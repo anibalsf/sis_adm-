@@ -1,0 +1,1 @@
+[{"model": "auth.group", "fields": {"name": "Afiliado", "permissions": []}}, {"model": "auth.group", "fields": {"name": "Secretaria", "permissions": []}}, {"model": "auth.group", "fields": {"name": "Directiva", "permissions": []}}, {"model": "auth.group", "fields": {"name": "AgenteParada", "permissions": []}}]

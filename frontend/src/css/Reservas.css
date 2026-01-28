@@ -1,0 +1,581 @@
+﻿.reservas-container {
+    padding: 2rem;
+}
+
+.reservas-container h1 {
+    margin-bottom: 1rem;
+}
+
+.rutas-disponibles {
+    margin-bottom: 2rem;
+}
+
+.rutas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.ruta-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #4CAF50;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.ruta-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.ruta-card.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    border-left-color: #999;
+}
+
+.ruta-card.disabled:hover {
+    transform: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ruta-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.ruta-nombre {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #333;
+    margin: 0;
+}
+
+.ruta-tarifa {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+.ruta-destino {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 0.75rem;
+}
+
+.ruta-info {
+    margin-top: 1rem;
+}
+
+.info-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.info-label {
+    font-weight: 600;
+    color: #555;
+    margin-right: 0.5rem;
+    min-width: 80px;
+}
+
+.info-value {
+    color: #333;
+}
+
+.fecha-salida {
+    color: #2196F3;
+    font-weight: 500;
+}
+
+.cupos-info {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #f0f0f0;
+}
+
+.cupos-text {
+    margin-bottom: 0.5rem;
+}
+
+.cupos-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.cupos-badge.disponible {
+    background: #E8F5E9;
+    color: #2E7D32;
+}
+
+.cupos-badge.casi-lleno {
+    background: #FFF3E0;
+    color: #E65100;
+}
+
+.cupos-badge.lleno {
+    background: #FFEBEE;
+    color: #C62828;
+}
+
+.cupos-barra {
+    height: 6px;
+    background: #E0E0E0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.cupos-progreso {
+    height: 100%;
+    background: linear-gradient(90deg, #4CAF50, #66BB6A);
+    transition: width 0.3s ease;
+}
+
+.formulario-reserva {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.formulario-reserva h2 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    color: #333;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #555;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #2196F3;
+}
+
+.ruta-seleccionada-info {
+    padding: 0;
+    margin-bottom: 2rem;
+}
+
+.ruta-seleccionada-info h3 {
+    margin: 0 0 0.75rem 0;
+    color: #2E7D32;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: #2196F3;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #1976D2;
+}
+
+.btn-secondary {
+    background: #757575;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #616161;
+}
+
+.loading,
+.error,
+.no-rutas {
+    text-align: center;
+    padding: 2rem;
+    font-size: 1.1rem;
+}
+
+.error {
+    color: #f44336;
+}
+
+.no-rutas {
+    color: #757575;
+}
+
+.reserva-layout {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.reserva-info-col {
+    flex: 1;
+    min-width: 300px;
+}
+
+.reserva-seats-col {
+    flex: 0 0 auto;
+}
+
+.form-reserva-bottom {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-top: 2rem;
+    width: 100%;
+}
+
+.seat-grid-custom {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    background: #fff;
+    padding: 15px;
+    border: 2px solid #333;
+    border-radius: 4px;
+    max-width: 350px;
+}
+
+.seat-box {
+    border: 2px solid #333;
+    border-radius: 4px;
+    height: 70px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    background: #E8F5E9;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.seat-box:hover:not(.occupied) {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.seat-conductor {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    background: #f5f5f5;
+    border-style: dashed;
+    color: #666;
+    cursor: default;
+}
+
+.seat-regular {}
+
+.seat-wide {}
+
+.seat-number {
+    font-weight: bold;
+    font-size: 1rem;
+    color: #333;
+}
+
+.seat-checkbox {
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    margin: 0;
+}
+
+.seat-box.occupied {
+    background-color: #FFCDD2;
+    color: #C62828;
+    border-color: #E53935;
+    cursor: not-allowed;
+}
+
+.seat-box.occupied .seat-number {
+    color: #C62828;
+}
+
+.seat-box.occupied:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.seat-box.selected {
+    background-color: #BBDEFB;
+    border-color: #2196F3;
+    border-width: 3px;
+    box-shadow: 0 0 10px rgba(33, 150, 243, 0.5);
+}
+
+.seat-box.selected .seat-number {
+    color: #1976D2;
+}
+
+.seat-box.occupied .seat-checkbox {
+    cursor: not-allowed;
+}
+
+.seat-grid-minibus {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    background: #fff;
+    border: 1px solid #333;
+    max-width: 450px;
+}
+
+.seat-grid-ipsum {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    background: #fff;
+    padding: 15px;
+    border: 2px solid #333;
+    border-radius: 4px;
+    max-width: 350px;
+}
+
+.seat-grid-ipsum .seat-box {
+    height: 60px;
+    border: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border-radius: 4px;
+    padding: 5px;
+    position: relative;
+}
+
+.seat-grid-ipsum .seat-box.occupied {
+    background-color: #FFCDD2;
+}
+
+.seat-grid-ipsum .seat-box.selected {
+    background-color: #BBDEFB;
+    border-color: #2196F3;
+}
+
+.seat-grid-ipsum .seat-conductor {
+    background-color: #f5f5f5;
+    border-style: dashed;
+    font-weight: bold;
+    font-size: 0.7rem;
+    color: #999;
+}
+
+.seat-grid-ipsum .seat-spacer {
+    display: block;
+    height: 60px;
+}
+
+.seat-grid-minibus .seat-box {
+    height: 50px;
+    border: 1px solid #333;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    background: #fff;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    padding: 0 10px;
+}
+
+.seat-grid-minibus .seat-box:hover:not(.occupied) {
+    background-color: #f0f0f0;
+}
+
+.seat-grid-minibus .seat-conductor {
+    background-color: #fff;
+    color: #000;
+    font-size: 0.9rem;
+    font-weight: bold;
+    cursor: default;
+    justify-content: center;
+    text-transform: uppercase;
+}
+
+.seat-grid-minibus .seat-conductor:hover {
+    background-color: #fff;
+}
+
+/* Estilos para modal de confirmación */
+.confirmation-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.confirmation-content {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.confirmation-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.confirmation-icon {
+    font-size: 3rem;
+}
+
+.confirmation-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #2E7D32;
+    margin: 0;
+}
+
+.confirmation-body {
+    margin-bottom: 1.5rem;
+}
+
+.confirmation-detail {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: #f5f5f5;
+    border-radius: 4px;
+}
+
+.confirmation-label {
+    font-weight: 600;
+    color: #555;
+}
+
+.confirmation-value {
+    color: #333;
+}
+
+.confirmation-total {
+    background: #E8F5E9;
+    border: 2px solid #4CAF50;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.confirmation-total-label {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #2E7D32;
+}
+
+.confirmation-total-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #2E7D32;
+}
+
+.confirmation-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+
+/* Validación de teléfono */
+.input-error {
+    border-color: #f44336 !important;
+}
+
+.error-message {
+    color: #f44336;
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+}
+
+.input-success {
+    border-color: #4CAF50 !important;
+}

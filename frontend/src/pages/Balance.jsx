@@ -1,0 +1,128 @@
+import { useState, useEffect } from 'react';
+import api from '../services/api';
+import './Balance.css';
+
+function Balance() {
+    const [balance, setBalance] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [fechaInicio, setFechaInicio] = useState('');
+    const [fechaFin, setFechaFin] = useState('');
+
+    useEffect(() => {
+        loadBalance();
+    }, []);
+
+    const loadBalance = async () => {
+        try {
+            setLoading(true);
+            const params = {};
+            if (fechaInicio) params.fecha_inicio = fechaInicio;
+            if (fechaFin) params.fecha_fin = fechaFin;
+
+            const response = await api.getBalance(params);
+            setBalance(response.data);
+            setError('');
+        } catch (err) {
+            setError('Error al cargar el balance');
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleFiltrar = (e) => {
+        e.preventDefault();
+        loadBalance();
+    };
+
+    const limpiarFiltros = () => {
+        setFechaInicio('');
+        setFechaFin('');
+        setTimeout(() => loadBalance(), 100);
+    };
+
+    return (
+        <div className="balance-container">
+            <h1>Balance Financiero</h1>
+            <p>Resumen del estado financiero del sindicato</p>
+
+            {/* Filtros de fecha */}
+            <div className="card filter-card">
+                <form onSubmit={handleFiltrar} className="filter-form">
+                    <div className="form-group">
+                        <label htmlFor="fecha_inicio">Fecha Inicio</label>
+                        <input
+                            id="fecha_inicio"
+                            type="date"
+                            value={fechaInicio}
+                            onChange={(e) => setFechaInicio(e.target.value)}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="fecha_fin">Fecha Fin</label>
+                        <input
+                            id="fecha_fin"
+                            type="date"
+                            value={fechaFin}
+                            onChange={(e) => setFechaFin(e.target.value)}
+                        />
+                    </div>
+                    <div className="form-actions">
+                        <button type="submit" className="btn btn-primary">Filtrar</button>
+                        <button type="button" className="btn btn-secondary" onClick={limpiarFiltros}>Limpiar</button>
+                    </div>
+                </form>
+            </div>
+
+            {/* Tarjetas de balance */}
+            {loading ? (
+                <div className="loading">Cargando...</div>
+            ) : error ? (
+                <div className="error">{error}</div>
+            ) : balance ? (
+                <>
+                    <div className="balance-cards">
+                        <div className="balance-card ingresos">
+                            <div className="card-icon">💰</div>
+                            <div className="card-content">
+                                <h3>Total Ingresos</h3>
+                                <div className="amount">Bs. {balance.total_ingresos.toFixed(2)}</div>
+                                <div className="count">{balance.count_ingresos} registro(s)</div>
+                            </div>
+                        </div>
+
+                        <div className="balance-card egresos">
+                            <div className="card-icon">📤</div>
+                            <div className="card-content">
+                                <h3>Total Egresos</h3>
+                                <div className="amount">Bs. {balance.total_egresos.toFixed(2)}</div>
+                                <div className="count">{balance.count_egresos} registro(s)</div>
+                            </div>
+                        </div>
+
+                        <div className={`balance-card saldo ${balance.saldo >= 0 ? 'positivo' : 'negativo'}`}>
+                            <div className="card-icon">{balance.saldo >= 0 ? '✅' : '⚠️'}</div>
+                            <div className="card-content">
+                                <h3>Saldo Actual</h3>
+                                <div className="amount">Bs. {balance.saldo.toFixed(2)}</div>
+                                <div className="count">{balance.saldo >= 0 ? 'Positivo' : 'Negativo'}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Información del periodo */}
+                    {(balance.fecha_inicio || balance.fecha_fin) && (
+                        <div className="periodo-info">
+                            <strong>Periodo filtrado:</strong>
+                            {balance.fecha_inicio && ` Desde ${balance.fecha_inicio}`}
+                            {balance.fecha_fin && ` Hasta ${balance.fecha_fin}`}
+                        </div>
+                    )}
+                </>
+            ) : null}
+        </div>
+    );
+}
+
+export default Balance;

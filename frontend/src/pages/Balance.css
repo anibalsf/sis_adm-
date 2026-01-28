@@ -1,0 +1,200 @@
+.balance-container {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.balance-container h1 {
+    color: #2d3748;
+    margin-bottom: 0.5rem;
+}
+
+.balance-container p {
+    color: #718096;
+    margin-bottom: 2rem;
+}
+
+/* Filtros */
+.filter-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.filter-form {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.filter-form .form-group {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-form label {
+    font-weight: 600;
+    color: #2d3748;
+    font-size: 0.875rem;
+}
+
+.filter-form input {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.filter-form .form-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Tarjetas de balance */
+.balance-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.balance-card {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.balance-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.balance-card .card-icon {
+    font-size: 3rem;
+    line-height: 1;
+}
+
+.balance-card .card-content {
+    flex: 1;
+}
+
+.balance-card h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #718096;
+    font-weight: 600;
+}
+
+.balance-card .amount {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.balance-card .count {
+    font-size: 0.875rem;
+    color: #a0aec0;
+}
+
+/* Colores específicos */
+.balance-card.ingresos {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.balance-card.ingresos h3,
+.balance-card.ingresos .count {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.balance-card.egresos {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+}
+
+.balance-card.egresos h3,
+.balance-card.egresos .count {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.balance-card.saldo.positivo {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    color: #065f46;
+}
+
+.balance-card.saldo.positivo h3,
+.balance-card.saldo.positivo .count {
+    color: rgba(6, 95, 70, 0.8);
+}
+
+.balance-card.saldo.negativo {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    color: #7c2d12;
+}
+
+.balance-card.saldo.negativo h3,
+.balance-card.saldo.negativo .count {
+    color: rgba(124, 45, 18, 0.8);
+}
+
+/* Información del periodo */
+.periodo-info {
+    background: #edf2f7;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    text-align: center;
+    color: #2d3748;
+}
+
+.periodo-info strong {
+    margin-right: 0.5rem;
+}
+
+/* Loading y Error */
+.loading,
+.error {
+    text-align: center;
+    padding: 3rem;
+    font-size: 1.125rem;
+}
+
+.error {
+    color: #e53e3e;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .balance-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .filter-form {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-form .form-group {
+        width: 100%;
+    }
+
+    .filter-form .form-actions {
+        width: 100%;
+    }
+
+    .filter-form .form-actions button {
+        flex: 1;
+    }
+}

@@ -1,0 +1,208 @@
+.header {
+    background: var(--bg-surface);
+    height: 80px;
+    position: fixed;
+    top: 0;
+    left: 260px;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    z-index: 90;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: var(--transition-all);
+}
+
+.header-title h1 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--primary);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    background: linear-gradient(to right, var(--primary) 0%, var(--accent) 50%, var(--primary) 100%);
+    background-size: 200% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shine 5s linear infinite;
+}
+
+@keyframes shine {
+    to {
+        background-position: 200% center;
+    }
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.scan-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--primary);
+    color: var(--text-inverse);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.875rem;
+    transition: var(--transition-all);
+    box-shadow: var(--shadow-sm);
+    white-space: nowrap;
+    min-width: max-content;
+}
+
+.scan-button:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 768px) {
+    .scan-text {
+        display: none;
+    }
+
+    .scan-button {
+        padding: 0.5rem;
+        width: 40px;
+        height: 40px;
+        justify-content: center;
+    }
+}
+
+.theme-toggle {
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: var(--text-main);
+    transition: var(--transition-all);
+}
+
+.theme-toggle:hover {
+    background: var(--secondary);
+    transform: rotate(15deg) scale(1.1);
+}
+
+.user-menu {
+    position: relative;
+}
+
+.user-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-main);
+    transition: var(--transition-all);
+}
+
+.user-button:hover {
+    background: var(--secondary);
+    border-color: var(--primary-light);
+}
+
+.dropdown-icon {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.user-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.5rem);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    min-width: 150px;
+    overflow: hidden;
+}
+
+.user-menu:hover .user-dropdown {
+    display: block;
+}
+
+.dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-main);
+    transition: var(--transition-all);
+}
+
+.dropdown-item:hover {
+    background: var(--bg-surface-alt);
+    color: var(--primary);
+}
+
+@media (max-width: 768px) {
+    .header {
+        left: 0;
+        /* Full width */
+        padding: 0 1rem;
+    }
+
+    .header-title h1 {
+        font-size: 0.8rem;
+        /* Smaller font on mobile */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+    }
+
+    .mobile-menu-btn {
+        display: block !important;
+    }
+}
+
+/* Escudo y título alineados */
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.escudo-logo {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 50%;
+    border: 2px solid var(--gray-200);
+    background: var(--white);
+}
+
+@media (max-width: 768px) {
+    .escudo-logo {
+        width: 60px;
+        height: 60px;
+        border-width: 1px;
+    }
+}

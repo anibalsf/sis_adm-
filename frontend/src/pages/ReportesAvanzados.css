@@ -1,0 +1,274 @@
+/* Reportes Avanzados - Estilos Adicionales */
+
+.reportes-avanzados {
+    padding: 2rem;
+}
+
+/* KPIs Dashboard */
+.kpis-dashboard {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.kpis-header {
+    margin-bottom: 2rem;
+}
+
+.kpis-header h2 {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 0.5rem;
+}
+
+.periodo {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.kpis-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.kpi-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #6366f1;
+    transition: transform 0.2s;
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.kpi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.kpi-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kpi-badge {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.kpi-badge.bueno {
+    background: #10b981;
+    color: white;
+}
+
+.kpi-badge.regular {
+    background: #f59e0b;
+    color: white;
+}
+
+.kpi-badge.malo {
+    background: #ef4444;
+    color: white;
+}
+
+.kpi-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 0.5rem;
+}
+
+.kpi-unit {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-left: 0.25rem;
+}
+
+.kpi-objetivo {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Resumen Financiero */
+.resumen-financiero {
+    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+    border-radius: 16px;
+    padding: 2rem;
+    color: white;
+}
+
+.resumen-financiero h3 {
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+}
+
+.resumen-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.resumen-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.resumen-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.resumen-valor {
+    font-size: 1.75rem;
+    font-weight: 800;
+}
+
+.resumen-valor.positivo {
+    color: #10b981;
+}
+
+.resumen-valor.negativo {
+    color: #ef4444;
+}
+
+/* Rentabilidad */
+.rentabilidad-container,
+.tendencias-container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.rentabilidad-header,
+.tendencias-header {
+    margin-bottom: 2rem;
+}
+
+.rentabilidad-header h2,
+.tendencias-header h2 {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 0.5rem;
+}
+
+.rentabilidad-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.resumen-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Estadísticas Grid */
+.estadisticas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.stat-valor {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+/* Proyección */
+.proyeccion-card {
+    background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+    border-radius: 16px;
+    padding: 2rem;
+    color: white;
+}
+
+.proyeccion-card h3 {
+    margin-bottom: 1.5rem;
+}
+
+.proyeccion-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.proyeccion-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.proyeccion-item span {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.proyeccion-item strong {
+    font-size: 1.5rem;
+}
+
+.proyeccion-item strong.positivo {
+    color: #10b981;
+}
+
+.proyeccion-item strong.negativo {
+    color: #fca5a5;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+
+    .kpis-grid,
+    .rentabilidad-resumen,
+    .estadisticas-grid,
+    .proyeccion-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .kpi-value {
+        font-size: 2rem;
+    }
+}

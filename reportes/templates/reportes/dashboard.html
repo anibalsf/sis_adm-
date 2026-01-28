@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard Sindicato</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;padding:24px;background:#f5f8f9;color:#0f172a}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+    .card{background:#e6f0f4;border-radius:12px;padding:16px;text-align:center}
+    .card .num{font-size:36px;font-weight:700}
+    .table{background:#fff;border-radius:12px;padding:16px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
+    th{font-weight:600}
+    .title{font-size:20px;font-weight:700;margin-bottom:12px}
+  </style>
+</head>
+<body>
+  <h2>SINDICATO MIXTO INTEGRACIÓN TAIPIPLAYA</h2>
+  <div class="grid">
+    <div class="card"><div class="num">{{ afiliados }}</div><div>AFILIADOS</div></div>
+    <div class="card"><div class="num">{{ vehiculos }}</div><div>VEHÍCULOS</div></div>
+    <div class="card"><div class="num">{{ rutas }}</div><div>RUTAS</div></div>
+  </div>
+  <div class="table">
+    <div class="title">HOJAS DE RUTA</div>
+    <form method="get" style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap">
+      <input type="date" name="desde" value="{{ params.desde }}" placeholder="Desde">
+      <input type="date" name="hasta" value="{{ params.hasta }}" placeholder="Hasta">
+      <select name="ruta_id">
+        <option value="">Todas las rutas</option>
+        {% for r in rutas_list %}
+        <option value="{{ r.id }}" {% if params.ruta_id|default:'' == r.id|stringformat:'s' %}selected{% endif %}>{{ r.nombre }}</option>
+        {% endfor %}
+      </select>
+      <input type="text" name="q" value="{{ params.q }}" placeholder="Afiliado">
+      <input type="number" min="1" name="page_size" value="{{ page_size }}" style="width:80px" title="Filas por página">
+      <select name="orden">
+        <option value="fecha_emision" {% if params.orden == 'fecha_emision' %}selected{% endif %}>Fecha</option>
+        <option value="nro" {% if params.orden == 'nro' %}selected{% endif %}>Número</option>
+        <option value="precio" {% if params.orden == 'precio' %}selected{% endif %}>Monto</option>
+      </select>
+      <select name="dir">
+        <option value="desc" {% if params.dir == 'desc' %}selected{% endif %}>Desc</option>
+        <option value="asc" {% if params.dir == 'asc' %}selected{% endif %}>Asc</option>
+      </select>
+      <select name="estado_cuota" title="Estado cuotas">
+        <option value="" {% if estado_cuota == '' %}selected{% endif %}>Cuotas: todos</option>
+        <option value="pendiente" {% if estado_cuota == 'pendiente' %}selected{% endif %}>Pendiente</option>
+        <option value="pagada" {% if estado_cuota == 'pagada' %}selected{% endif %}>Pagada</option>
+        <option value="anulada" {% if estado_cuota == 'anulada' %}selected{% endif %}>Anulada</option>
+      </select>
+      <select name="estado_sancion" title="Estado sanciones">
+        <option value="" {% if estado_sancion == '' %}selected{% endif %}>Sanciones: todas</option>
+        <option value="pendiente" {% if estado_sancion == 'pendiente' %}selected{% endif %}>Pendiente</option>
+        <option value="notificada" {% if estado_sancion == 'notificada' %}selected{% endif %}>Notificada</option>
+        <option value="pagada" {% if estado_sancion == 'pagada' %}selected{% endif %}>Pagada</option>
+        <option value="anulada" {% if estado_sancion == 'anulada' %}selected{% endif %}>Anulada</option>
+      </select>
+      <button type="submit">Filtrar</button>
+      <a href="/dashboard" style="align-self:center">Limpiar</a>
+      <a href="/api/reportes/hojas-ruta.csv?desde={{ params.desde }}&hasta={{ params.hasta }}&ruta_id={{ params.ruta_id }}" style="align-self:center">Exportar CSV</a>
+      <a href="/api/reportes/hojas-ruta.pdf?desde={{ params.desde }}&hasta={{ params.hasta }}&ruta_id={{ params.ruta_id }}" style="align-self:center">Exportar PDF</a>
+      <a href="/api/reportes/cuotas.csv?desde={{ params.desde }}&hasta={{ params.hasta }}&estado={{ estado_cuota }}" style="align-self:center">Cuotas CSV</a>
+      <a href="/api/reportes/sanciones.csv?desde={{ params.desde }}&hasta={{ params.hasta }}&estado={{ estado_sancion }}" style="align-self:center">Sanciones CSV</a>
+    </form>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Afiliado</th><th>Vehículo</th><th>Ruta</th><th>Fecha</th><th>Monto</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in recientes %}
+        <tr>
+          <td>{{ h.id }}</td>
+          <td>{{ h.afiliado }}</td>
+          <td>{{ h.vehiculo }}</td>
+          <td>{{ h.ruta }}</td>
+          <td>{{ h.fecha }}</td>
+          <td>{{ h.monto }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">Sin registros</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5" style="text-align:right;font-weight:600">Total filtrado</td>
+          <td style="font-weight:600">{{ total_monto }}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <div style="margin-top:10px; display:flex; gap:8px">
+      {% if has_prev %}
+        <a href="/dashboard?desde={{ params.desde }}&hasta={{ params.hasta }}&ruta_id={{ params.ruta_id }}&q={{ params.q }}&page={{ page|add:-1 }}&page_size={{ page_size }}">« Anterior</a>
+      {% endif %}
+      <span>Página {{ page }}</span>
+      {% if has_next %}
+        <a href="/dashboard?desde={{ params.desde }}&hasta={{ params.hasta }}&ruta_id={{ params.ruta_id }}&q={{ params.q }}&page={{ page|add:1 }}&page_size={{ page_size }}">Siguiente »</a>
+      {% endif %}
+    </div>
+  </div>
+  <div style="margin-top:24px">
+    <div class="title">Recientes</div>
+    <div style="display:flex; gap:10px; margin-bottom:8px">
+      <button type="button" onclick="showTab('hojas')">Hojas de Ruta</button>
+      <button type="button" onclick="showTab('cuotas')">Cuotas</button>
+      <button type="button" onclick="showTab('reservas')">Reservas</button>
+      <button type="button" onclick="showTab('sanciones')">Sanciones</button>
+    </div>
+    <div id="tab-hojas" class="table">
+      <table>
+        <thead><tr><th>ID</th><th>Afiliado</th><th>Ruta</th><th>Fecha</th><th>Monto</th></tr></thead>
+        <tbody>
+          {% for h in recientes %}
+          <tr><td>{{ h.id }}</td><td>{{ h.afiliado }}</td><td>{{ h.ruta }}</td><td>{{ h.fecha }}</td><td>{{ h.monto }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div id="tab-cuotas" class="table" style="display:none">
+      <table>
+        <thead><tr><th>ID</th><th>Afiliado</th><th>Periodo</th><th>Monto</th><th>Estado</th></tr></thead>
+        <tbody>
+          {% for c in cuotas_recientes %}
+          <tr><td>{{ c.id }}</td><td>{{ c.afiliado }}</td><td>{{ c.periodo }}</td><td>{{ c.monto }}</td><td>{{ c.estado }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div id="tab-reservas" class="table" style="display:none">
+      <table>
+        <thead><tr><th>ID</th><th>Cliente</th><th>Ruta</th><th>Fecha</th><th>Cant.</th><th>Estado</th></tr></thead>
+        <tbody>
+          {% for r in reservas_recientes %}
+          <tr><td>{{ r.id }}</td><td>{{ r.cliente }}</td><td>{{ r.ruta }}</td><td>{{ r.fecha }}</td><td>{{ r.cantidad }}</td><td>{{ r.estado }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div id="tab-sanciones" class="table" style="display:none">
+      <table>
+        <thead><tr><th>ID</th><th>Afiliado</th><th>Tipo</th><th>Monto</th><th>Estado</th></tr></thead>
+        <tbody>
+          {% for s in sanciones_recientes %}
+          <tr><td>{{ s.id }}</td><td>{{ s.afiliado }}</td><td>{{ s.tipo }}</td><td>{{ s.monto }}</td><td>{{ s.estado }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p style="margin-top:16px">API: 
+    <a href="/api/dashboard">/api/dashboard</a> · 
+    <a href="/api/afiliados">/api/afiliados</a> · 
+    <a href="/api/vehiculos">/api/vehiculos</a> · 
+    <a href="/api/rutas">/api/rutas</a> · 
+    <a href="/api/hojas-ruta">/api/hojas-ruta</a> · 
+    <a href="/api/cuotas">/api/cuotas</a> · 
+    <a href="/api/reservas">/api/reservas</a> · 
+    <a href="/api/sanciones">/api/sanciones</a> · 
+    <a href="/api/asistencias">/api/asistencias</a>
+  </p>
+</body>
+<script>
+  function showTab(name){
+    document.getElementById('tab-hojas').style.display = name==='hojas'?'block':'none'
+    document.getElementById('tab-cuotas').style.display = name==='cuotas'?'block':'none'
+    document.getElementById('tab-reservas').style.display = name==='reservas'?'block':'none'
+    document.getElementById('tab-sanciones').style.display = name==='sanciones'?'block':'none'
+  }
+</script>
+</html>

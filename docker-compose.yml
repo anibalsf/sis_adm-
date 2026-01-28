@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: sindicato-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=sindicato_db
+      - POSTGRES_USER=sindicato_user
+      - POSTGRES_PASSWORD=sindicato_password
+    restart: always
+
+  web:
+    build: .
+    container_name: sindicato-app
+    command: >
+      sh -c "python manage.py migrate &&
+             gunicorn --bind 0.0.0.0:8000 sistema.wsgi:application"
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+    environment:
+      - SECRET_KEY=prod-secret-change-this-in-deployment
+      - DEBUG=False
+      - DB_ENGINE=postgres
+      - DB_NAME=sindicato_db
+      - DB_USER=sindicato_user
+      - DB_PASSWORD=sindicato_password
+      - DB_HOST=db
+      - DB_PORT=5432
+      - ALLOWED_HOSTS=*
+      - CORS_ALLOWED_ORIGINS=http://localhost:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    restart: always
+
+volumes:
+  postgres_data:

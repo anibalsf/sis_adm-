@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+db.sqlite3
+
+# Node.js
+frontend/node_modules/
+frontend/dist/
+
+# Git
+.git/
+.gitignore
+
+# Logs
+logs/
+*.log
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Otros
+.vscode/
+.idea/
+.DS_Store
+tmp/
+C/
+temp/
+tests/
+test/
+ANÁLISIS_SISTEMA_Y_MEJORAS.md
+REPASO_MODULOS.md
+GUIA_INSTALACION_SINDICATO.md
+CUADERNO_TRABAJO_AGENTICO.md
+EJECUTAR_SISTEMA.md
+PROGRESO_MEJORAS.md
+BACKUP_DB/
+manualv2/
+docs/
