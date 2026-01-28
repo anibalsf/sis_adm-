@@ -41,6 +41,10 @@ db.sqlite3-journal
 /staticfiles/
 /static/
 /media/
+/backups/
+/migration_backups/
+data_migration.json
+*.json.bak
 
 # ------------------------------------------------------------------------------
 # Environment Variables
