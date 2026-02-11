@@ -189,37 +189,74 @@ const ReportesAutomaticos = () => {
                         </div>
 
                         <div className="reportes-list">
-                            {Array.isArray(reportes) && reportes.map((reporte) => (
-                                <div key={reporte.id} className="reporte-card">
-                                    <div className="reporte-header">
-                                        <div>
-                                            <h3>{reporte.tipo_display}</h3>
-                                            <p className="reporte-fecha">
-                                                {new Date(reporte.fecha_generacion).toLocaleString('es-BO')}
-                                            </p>
+                            {(() => {
+                                if (!Array.isArray(reportes) || reportes.length === 0) {
+                                    return (
+                                        <div className="empty-state">
+                                            <p>No hay reportes generados</p>
                                         </div>
-                                        <span className={`badge ${getBadgeClass(reporte.estado)}`}>
-                                            {reporte.estado_display}
-                                        </span>
+                                    );
+                                }
+
+                                // Agrupar reportes por mes y año
+                                const grupos = reportes.reduce((acc, reporte) => {
+                                    const fecha = new Date(reporte.fecha_generacion);
+                                    const mesAnio = fecha.toLocaleString('es-BO', { month: 'long', year: 'numeric' });
+                                    if (!acc[mesAnio]) acc[mesAnio] = [];
+                                    acc[mesAnio].push(reporte);
+                                    return acc;
+                                }, {});
+
+                                return Object.entries(grupos).map(([mesAnio, reportesGrupo]) => (
+                                    <div key={mesAnio} className="reporte-grupo-mes">
+                                        <h2 className="mes-titulo">{mesAnio.toUpperCase()}</h2>
+                                        <div className="grupo-grid">
+                                            {reportesGrupo.map((reporte) => (
+                                                <div key={reporte.id} className="reporte-card">
+                                                    <div className="reporte-header">
+                                                        <div>
+                                                            <h3>{reporte.tipo_display}</h3>
+                                                            <p className="reporte-fecha">
+                                                                {new Date(reporte.fecha_generacion).toLocaleString('es-BO')}
+                                                            </p>
+                                                        </div>
+                                                        <span className={`badge ${getBadgeClass(reporte.estado)}`}>
+                                                            {reporte.estado_display}
+                                                        </span>
+                                                    </div>
+                                                    <div className="reporte-body">
+                                                        <p><strong>Período:</strong> {new Date(reporte.fecha_periodo).toLocaleDateString('es-BO')}</p>
+                                                        <p><strong>Mensajes enviados:</strong> {reporte.mensajes_enviados}</p>
+                                                        {reporte.destinatarios_whatsapp && (
+                                                            <p className="truncate"><strong>Destinatarios:</strong> {reporte.destinatarios_whatsapp}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="reporte-actions">
+                                                        <details className="reporte-content">
+                                                            <summary>Ver contenido</summary>
+                                                            <pre>{reporte.contenido}</pre>
+                                                        </details>
+                                                        <button
+                                                            className="btn-download"
+                                                            onClick={() => {
+                                                                const blob = new Blob([reporte.contenido], { type: 'text/plain' });
+                                                                const url = window.URL.createObjectURL(blob);
+                                                                const a = document.createElement('a');
+                                                                a.href = url;
+                                                                a.download = `Reporte_${reporte.tipo}_${reporte.fecha_periodo}.txt`;
+                                                                a.click();
+                                                                window.URL.revokeObjectURL(url);
+                                                            }}
+                                                        >
+                                                            📥 Descargar .txt
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="reporte-body">
-                                        <p><strong>Período:</strong> {new Date(reporte.fecha_periodo).toLocaleDateString('es-BO')}</p>
-                                        <p><strong>Mensajes enviados:</strong> {reporte.mensajes_enviados}</p>
-                                        {reporte.destinatarios_whatsapp && (
-                                            <p><strong>Destinatarios:</strong> {reporte.destinatarios_whatsapp}</p>
-                                        )}
-                                    </div>
-                                    <details className="reporte-content">
-                                        <summary>Ver contenido</summary>
-                                        <pre>{reporte.contenido}</pre>
-                                    </details>
-                                </div>
-                            ))}
-                            {reportes.length === 0 && (
-                                <div className="empty-state">
-                                    <p>No hay reportes generados</p>
-                                </div>
-                            )}
+                                ));
+                            })()}
                         </div>
                     </div>
                 )}

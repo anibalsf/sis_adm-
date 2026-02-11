@@ -43,6 +43,7 @@ from usuarios.views import ChangePasswordView
 from sistema.scheduler_views import SchedulerViewSet
 from directorio.views import MiembroDirectorioViewSet
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from sistema.health import health_check
 
 router = routers.DefaultRouter()
 router.register(r'afiliados', AfiliadoViewSet)
@@ -131,6 +132,9 @@ urlpatterns = [
     path('api/scheduler/test-sanciones/', SchedulerViewSet.as_view({'post': 'test_sanciones'}), name='scheduler-test-sanciones'),
     path('api/scheduler/test-reporte-diario/', SchedulerViewSet.as_view({'post': 'test_reporte_diario'}), name='scheduler-test-reporte-diario'),
     path('api/scheduler/test-alerta-morosos/', SchedulerViewSet.as_view({'post': 'test_alerta_morosos'}), name='scheduler-test-alerta-morosos'),
+    
+    # Salud del sistema
+    path('api/health/', health_check, name='health-check'),
     
     # Catch-all route para React SPA
     re_path(r'^.*$', TemplateView.as_view(template_name='index.html')),

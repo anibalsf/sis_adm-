@@ -34,8 +34,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {
             title: 'PRINCIPAL',
             items: [
-                { path: '/', icon: <IconHome />, label: 'Inicio', color: '#3b82f6' }, // Blue
-                { path: '/mi-perfil', icon: <IconUser />, label: 'Mi Perfil', color: '#8b5cf6' }, // Purple
+                { path: '/', icon: <IconHome />, label: 'Inicio', color: '#10b981' }, // Emerald
+                { path: '/mi-perfil', icon: <IconUser />, label: 'Mi Perfil', color: '#3b82f6' }, // Blue
             ]
         },
         {
@@ -43,8 +43,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             items: [
                 { path: '/afiliados', icon: <IconUsers />, label: 'Afiliados', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#6366f1' }, // Indigo
                 { path: '/vehiculos', icon: <IconBus />, label: 'Vehículos', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#f43f5e' }, // Rose
-                { path: '/directorio', icon: <IconLayout />, label: 'Directorio', roles: ['Directiva', 'Sistemas'], color: '#06b6d4' }, // Cyan
-                { path: '/rutas', icon: <IconMapPin />, label: 'Rutas', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#10b981' }, // Emerald
+                { path: '/directorio', icon: <IconLayout />, label: 'Directorio', roles: ['Directiva', 'Sistemas'], color: '#0ea5e9' }, // Sky
+                { path: '/rutas', icon: <IconMapPin />, label: 'Rutas', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#8b5cf6' }, // Violet
                 { path: '/hojas-ruta', icon: <IconList />, label: 'Hojas de Ruta', roles: ['Directiva', 'Secretaria', 'Sistemas', 'Agente'], color: '#f59e0b' }, // Amber
                 { path: '/reservas', icon: <IconCalendar />, label: 'Reservas', roles: ['Directiva', 'Secretaria', 'Sistemas', 'Agente'], color: '#ec4899' }, // Pink
             ]
@@ -53,18 +53,18 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             title: 'ADMINISTRACIÓN',
             items: [
                 { path: '/pagos-y-egresos', icon: <IconCash />, label: 'Pagos y Egresos', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#22c55e' }, // Green
-                { path: '/balance', icon: <IconTrendingUp />, label: 'Balance Financiero', roles: ['Directiva', 'Sistemas'], color: '#eab308' }, // Yellow
+                { path: '/balance', icon: <IconTrendingUp />, label: 'Balance Financiero', roles: ['Directiva', 'Sistemas'], color: '#f97316' }, // Orange
                 { path: '/reportes', icon: <IconBarChart />, label: 'Reportes', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#a855f7' }, // Purple
-                { path: '/reportes-automaticos', icon: <IconBarChart />, label: 'Reportes Automáticos', roles: ['Directiva', 'Sistemas'], color: '#4a9d9c' }, // Teal
+                { path: '/reportes-automaticos', icon: <IconBarChart />, label: 'Reportes Automáticos', roles: ['Directiva', 'Sistemas'], color: '#06b6d4' }, // Cyan
                 { path: '/sanciones-asistencia', icon: <IconAlertTriangle />, label: 'Sanciones / Asistencia', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#ef4444' }, // Red
             ]
         },
         {
             title: 'SISTEMA',
             items: [
-                { path: '/usuarios', icon: <IconUser />, label: 'Gestión Usuarios', roles: ['Directiva', 'Sistemas'], color: '#64748b' }, // Slate
-                { path: '/bitacora', icon: <IconHistory />, label: 'Bitácora', roles: ['Directiva', 'Sistemas'], color: '#475569' }, // Slate dark
-                { path: '/change-password', icon: <IconLock />, label: 'Seguridad', color: '#1e293b' }, // Slate darker
+                { path: '/usuarios', icon: <IconUser />, label: 'Gestión Usuarios', roles: ['Directiva', 'Sistemas'], color: '#6366f1' }, // Indigo
+                { path: '/bitacora', icon: <IconHistory />, label: 'Bitácora', roles: ['Directiva', 'Sistemas'], color: '#8b5cf6' }, // Violet
+                { path: '/change-password', icon: <IconLock />, label: 'Seguridad', color: '#f59e0b' }, // Amber
             ]
         }
     ];
@@ -113,16 +113,26 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                                         <Link
                                             key={item.path}
                                             to={item.path}
-                                            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
-                                                ? 'bg-primary text-white shadow-lg shadow-primary/30'
-                                                : 'text-main dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                            className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl transition-all duration-300 group ${isActive
+                                                ? 'bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg shadow-primary/25 translate-x-1'
+                                                : 'text-main/80 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 hover:translate-x-1'
                                                 }`}
                                         >
-                                            <span className={`p-1.5 rounded-lg transition-colors ${isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-primary'
-                                                }`}>
+                                            <span
+                                                className={`p-2 rounded-xl transition-all duration-300 flex items-center justify-center ${isActive
+                                                    ? 'bg-white/20 text-white shadow-none ring-1 ring-white/30'
+                                                    : 'bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 group-hover:scale-110 group-hover:shadow-md'
+                                                    }`}
+                                                style={!isActive ? { color: item.color } : {}}
+                                            >
                                                 {item.icon}
                                             </span>
-                                            <span className="text-sm font-bold tracking-tight">{item.label}</span>
+                                            <span className={`text-[13px] font-bold tracking-tight transition-colors ${isActive ? 'text-white font-extrabold' : 'group-hover:text-primary'}`}>
+                                                {item.label}
+                                            </span>
+                                            {isActive && (
+                                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_white]"></div>
+                                            )}
                                         </Link>
                                     );
                                 })}

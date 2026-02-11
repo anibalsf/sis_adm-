@@ -437,14 +437,19 @@ if not DEBUG:
 # CELERY / REDIS CONFIGURATION (MODO SEGURO SIN REDIS)
 # ==============================================================================
 # Configuración original (Comentada temporalmente por fallo en Redis)
-# CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
-# CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
+# Configuración dinámica de Celery (Prioridad: REDIS_URL > Eager Mode)
+REDIS_URL = config('REDIS_URL', default='')
 
-# Configuración temporal en memoria (EAGER MODE)
-# Esto ejecuta las tareas síncronamente y no requiere Redis corriendo
-CELERY_BROKER_URL = 'memory://'
-CELERY_RESULT_BACKEND = 'db+sqlite:///results.sqlite'
-CELERY_TASK_ALWAYS_EAGER = True
+if REDIS_URL:
+    CELERY_BROKER_URL = REDIS_URL
+    CELERY_RESULT_BACKEND = REDIS_URL
+    CELERY_TASK_ALWAYS_EAGER = False
+else:
+    # Fallback a modo síncrono para desarrollo sin Redis
+    CELERY_BROKER_URL = 'memory://'
+    CELERY_RESULT_BACKEND = 'db+sqlite:///results.sqlite'
+    CELERY_TASK_ALWAYS_EAGER = True
+
 CELERY_TASK_EAGER_PROPAGATES = True  # Propagar errores si ocurren
 
 CELERY_ACCEPT_CONTENT = ['json']
