@@ -5,16 +5,26 @@ import re
 class AfiliadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Afiliado
-        fields = ['id', 'user', 'nombres', 'apellidos', 'ci', 'telefono', 'email', 'direccion', 'estado', 'fecha_ingreso', 'is_active', 'created_at', 'updated_at']
+        fields = ['id', 'user', 'nombres', 'apellidos', 'nombre_completo', 'ci', 'ci_exp', 'telefono', 'email', 'direccion', 'estado', 'fecha_ingreso', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'nombre_completo']
 
     def validate_ci(self, value):
-        """Validar formato CI boliviano (7-8 dígitos + opcionalmente extensión)"""
+        """Validar formato CI boliviano (6-10 dígitos)"""
         if not value:
             return value
-        pattern = r'^\d{7,8}(-[A-Z]{2})?$'
-        if not re.match(pattern, value.upper()):
-            raise serializers.ValidationError("CI inválido. Debe tener 7-8 dígitos y opcionalmente extensión (ej. 1234567-LP).")
-        return value.upper()
+        # Pattern solo para números para simplificar, la extensión va en otro campo
+        pattern = r'^\d{6,10}$'
+        if not re.match(pattern, value):
+            # Si ya trae guión, lo permitimos si cumple el patrón general de la app
+            if '-' in value:
+                from sistema.validators import validate_ci_boliviano
+                try:
+                    validate_ci_boliviano(value)
+                    return value.upper()
+                except:
+                    pass
+            raise serializers.ValidationError("CI inválido. Debe tener entre 6 y 10 dígitos.")
+        return value
 
     def validate_telefono(self, value):
         """Validar número de teléfono boliviano (8 dígitos, empieza con 6 o 7)"""

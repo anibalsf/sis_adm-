@@ -20,7 +20,7 @@ function Vehiculos() {
   const [modalMode, setModalMode] = useState('create')
   const [submitError, setSubmitError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-  const [form, setForm] = useState({ placa: '', tipo: '', capacidad: '', estado: 'activo', afiliado: '' })
+  const [form, setForm] = useState({ placa: '', tipo: '', color: '', capacidad: '', estado: 'activo', afiliado: '' })
   const [editingId, setEditingId] = useState(null)
 
   useEffect(() => { load() }, [search, filtroEstado, page, pageSize])
@@ -55,7 +55,7 @@ function Vehiculos() {
 
   const openEdit = (v) => {
     setModalMode('edit')
-    setForm({ placa: v.placa || '', tipo: v.tipo || '', capacidad: String(v.capacidad || ''), estado: v.estado || 'activo', afiliado: v.afiliado || v.afiliado_id || '' })
+    setForm({ placa: v.placa || '', tipo: v.tipo || '', color: v.color || '', capacidad: String(v.capacidad || ''), estado: v.estado || 'activo', afiliado: v.afiliado || v.afiliado_id || '' })
     setSubmitError('')
     setFieldErrors({})
     setEditingId(v.id)
@@ -72,7 +72,7 @@ function Vehiculos() {
     try {
       setSubmitError('')
       setFieldErrors({})
-      const payload = { placa: form.placa, tipo: form.tipo, capacidad: parseInt(form.capacidad || '0', 10), estado: form.estado, afiliado: form.afiliado || null }
+      const payload = { placa: form.placa, tipo: form.tipo, color: form.color || '', capacidad: parseInt(form.capacidad || '0', 10), estado: form.estado, afiliado: form.afiliado || null }
       if (modalMode === 'create') {
         await api.createVehiculo(payload)
         toast.success('Vehículo registrado correctamente')
@@ -163,6 +163,7 @@ function Vehiculos() {
               <tr>
                 <th>Placa</th>
                 <th>Tipo</th>
+                <th>Color</th>
                 <th>Capacidad</th>
                 <th>Afiliado</th>
                 <th>Estado</th>
@@ -174,12 +175,20 @@ function Vehiculos() {
                 <tr><td colSpan="6" className="no-data">Sin vehículos</td></tr>
               ) : vehiculos.map(v => (
                 <tr key={v.id}>
-                  <td>{v.placa}</td>
-                  <td>{v.tipo}</td>
-                  <td>{v.capacidad}</td>
-                  <td>{v.afiliado_nombre || v.afiliado || '-'}</td>
-                  <td><span className={`badge badge-${v.estado || 'activo'}`}>{v.estado || 'activo'}</span></td>
-                  <td className="actions">
+                  <td data-label="Placa"><span style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>{v.placa}</span></td>
+                  <td data-label="Tipo" style={{ textTransform: 'capitalize' }}>{v.tipo}</td>
+                  <td data-label="Color">
+                    {v.color ? (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ width: '14px', height: '14px', borderRadius: '50%', backgroundColor: v.color.toLowerCase(), border: '1px solid #ccc', display: 'inline-block' }}></span>
+                        {v.color}
+                      </span>
+                    ) : <span style={{ color: '#aaa' }}>—</span>}
+                  </td>
+                  <td data-label="Capacidad">{v.capacidad}</td>
+                  <td data-label="Afiliado">{v.afiliado_nombre || v.afiliado || '-'}</td>
+                  <td data-label="Estado"><span className={`badge badge-${v.estado || 'activo'}`}>{v.estado || 'activo'}</span></td>
+                  <td className="actions" data-label="Acciones">
                     <button className="btn-icon btn-edit" onClick={() => openEdit(v)} title="Editar"><IconPencil /></button>
                     <button className="btn-icon btn-delete" onClick={() => remove(v.id)} title="Eliminar"><IconTrash /></button>
                   </td>
@@ -247,6 +256,23 @@ function Vehiculos() {
               </div>
               <div className="form-row">
                 <div className="form-group">
+                  <label htmlFor="color">Color de la Movilidad</label>
+                  <input
+                    id="color"
+                    name="color"
+                    type="text"
+                    value={form.color}
+                    onChange={onChange}
+                    placeholder="Ej: Blanco, Rojo, Azul..."
+                  />
+                  {form.color && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                      <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: form.color.toLowerCase(), border: '1px solid #ccc', display: 'inline-block' }}></span>
+                      <small style={{ color: '#666' }}>Vista previa del color</small>
+                    </div>
+                  )}
+                </div>
+                <div className="form-group">
                   <label htmlFor="capacidad">Capacidad *</label>
                   <input
                     id="capacidad"
@@ -258,17 +284,17 @@ function Vehiculos() {
                   />
                   {fieldErrors.capacidad && <div className="error-message">{Array.isArray(fieldErrors.capacidad) ? fieldErrors.capacidad[0] : String(fieldErrors.capacidad)}</div>}
                 </div>
+              </div>
 
-                <div className="form-group">
-                  <label htmlFor="afiliado">Afiliado</label>
-                  <select id="afiliado" name="afiliado" value={form.afiliado} onChange={onChange}>
-                    <option value="">Sin afiliado</option>
-                    {afiliados.map(a => (
-                      <option key={a.id} value={a.id}>{a.apellidos} {a.nombres}</option>
-                    ))}
-                  </select>
-                  {fieldErrors.afiliado && <div className="error">{Array.isArray(fieldErrors.afiliado) ? fieldErrors.afiliado[0] : String(fieldErrors.afiliado)}</div>}
-                </div>
+              <div className="form-group">
+                <label htmlFor="afiliado">Afiliado</label>
+                <select id="afiliado" name="afiliado" value={form.afiliado} onChange={onChange}>
+                  <option value="">Sin afiliado</option>
+                  {afiliados.map(a => (
+                    <option key={a.id} value={a.id}>{a.apellidos} {a.nombres}</option>
+                  ))}
+                </select>
+                {fieldErrors.afiliado && <div className="error">{Array.isArray(fieldErrors.afiliado) ? fieldErrors.afiliado[0] : String(fieldErrors.afiliado)}</div>}
               </div>
               <div className="form-group">
                 <label htmlFor="estado">Estado</label>

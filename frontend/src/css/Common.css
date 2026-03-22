@@ -311,3 +311,103 @@
 .tab-button.tab-caranavi.active {
     border-bottom-color: #00BCD4;
 }
+
+/* Responsive Table to Cards Transformation */
+@media (max-width: 768px) {
+
+    .vehiculos-table thead,
+    .afiliados-table thead,
+    .data-table thead {
+        display: none !important;
+    }
+
+    .vehiculos-table,
+    .vehiculos-table tbody,
+    .vehiculos-table tr,
+    .vehiculos-table td,
+    .afiliados-table,
+    .afiliados-table tbody,
+    .afiliados-table tr,
+    .afiliados-table td,
+    .data-table,
+    .data-table tbody,
+    .data-table tr,
+    .data-table td {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    .vehiculos-table tr,
+    .afiliados-table tr,
+    .data-table tr {
+        margin-bottom: 20px !important;
+        border: 1px solid var(--border-subtle) !important;
+        border-radius: 16px !important;
+        padding: 16px !important;
+        background: var(--bg-surface) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+        position: relative !important;
+    }
+
+    .vehiculos-table td,
+    .afiliados-table td,
+    .data-table td {
+        border: none !important;
+        padding: 10px 0 !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        text-align: right !important;
+        font-size: 13px !important;
+    }
+
+    .vehiculos-table td::before,
+    .afiliados-table td::before,
+    .data-table td::before {
+        content: attr(data-label) !important;
+        font-weight: 800 !important;
+        text-align: left !important;
+        color: var(--text-muted) !important;
+        font-size: 11px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        flex: 1 !important;
+    }
+
+    .vehiculos-table td.actions,
+    .afiliados-table td.actions,
+    .data-table td.actions {
+        margin-top: 12px !important;
+        padding-top: 16px !important;
+        border-top: 1px solid var(--border-subtle) !important;
+        justify-content: center !important;
+        gap: 15px !important;
+    }
+
+    .vehiculos-table td.actions .btn-icon,
+    .afiliados-table td.actions .btn-icon,
+    .data-table td.actions .btn-icon {
+        width: 48px !important;
+        height: 48px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: var(--gray-100) !important;
+        border-radius: 12px !important;
+    }
+
+    .tabs {
+        gap: 5px !important;
+        border-bottom: none !important;
+    }
+
+    .tab-button {
+        flex: 1 !important;
+        min-width: 140px !important;
+        text-align: center !important;
+        font-size: 12px !important;
+        padding: 12px 8px !important;
+        border-radius: 12px !important;
+        margin-bottom: 5px !important;
+    }
+}

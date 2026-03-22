@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../services/api';
 import {
     Chart as ChartJS,
@@ -45,6 +46,9 @@ const DashboardMejorado = () => {
     const chartGridColor = darkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
 
     const [graficosData, setGraficosData] = useState(null);
+    const [salidasData, setSalidasData] = useState(null);
+    const [semanalData, setSemanalData] = useState(null);
+    const [egresosPorTipoData, setEgresosPorTipoData] = useState(null);
     const [rutasRentables, setRutasRentables] = useState([]);
 
     const [metricas, setMetricas] = useState({
@@ -149,14 +153,28 @@ const DashboardMejorado = () => {
             const hoy = new Date();
             const fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth() - (periodo - 1), 1).toISOString().split('T')[0];
 
-            const [operativosRes, graficosRes, rutasRes, ocupacionRes, morososRes, hojasResponse, sancionesRes] = await Promise.all([
+            const [
+                operativosRes,
+                graficosRes,
+                rutasRes,
+                ocupacionRes,
+                morososRes,
+                hojasResponse,
+                sancionesRes,
+                salidasRes,
+                semanalRes,
+                egresosPorTipoRes
+            ] = await Promise.all([
                 api.getReportesOperativos().catch(e => ({ data: {} })),
                 api.getReportesGraficos({ tipo: 'mensual', fecha_inicio: fechaInicio }).catch(e => ({ data: { ingresos: [], egresos: [] } })),
                 api.getRutasRentables({ meses: periodo }).catch(e => ({ data: { rutas: [] } })),
                 api.getOcupacionHistorica({ meses: periodo }).catch(e => ({ data: { meses: [] } })),
                 api.getAfiliadosMorosos({ page_size: 5 }).catch(e => ({ data: { morosos: [] } })),
                 api.getHojasRuta({ page: 1, page_size: 5, ordering: '-fecha_emision' }).catch(e => ({ data: { results: [] } })),
-                api.getSanciones({ estado: 'pendiente', page: 1, page_size: 5 }).catch(e => ({ data: { results: [] } }))
+                api.getSanciones({ estado: 'pendiente', page: 1, page_size: 5 }).catch(e => ({ data: { results: [] } })),
+                api.getReportesGraficos({ tipo: 'salidas' }).catch(e => ({ data: { salidas: [] } })),
+                api.getReportesGraficos({ tipo: 'semanal' }).catch(e => ({ data: { semana: [] } })),
+                api.getReportesGraficos({ tipo: 'por_tipo' }).catch(e => ({ data: { egresos: [] } }))
             ]);
 
             setStats({
@@ -166,6 +184,9 @@ const DashboardMejorado = () => {
                 operativos: operativosRes.data
             });
             setGraficosData(graficosRes.data || { ingresos: [], egresos: [] });
+            setSalidasData(salidasRes?.data || { salidas: [] });
+            setSemanalData(semanalRes?.data || { semana: [] });
+            setEgresosPorTipoData(egresosPorTipoRes?.data || { egresos: [] });
             setRutasRentables(rutasRes.data?.rutas || []);
             setOcupacionData(ocupacionRes.data || { meses: [] });
 
@@ -277,6 +298,61 @@ const DashboardMejorado = () => {
         };
     }, [ocupacionData]);
 
+    const chartSalidasData = useMemo(() => {
+        if (!salidasData || !salidasData.salidas) return null;
+        return {
+            labels: salidasData.salidas.map(s => s.fecha.split('-').slice(1).reverse().join('/')),
+            datasets: [
+                {
+                    label: 'Canitdad de Salidas',
+                    data: salidasData.salidas.map(s => s.total),
+                    backgroundColor: 'rgba(52, 211, 153, 0.7)',
+                    borderRadius: 6,
+                }
+            ]
+        };
+    }, [salidasData]);
+
+    const chartSemanalData = useMemo(() => {
+        if (!semanalData || !semanalData.semana) return null;
+        return {
+            labels: semanalData.semana.map(s => s.fecha.split('-').slice(1).reverse().join('/')),
+            datasets: [
+                {
+                    label: 'Ingresos Diarios (Bs.)',
+                    data: semanalData.semana.map(s => s.total),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                }
+            ]
+        };
+    }, [semanalData]);
+
+    const chartEgresosPorTipoData = useMemo(() => {
+        if (!egresosPorTipoData || !egresosPorTipoData.egresos) return null;
+        return {
+            labels: egresosPorTipoData.egresos.map(e => e.tipo),
+            datasets: [
+                {
+                    label: 'Monto (Bs.)',
+                    data: egresosPorTipoData.egresos.map(e => e.total),
+                    backgroundColor: [
+                        'rgba(99, 102, 241, 0.7)',
+                        'rgba(244, 63, 94, 0.7)',
+                        'rgba(16, 185, 129, 0.7)',
+                        'rgba(245, 158, 11, 0.7)',
+                        'rgba(139, 92, 246, 0.7)',
+                        'rgba(14, 165, 233, 0.7)',
+                    ],
+                    borderWidth: 0,
+                }
+            ]
+        };
+    }, [egresosPorTipoData]);
+
     const rutaMasRentable = useMemo(() => {
         if (!rutasRentables || rutasRentables.length === 0) return null;
         return [...rutasRentables].sort((a, b) => b.ingresos_totales - a.ingresos_totales)[0];
@@ -342,6 +418,102 @@ const DashboardMejorado = () => {
                         Actualizar {formatLastUpdate()}
                     </button>
                 </div>
+            </div>
+
+            {/* Nueva sección de Accesos Rápidos */}
+            <div className="quick-access-bar" style={{
+                display: 'flex',
+                gap: '1rem',
+                marginBottom: '1.5rem',
+                overflowX: 'auto',
+                paddingBottom: '0.5rem'
+            }}>
+                <Link to="/pizarra" className="quick-card-link" style={{
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    color: 'white',
+                    padding: '1rem 1.5rem',
+                    borderRadius: '12px',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.2)',
+                    minWidth: '220px'
+                }}>
+                    <span style={{ fontSize: '1.5rem' }}>🚌</span>
+                    <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Pizarra Pública</div>
+                        <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>Ver salidas y reservas online</div>
+                    </div>
+                </Link>
+                <Link to="/reservas" className="quick-card-link" style={{
+                    background: 'white',
+                    border: '1px solid #e2e8f0',
+                    color: '#1e293b',
+                    padding: '1rem 1.5rem',
+                    borderRadius: '12px',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    minWidth: '220px'
+                }}>
+                    <span style={{ fontSize: '1.5rem' }}>📅</span>
+                    <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Gestión Reservas</div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Admin. reservas internas</div>
+                    </div>
+                </Link>
+                <a 
+                    href="/QR_RESERVAS_TAIPIPLAYA.png" 
+                    download="QR_RESERVAS_TAIPIPLAYA.png"
+                    className="quick-card-link" 
+                    style={{
+                        background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                        color: 'white',
+                        padding: '1rem 1.5rem',
+                        borderRadius: '12px',
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        boxShadow: '0 4px 15px rgba(124, 58, 237, 0.2)',
+                        minWidth: '220px',
+                        border: 'none',
+                        cursor: 'pointer'
+                    }}
+                >
+                    <span style={{ fontSize: '1.5rem' }}>⬇️</span>
+                    <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Descargar QR Reservas</div>
+                        <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>Para imprimir y colocar en oficina</div>
+                    </div>
+                </a>
+                <a 
+                    href="/volante_reservas.png" 
+                    download="volante_reservas.png"
+                    className="quick-card-link" 
+                    style={{
+                        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                        color: 'white',
+                        padding: '1rem 1.5rem',
+                        borderRadius: '12px',
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        boxShadow: '0 4px 15px rgba(245, 158, 11, 0.2)',
+                        minWidth: '220px',
+                        border: 'none',
+                        cursor: 'pointer'
+                    }}
+                >
+                    <span style={{ fontSize: '1.5rem' }}>📄</span>
+                    <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Descargar Volante</div>
+                        <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>Diseño con QR para publicidad</div>
+                    </div>
+                </a>
             </div>
 
             <div className="metricas-grid">
@@ -475,6 +647,83 @@ const DashboardMejorado = () => {
                             }}
                         />
                     ) : <p>Cargando...</p>}
+                </div>
+            </div>
+
+            <div className="dashboard-charts third-row" style={{ marginTop: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                <div className="chart-card">
+                    <h3>🚌 Salidas por Día (14 días)</h3>
+                    {chartSalidasData ? (
+                        <Bar
+                            data={chartSalidasData}
+                            options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    y: { beginAtZero: true, grid: { color: chartGridColor }, ticks: { color: chartTextColor, stepSize: 1 } },
+                                    x: { grid: { display: false }, ticks: { color: chartTextColor } }
+                                }
+                            }}
+                        />
+                    ) : <p>Cargando salidas...</p>}
+                </div>
+                <div className="chart-card">
+                    <h3>📅 Ingresos de la Semana Actual</h3>
+                    {chartSemanalData ? (
+                        <Line
+                            data={chartSemanalData}
+                            options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    y: { beginAtZero: true, grid: { color: chartGridColor }, ticks: { color: chartTextColor } },
+                                    x: { grid: { display: false }, ticks: { color: chartTextColor } }
+                                }
+                            }}
+                        />
+                    ) : <p>Cargando ingresos...</p>}
+                </div>
+            </div>
+
+            <div className="dashboard-charts fourth-row" style={{ marginTop: '1.5rem', display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                <div className="chart-card" style={{ height: '350px' }}>
+                    <h3>💰 Gastos Detallados por Categoría</h3>
+                    <div style={{ height: '280px', position: 'relative' }}>
+                        {chartEgresosPorTipoData ? (
+                            <Doughnut
+                                data={chartEgresosPorTipoData}
+                                options={{
+                                    maintainAspectRatio: false,
+                                    responsive: true,
+                                    plugins: {
+                                        legend: {
+                                            position: 'right',
+                                            labels: {
+                                                color: chartTextColor,
+                                                font: { size: 12, weight: 'bold' },
+                                                padding: 20
+                                            }
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function (context) {
+                                                    let label = context.label || '';
+                                                    if (label) label += ': ';
+                                                    if (context.parsed !== null) {
+                                                        label += 'Bs. ' + context.parsed.toLocaleString();
+                                                    }
+                                                    return label;
+                                                }
+                                            }
+                                        }
+                                    },
+                                    cutout: '60%'
+                                }}
+                            />
+                        ) : <p>Cargando gastos...</p>}
+                    </div>
                 </div>
             </div>
 

@@ -26,6 +26,7 @@ class WhatsAppMessage(models.Model):
         ('meeting_reminder', 'Recordatorio de Reunión'),
         ('debt_reminder', 'Recordatorio de Deuda'),
         ('cuota_payment', 'Pago de Cuota'),
+        ('hoja_ruta_emitted', 'Emisión de Hoja de Ruta'),
         ('general', 'General'),
     ]
 
@@ -89,6 +90,11 @@ class WhatsAppMessage(models.Model):
         blank=True,
         null=True,
         verbose_name='ID de Cuota Relacionada'
+    )
+    related_hoja_id = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name='ID de Hoja de Ruta Relacionada'
     )
     
     # Información de error (si falla)

@@ -155,3 +155,101 @@ class ReportGenerator:
         )
         
         return summary
+    @staticmethod
+    def get_monday_hojas_pagadas_report():
+        """
+        Genera una lista detallada de los afiliados que pagaron sus hojas de ruta
+        el día lunes para el control de la directiva.
+        """
+        from hojasruta.models import HojaRuta
+        
+        today = timezone.now().date()
+        # Obtener hojas de ruta del día (Lunes)
+        hojas = HojaRuta.objects.filter(fecha_emision=today).select_related('afiliado', 'ruta')
+        
+        total_pagadas = hojas.filter(estado='pagada').count()
+        monto_total = hojas.filter(estado='pagada').aggregate(total=Sum('precio'))['total'] or 0
+        total_pendientes = hojas.filter(estado__in=['emitida', 'notificada']).count()
+        
+        summary = (
+            f"📋 *LISTA OFICIAL DE CONTROL*\n"
+            f"📅 *Día:* Lunes {today.strftime('%d/%m/%Y')}\n"
+            f"📍 *Hojas de Ruta Pagadas*\n\n"
+        )
+        
+        if not hojas.exists():
+            summary += "_No se registraron hojas de ruta hoy._\n"
+        else:
+            summary += "*DETALLE DE PAGOS:*\n"
+            # Listar pagadas primero
+            for h in hojas.filter(estado='pagada').order_by('nro'):
+                nombre = h.afiliado.nombre_completo if hasattr(h.afiliado, 'nombre_completo') else str(h.afiliado)
+                summary += f"✅ {h.nro} - {nombre}: {h.precio:.2f} Bs\n"
+            
+            # Listar pendientes
+            pendientes = hojas.exclude(estado='pagada')
+            if pendientes.exists():
+                summary += "\n*SANCIONES / PENDIENTES:*\n"
+                for h in pendientes.order_by('nro'):
+                    nombre = h.afiliado.nombre_completo if hasattr(h.afiliado, 'nombre_completo') else str(h.afiliado)
+                    summary += f"❌ {h.nro} - {nombre}: PENDIENTE\n"
+
+        summary += (
+            f"\n--- *RESUMEN FINAL* ---\n"
+            f"✅ Pagadas: {total_pagadas}\n"
+            f"❌ Pendientes: {total_pendientes}\n"
+            f"💰 Recaudación: {monto_total:.2f} Bs\n\n"
+            f"Sindicato S.M.I.T. Taipiplaya"
+        )
+        
+        return summary
+
+    @staticmethod
+    def get_daily_puntero_la_paz_report():
+        """
+        Genera el reporte de quién sale hoy en el puntero de La Paz.
+        """
+        from hojasruta.models import TurnoSalida
+        from datetime import date
+        
+        today = date.today()
+        # Buscar el turno programado para hoy en la ruta La Paz
+        turnos = TurnoSalida.objects.filter(
+            fecha=today, 
+            ruta__destino__iexact='la paz'
+        ).select_related('afiliado', 'ruta')
+        
+        # Dial de la semana
+        dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        dia_nombre = dias[today.weekday()]
+        
+        summary = (
+            f"🚌 *CONTROL DIARIO - RUTA LA PAZ*\n"
+            f"📅 *Día:* {dia_nombre} {today.strftime('%d/%m/%Y')}\n\n"
+        )
+        
+        if today.weekday() in [1, 3]: # Martes o Jueves
+            summary += "ℹ️ *AVISO:* Hoy no hay turno de Taipiplaya. Salen integración Caranavi (Convenio).\n"
+        elif not turnos.exists():
+            summary += "⚠️ *ATENCIÓN:* No se encontró programación para hoy en el sistema.\n"
+        else:
+            summary += "*PROGRAMACIÓN DE SALIDA (PUNTERO):*\n"
+            for t in turnos:
+                af = t.afiliado
+                vehiculos = af.vehiculos.all()
+                placa = vehiculos[0].placa if vehiculos.exists() else "Sin placa reg."
+                tipo = vehiculos[0].tipo if vehiculos.exists() else "N/A"
+                
+                summary += (
+                    f"✅ *{t.orden}º Salida:*\n"
+                    f"👤 *Socio:* {af.nombre_completo}\n"
+                    f"🚗 *Vehículo:* {tipo.upper()} - {placa}\n"
+                    f"📞 *Tel:* {af.telefono or 'N/A'}\n\n"
+                )
+        
+        summary += (
+            f"Favor realizar el control respectivo.\n"
+            f"_Sindicato S.M.I.T. Taipiplaya_"
+        )
+        
+        return summary

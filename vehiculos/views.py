@@ -9,7 +9,7 @@ class VehiculoViewSet(viewsets.ModelViewSet):
     queryset = Vehiculo.objects.select_related('afiliado').all()
     serializer_class = VehiculoSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['placa', 'tipo', 'afiliado__ci']
+    search_fields = ['placa', 'tipo', 'color', 'afiliado__ci', 'afiliado__apellidos']
     ordering_fields = ['placa', 'tipo', 'capacidad']
     class IsSecretariaOrDirectivaOrReadOnly(BasePermission):
         def has_permission(self, request, view):
@@ -113,8 +113,15 @@ class VehiculoViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
         estado = self.request.query_params.get('estado')
         afiliado = self.request.query_params.get('afiliado')
+        con_placa = self.request.query_params.get('con_placa')
+        tipo_in = self.request.query_params.get('tipo_in')
         if estado:
             qs = qs.filter(estado=estado)
         if afiliado:
             qs = qs.filter(afiliado_id=afiliado)
+        if con_placa and con_placa.lower() == 'true':
+            qs = qs.filter(indocumentado=False)
+        if tipo_in:
+            tipos = [t.strip().lower() for t in tipo_in.split(',')]
+            qs = qs.filter(tipo__in=tipos)
         return qs

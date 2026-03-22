@@ -103,8 +103,10 @@ class WhatsAppService:
         related_reservation_id: Optional[int] = None,
         related_sanction_id: Optional[int] = None,
         related_cuota_id: Optional[int] = None,
+        related_hoja_id: Optional[int] = None,
         recipient_name: str = '',
         use_celery: bool = True,
+        media_url: Optional[str] = None,
     ) -> Optional[WhatsAppMessage]:
         """
         Enviar mensaje de WhatsApp (asíncrono por defecto)
@@ -130,25 +132,30 @@ class WhatsAppService:
             related_reservation_id=related_reservation_id,
             related_sanction_id=related_sanction_id,
             related_cuota_id=related_cuota_id,
+            related_hoja_id=related_hoja_id,
             status='pending'
         )
         
         if use_celery:
             from .tasks import send_whatsapp_task
-            send_whatsapp_task.delay(whatsapp_msg.id)
+            send_whatsapp_task.delay(whatsapp_msg.id, media_url=media_url)
             return whatsapp_msg
         
         # Envío síncrono (solo si use_celery=False)
-        return self._do_send(whatsapp_msg)
+        return self._do_send(whatsapp_msg, media_url=media_url)
 
-    def _do_send(self, whatsapp_msg: WhatsAppMessage) -> WhatsAppMessage:
+    def _do_send(self, whatsapp_msg: WhatsAppMessage, media_url: Optional[str] = None) -> WhatsAppMessage:
         """
         Realiza el envío real del mensaje
         """
         try:
             # Enviar según proveedor
             if self.provider == 'twilio':
-                result = self._send_via_twilio(whatsapp_msg.recipient_phone, whatsapp_msg.message_content)
+                result = self._send_via_twilio(
+                    whatsapp_msg.recipient_phone, 
+                    whatsapp_msg.message_content,
+                    media_url=media_url
+                )
                 if result:
                     whatsapp_msg.mark_as_sent(external_id=result)
                     logger.info(f"Mensaje enviado a {whatsapp_msg.recipient_phone}: {result}")
@@ -167,7 +174,7 @@ class WhatsAppService:
         
         return whatsapp_msg
     
-    def _send_via_twilio(self, to: str, body: str) -> Optional[str]:
+    def _send_via_twilio(self, to: str, body: str, media_url: Optional[str] = None) -> Optional[str]:
         """
         Enviar mensaje via Twilio
         
@@ -179,11 +186,15 @@ class WhatsAppService:
             return None
         
         try:
-            message = self.client.messages.create(
-                from_=self.twilio_from,
-                body=body,
-                to=to
-            )
+            params = {
+                'from_': self.twilio_from,
+                'body': body,
+                'to': to
+            }
+            if media_url:
+                params['media_url'] = [media_url]
+                
+            message = self.client.messages.create(**params)
             return message.sid
         
         except Exception as e:
@@ -320,6 +331,33 @@ class WhatsAppService:
             },
             recipient_name=recipient_name,
             related_cuota_id=cuota_id
+        )
+
+    def send_hoja_ruta_notification(
+        self,
+        phone: str,
+        recipient_name: str,
+        nro_hoja: str,
+        ruta: str,
+        placa: str,
+        precio: float,
+        hoja_id: int
+    ) -> Optional[WhatsAppMessage]:
+        """
+        Enviar notificación de emisión de hoja de ruta
+        """
+        return self.send_from_template(
+            template_name='hoja_ruta_emitted',
+            phone=phone,
+            context={
+                'nombre': recipient_name,
+                'nro': nro_hoja,
+                'ruta': ruta,
+                'placa': placa,
+                'precio': f"{precio:.2f}",
+            },
+            recipient_name=recipient_name,
+            related_hoja_id=hoja_id
         )
 
 

@@ -7,14 +7,14 @@ from .models import WhatsAppMessage
 logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, max_retries=3)
-def send_whatsapp_task(self, message_id):
+def send_whatsapp_task(self, message_id, media_url=None):
     """
     Tarea de Celery para enviar un mensaje de WhatsApp
     """
     try:
         from .services import whatsapp_service
         msg = WhatsAppMessage.objects.get(pk=message_id)
-        return whatsapp_service._do_send(msg).status
+        return whatsapp_service._do_send(msg, media_url=media_url).status
     except WhatsAppMessage.DoesNotExist:
         logger.error(f"Mensaje {message_id} no encontrado")
         return "not_found"

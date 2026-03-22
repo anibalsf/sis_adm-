@@ -95,3 +95,13 @@ class SchedulerViewSet(viewsets.ViewSet):
             return Response({'detail': 'Reporte de morosos ejecutado'})
         except Exception as e:
             return Response({'detail': str(e)}, status=500)
+
+    @action(detail=False, methods=['post'])
+    def test_puntero(self, request):
+        """Ejecuta manualmente la notificación de puntero"""
+        try:
+            from sistema.scheduler import enviar_notificacion_puntero_diario
+            resultado = enviar_notificacion_puntero_diario()
+            return Response({'detail': f'Notificación de puntero enviada ({resultado})'})
+        except Exception as e:
+            return Response({'detail': str(e)}, status=500)

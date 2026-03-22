@@ -37,13 +37,28 @@ const downloadFile = async (url, filename) => {
     }
 };
 
+export const axiosInstance = axios;
+
 export const api = {
     // Dashboard
     getDashboard: () => axios.get('/dashboard'),
 
+    // Encomiendas
+    getEncomiendas: (params) => axios.get('/encomiendas/', { params }),
+    getEncomienda: (id) => axios.get(`/encomiendas/${id}/`),
+    createEncomienda: (data) => axios.post('/encomiendas/', data),
+    updateEncomienda: (id, data) => axios.put(`/encomiendas/${id}/`, data),
+    deleteEncomienda: (id) => axios.delete(`/encomiendas/${id}/`),
+    cambiarEstadoEncomienda: (id, estado) => axios.post(`/encomiendas/${id}/cambiar_estado/`, { estado }),
+    asignarHojaEncomienda: (id, hojaId) => axios.post(`/encomiendas/${id}/asignar_hoja/`, { hoja_ruta_id: hojaId }),
+    generarQrEncomienda: (id) => axios.get(`/encomiendas/${id}/generar_qr/`),
+    notificarWhatsappEncomienda: (id, tipo) => axios.post(`/encomiendas/${id}/notificar_whatsapp/`, { tipo }),
+
+
     // Afiliados
     getAfiliados: (params) => axios.get('/afiliados/', { params }),
     getAfiliado: (id) => axios.get(`/afiliados/${id}/`),
+    getListaTurnoLaPaz: () => axios.get('/afiliados/lista_turno_la_paz/'),
     createAfiliado: (data) => axios.post('/afiliados/', data),
     updateAfiliado: (id, data) => axios.put(`/afiliados/${id}/`, data),
     deleteAfiliado: (id) => axios.delete(`/afiliados/${id}/`),
@@ -53,6 +68,7 @@ export const api = {
     getTurnoDelDia: (fecha) => axios.get(`/afiliados/turno_del_dia/?fecha=${fecha}`),
     generarPagoQrTotalAfiliado: (id) => axios.post(`/afiliados/${id}/generar_pago_qr_total/`),
     getMiPerfil: () => axios.get('/afiliados/mi_perfil/'),
+    getKioscoConsulta: (ci, ci_exp) => axios.get(`/afiliados/kiosco_consulta/?ci=${ci}&ci_exp=${ci_exp}`),
 
     // Nuevas funciones - Fase 3: Reservas con QR
     generarQrReserva: (id) => axios.get(`/reservas/${id}/generar_qr/`, { responseType: 'blob' }),
@@ -88,7 +104,7 @@ export const api = {
     deleteMiembroDirectorio: (id) => axios.delete(`/directorio/${id}/`),
 
     // Rutas
-    getRutas: () => axios.get('/rutas/'),
+    getRutas: (params) => axios.get('/rutas/', { params }),
     getRuta: (id) => axios.get(`/rutas/${id}/`),
     createRuta: (data) => axios.post('/rutas/', data),
     updateRuta: (id, data) => axios.put(`/rutas/${id}/`, data),
@@ -104,6 +120,7 @@ export const api = {
     generarPlanillaLaPaz: (id) => axios.get(`/hojas-ruta/${id}/generar_planilla_la_paz/`, { responseType: 'blob' }),
     enviarHojaWhatsapp: (id, data) => axios.post(`/hojas-ruta/${id}/notificar/`, data),
     validarQr: (id) => axios.get(`/hojas-ruta/${id}/validar_qr/`),
+    getPunteroHoy: () => axios.get('/hojas-ruta/puntero_hoy/'),
 
     // Rutas
 
@@ -124,6 +141,11 @@ export const api = {
     updateReunion: (id, data) => axios.put(`/reuniones/${id}/`, data),
     deleteReunion: (id) => axios.delete(`/reuniones/${id}/`),
     cerrarReunion: (id) => axios.post(`/reuniones/${id}/cerrar_reunion/`),
+    
+    // Turnos Salida (Puntero La Paz)
+    getTurnosSalida: (params) => axios.get('/turnos-salida/', { params }),
+    generarProgramacionSalida: () => axios.post('/turnos-salida/generar_programacion/'),
+    deleteTurnoSalida: (id) => axios.delete(`/turnos-salida/${id}/`),
 
 
     // Asistencias
@@ -156,6 +178,7 @@ export const api = {
     getHojasRutaDisponibles: (params) => axios.get('/hojas-ruta/disponibles_hoy/', { params }),
     getPasajeros: (id) => axios.get(`/hojas-ruta/${id}/pasajeros/`),
     generarPagoQrReserva: (id) => axios.post(`/reservas/${id}/generar_pago_qr/`),
+    getReservaPublica: (id) => axios.get(`/reservas/${id}/public-retrieve/`),
 
     // Reportes
     getReporteFinanzas: (params) => axios.get('/reportes/finanzas', { params }),
@@ -186,7 +209,7 @@ export const api = {
         const q = new URLSearchParams(params).toString()
         return `${API_URL}/reportes/operativos/csv?${q}`
     },
-    getTransacciones: (params) => axios.get('/reportes/transacciones', { params }),
+    getTransacciones: (params) => axios.get('/reportes/transacciones/', { params }),
     urlTransaccionesPdf: (params) => {
         const q = new URLSearchParams(params).toString()
         return `${API_URL}/reportes/transacciones/pdf?${q}`
@@ -231,7 +254,7 @@ export const api = {
     changePassword: (data) => axios.post('/auth/change-password', data),
 
     // Bitácora / Logs de Auditoría
-    getBitacora: (params) => axios.get('/bitacora', { params }),
+    getBitacora: (params) => axios.get('/bitacora/', { params }),
 
     // Métodos de descarga con autenticación
     downloadTransaccionesPdf: async (params) => {
@@ -295,9 +318,14 @@ export const api = {
     },
 
     // Nuevos Reportes Avanzados
-    getRentabilidadRutas: (params) => axios.get('/reportes/rentabilidad-rutas', { params }),
-    getKPIsEjecutivos: () => axios.get('/reportes/kpis-ejecutivos'),
-    getTendenciasMensuales: (params) => axios.get('/reportes/tendencias-mensuales', { params }),
+    getRentabilidadRutas: (params) => axios.get('/reportes/rentabilidad-rutas/', { params }),
+    getKPIsEjecutivos: () => axios.get('/reportes/kpis-ejecutivos/'),
+    getTendenciasMensuales: (params) => axios.get('/reportes/tendencias-mensuales/', { params }),
+
+    // Alertas de Sistema
+    getAlertasNoLeidas: () => axios.get('/alertas/no_leidas/'),
+    marcarAlertaLeida: (id) => axios.post(`/alertas/${id}/marcar_leida/`),
+    marcarTodasAlertasLeidas: () => axios.post('/alertas/marcar_todas_leidas/'),
 };
 
 

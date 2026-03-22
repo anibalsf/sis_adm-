@@ -17,3 +17,25 @@ class Notificacion(models.Model):
 
     def __str__(self):
         return f"{self.canal}-{self.destinatario}-{self.estado}"
+
+class AlertaSistema(models.Model):
+    TIPOS = [
+        ('reserva', 'Nueva Reserva Online'),
+        ('encomienda', 'Nueva Encomienda'),
+        ('sistema', 'Alerta de Sistema'),
+        ('vehiculo', 'Vencimiento Documentación'),
+    ]
+    tipo = models.CharField(max_length=20, choices=TIPOS)
+    titulo = models.CharField(max_length=100)
+    mensaje = models.TextField()
+    leida = models.BooleanField(default=False)
+    fecha = models.DateTimeField(auto_now_add=True)
+    link = models.CharField(max_length=200, blank=True, null=True)
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = "Alerta de Sistema"
+        verbose_name_plural = "Alertas de Sistema"
+
+    def __str__(self):
+        return f"{self.tipo} - {self.titulo} ({'Leída' if self.leida else 'Nueva'})"

@@ -56,7 +56,11 @@ class PagoViewSet(viewsets.ModelViewSet):
     serializer_class = PagoSerializer
     
     def perform_create(self, serializer):
-        obj = serializer.save()
+        # Si es QR, el estado inicial es pendiente hasta que se verifique
+        metodo = self.request.data.get('metodo_pago', 'efectivo')
+        estado_inicial = 'pendiente' if metodo == 'qr' else 'completado'
+        
+        obj = serializer.save(estado=estado_inicial)
         
         # Actualizar estado de la hoja de ruta si existe el vínculo
         if obj.hoja_ruta:
@@ -70,7 +74,7 @@ class PagoViewSet(viewsets.ModelViewSet):
     def generar_recibo(self, request, pk=None):
         """Generar recibo de pago en PDF mejorado"""
         from datetime import datetime
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_RIGHT
         
@@ -102,13 +106,30 @@ class PagoViewSet(viewsets.ModelViewSet):
             alignment=TA_RIGHT
         )
         
-        # Encabezado
-        elements.append(Paragraph("SINDICATO MIXTO INTEGRACIÓN TAIPIPLAYA", title_style))
+        # Encabezado con Logo
+        logo_path = BASE_DIR / 'frontend' / 'public' / 'logo-taipiplaya.png'
+        if logo_path.exists():
+            logo = Image(str(logo_path), width=1.4*inch, height=1.4*inch)
+            logo.hAlign = 'CENTER'
+            elements.append(logo)
+            elements.append(Spacer(1, 6))
+
+        elements.append(Paragraph("SINDICATO MIXTO \"INTEGRACIÓN TAIPIPLAYA\"", title_style))
+        
+        info_sub_style = ParagraphStyle(
+            'InfoSub',
+            parent=styles['Normal'],
+            fontSize=8,
+            alignment=TA_CENTER,
+            spaceAfter=12
+        )
+        info_text = "FUNDADO EL 22 DE SEPTIEMBRE DEL 2011 CON PERSONERÍA JURÍDICA R.S. NRO. 20095<br/>TAIPIPLAYA – CARANAVI LA PAZ BOLIVIA"
+        elements.append(Paragraph(info_text, info_sub_style))
         elements.append(Paragraph("RECIBO DE PAGO", title_style))
         elements.append(Spacer(1, 12))
         
         # Número de recibo y fecha
-        recibo_nro = f"NRO-{pago.id:06d}"
+        recibo_nro = f"NRO-{pago.id:03d}"
         fecha_str = pago.fecha_pago.strftime("%d/%m/%Y") if hasattr(pago, 'fecha_pago') and pago.fecha_pago else datetime.now().strftime("%d/%m/%Y")
         
         elements.append(Paragraph(f"<b>Recibo Nº:</b> {recibo_nro}", right_style))
@@ -127,8 +148,13 @@ class PagoViewSet(viewsets.ModelViewSet):
             ['CI', afiliado_ci],
             ['Concepto', concepto_principal],
             ['Descripción', observaciones],
-            ['Monto', f"Bs. {float(pago.monto):.2f}"],
+            ['Método de Pago', pago.get_metodo_pago_display()],
         ]
+        
+        if pago.metodo_pago == 'transferencia':
+            data.append(['Datos Transferencia', f"Banco: {pago.banco or '-'} | Operación: {pago.nro_operacion or '-'}"])
+            
+        data.append(['Monto', f"Bs. {float(pago.monto):.2f}"])
         
         # Crear tabla
         table = Table(data, colWidths=[2*inch, 4*inch])
@@ -158,7 +184,31 @@ class PagoViewSet(viewsets.ModelViewSet):
         ]))
         
         elements.append(table)
-        elements.append(Spacer(1, 30))
+        elements.append(Spacer(1, 20))
+
+        # Generar QR para el recibo
+        qr_data = f"RECIBO:{recibo_nro}|FECHA:{fecha_str}|MONTO:{pago.monto}|AFILIADO:{afiliado_nombre}"
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+
+        img_qr = qr.make_image(fill_color="black", back_color="white")
+        qr_img_buffer = BytesIO()
+        img_qr.save(qr_img_buffer)
+        qr_img_buffer.seek(0)
+        
+        # Añadir QR al PDF (centrado)
+        from reportlab.lib.utils import ImageReader
+        qr_flowable = Image(qr_img_buffer, width=1.5*inch, height=1.5*inch)
+        qr_flowable.hAlign = 'CENTER'
+        elements.append(qr_flowable)
+        
+        elements.append(Spacer(1, 10))
         
         # Nota al pie
         nota_style = ParagraphStyle(
@@ -345,9 +395,16 @@ class ReciboView(APIView):
         # Altura de CADA recibo individual (será un poco menos de la mitad del área útil)
         RECEIPT_HEIGHT = AVAILABLE_HEIGHT / 2
         
+        from django.conf import settings
+        logo_path = settings.BASE_DIR / 'frontend' / 'public' / 'logo-taipiplaya.png'
+
         def dibujar_recibo_individual(c, start_y, etiqueta_copia):
             # start_y es donde comienza la cabecera (parte superior del recibo)
             
+            # --- Logotipo ---
+            if logo_path.exists():
+                c.drawImage(str(logo_path), width / 2 - 0.4*inch, start_y + 10, width=0.8*inch, height=0.8*inch, mask='auto')
+
             # --- Cabecera ---
             c.setFont("Helvetica-Bold", 11) # Letra un poco más pequeña
             c.drawCentredString(width / 2, start_y, "SINDICATO MIXTO DE TRANSPORTE")
@@ -399,6 +456,15 @@ class ReciboView(APIView):
             renglon("Por:", pago.tipo_pago.nombre[0:45], current_y)
             current_y -= line_step
             
+            renglon("Método de Pago:", pago.get_metodo_pago_display(), current_y)
+            current_y -= line_step
+            
+            if hasattr(pago, 'metodo_pago') and pago.metodo_pago == 'transferencia':
+                banco_str = pago.banco or '-'
+                nro_str = pago.nro_operacion or '-'
+                renglon("Transferencia:", f"Banco: {banco_str} | Nro: {nro_str}", current_y)
+                current_y -= line_step
+
             if pago.observaciones:
                 c.setFont("Helvetica-Oblique", 8)
                 c.drawString(SAFE_MARGIN_X + 1.0 * inch, current_y, f"({pago.observaciones[0:70]})")

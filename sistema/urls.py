@@ -7,7 +7,7 @@ from django.views.generic import TemplateView
 from rest_framework import routers
 from afiliados.views import AfiliadoViewSet
 from vehiculos.views import VehiculoViewSet
-from hojasruta.views import HojaRutaViewSet
+from hojasruta.views import HojaRutaViewSet, TurnoSalidaViewSet
 from cuotas.views import CuotaViewSet
 from rutas.views import RutaViewSet
 from tesoreria.views import EgresoViewSet, PagoViewSet, TipoPagoViewSet, ReciboView
@@ -45,6 +45,8 @@ from directorio.views import MiembroDirectorioViewSet
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from sistema.health import health_check
 
+from comunicacion.views import AlertaSistemaViewSet
+
 router = routers.DefaultRouter()
 router.register(r'afiliados', AfiliadoViewSet)
 router.register(r'vehiculos', VehiculoViewSet)
@@ -60,6 +62,8 @@ router.register(r'egresos', EgresoViewSet)
 router.register(r'pagos', PagoViewSet)
 router.register(r'tipos-pago', TipoPagoViewSet)
 router.register(r'users', UserViewSet)
+router.register(r'alertas', AlertaSistemaViewSet)
+router.register(r'turnos-salida', TurnoSalidaViewSet)
 
 urlpatterns = [
     # Admin
@@ -76,6 +80,7 @@ urlpatterns = [
     path('api/whatsapp/', include('whatsapp_notif.urls')),  # WhatsApp notifications
     path('api/mantenimiento/', include('mantenimiento.urls')),  # Vehicle Maintenance
     path('api/reportes-auto/', include('reportes_auto.urls')),  # Reportes Automáticos
+    path('api/encomiendas/', include('encomiendas.urls')),  # Encomiendas y Paquetería
     path('api/dashboard', ReportesOperativosView.as_view()), # Usamos Operativos como dashboard base
     # path('dashboard', DashboardHTMLView.as_view()),  # Comentado
     path('api/historial', HistorialView.as_view()),

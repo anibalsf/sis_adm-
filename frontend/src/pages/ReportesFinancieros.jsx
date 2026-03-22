@@ -12,6 +12,7 @@ import {
     Legend,
 } from 'chart.js';
 import { Line, Bar, Pie } from 'react-chartjs-2';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import api from '../services/api';
 import './ReportesFinancieros.css';
 
@@ -25,7 +26,8 @@ ChartJS.register(
     ArcElement,
     Title,
     Tooltip,
-    Legend
+    Legend,
+    ChartDataLabels
 );
 
 function ReportesFinancieros() {
@@ -67,8 +69,9 @@ function ReportesFinancieros() {
 
             setError('');
         } catch (err) {
-            setError('Error al cargar los reportes');
-            console.error(err);
+            const errorMsg = err.response?.data?.error || err.response?.data?.detail || err.message || 'Error desconocido';
+            setError(`Error al cargar los reportes: ${errorMsg}`);
+            console.error('Error cargando reportes:', err);
         } finally {
             setLoading(false);
         }
@@ -211,12 +214,15 @@ function ReportesFinancieros() {
                 display: true,
                 text: 'Tendencia Mensual de Ingresos y Egresos',
             },
+            datalabels: {
+                display: false
+            }
         },
         scales: {
             y: {
                 beginAtZero: true,
             },
-        },
+        }
     };
 
     const opcionesBarras = {
@@ -230,6 +236,9 @@ function ReportesFinancieros() {
                 display: true,
                 text: 'Comparación Mensual de Ingresos vs Egresos',
             },
+            datalabels: {
+                display: false
+            }
         },
         scales: {
             y: {
@@ -244,9 +253,38 @@ function ReportesFinancieros() {
         responsive: true,
         plugins: {
             legend: {
-                position: 'right',
+                position: 'bottom',
+                labels: {
+                    padding: 20,
+                    usePointStyle: true,
+                }
             },
+            tooltip: {
+                callbacks: {
+                    label: function (context) {
+                        const label = context.label || '';
+                        const value = context.parsed || 0;
+                        const total = context.dataset.data.reduce((acc, curr) => acc + curr, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${label}: Bs ${value.toLocaleString()} (${percentage}%)`;
+                    }
+                }
+            }
         },
+        datalabels: {
+            formatter: (value, ctx) => {
+                const total = ctx.dataset.data.reduce((acc, curr) => acc + curr, 0);
+                const percentage = ((value / total) * 100).toFixed(1) + "%";
+                return percentage;
+            },
+            color: '#fff',
+            font: {
+                weight: 'bold',
+                size: 14
+            },
+            textShadowBlur: 4,
+            textShadowColor: 'rgba(0,0,0,0.5)'
+        }
     };
 
     const datosLinea = prepararDatosLinea();
@@ -256,7 +294,7 @@ function ReportesFinancieros() {
 
     return (
         <div className="reportes-container">
-            <h1>Reportes Financieros</h1>
+            <h1>Módulo de Reportes Financieros</h1>
             <p>Visualización de datos financieros con gráficos interactivos</p>
 
             {/* Filtros */}

@@ -18,8 +18,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
-        name: 'Sindicato Taipiplaya',
-        short_name: 'Taipiplaya',
+        name: 'Sindicato Integración',
+        short_name: 'Integración',
         description: 'Sistema de Gestión Administrativa - Sindicato Mixto de Transporte Integración Taipiplaya',
         theme_color: '#1e3a8a',
         background_color: '#ffffff',

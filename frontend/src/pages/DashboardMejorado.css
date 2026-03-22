@@ -10,12 +10,23 @@
     --text-primary: #1e293b;
     --text-secondary: #64748b;
     --radius-premium: 20px;
+    /* Variables de glassmorphism */
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-blur: blur(20px);
+    --glass-border: rgba(226, 232, 240, 0.8);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+    --card-bg: #ffffff;
+    --card-border: #e2e8f0;
 }
 
 [data-theme='dark'] {
     --dashboard-bg: #0f172a;
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
+    --glass-bg: rgba(15, 23, 42, 0.8);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --card-bg: #1e293b;
+    --card-border: rgba(255, 255, 255, 0.1);
 }
 
 .dashboard-mejorado {
@@ -445,6 +456,8 @@
 @media (max-width: 1200px) {
 
     .dashboard-charts,
+    .dashboard-charts.second-row,
+    .dashboard-charts.third-row,
     .metricas-grid {
         grid-template-columns: 1fr;
     }

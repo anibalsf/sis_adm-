@@ -46,6 +46,7 @@
 2. **BCP Bolivia**
 3. **Banco Unión**
 4. **Banco Nacional de Bolivia**
+5. **yape con qr
 
 #### Tecnología:
 - **Simple QR Bolivia** (API unificada para QR boliviano)

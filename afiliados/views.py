@@ -9,6 +9,7 @@ from cuotas.models import Cuota
 from sanciones.models import Sancion
 from hojasruta.models import HojaRuta
 from tesoreria.models import Pago
+from django.utils import timezone
 
 class AfiliadoViewSet(viewsets.ModelViewSet):
     queryset = Afiliado.objects.all()
@@ -17,6 +18,25 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
     search_fields = ['ci', 'apellidos', 'nombres', 'telefono', 'direccion']
     ordering_fields = ['apellidos', 'nombres', 'ci', 'fecha_ingreso']
     permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
+
+    def get_queryset(self):
+        queryset = Afiliado.objects.all()
+        
+        # Filtro para solo mostrar afiliados elegibles para Agente de Parada
+        if self.request.query_params.get('para_agente_parada') == 'true':
+            from django.db.models import Q
+            la_paz_ids = Afiliado.objects.filter(
+                Q(vehiculos__tipo__iexact='IPSUM') | Q(vehiculos__tipo__iexact='MINIBUS'),
+                vehiculos__indocumentado=False
+            ).values_list('id', flat=True)
+            
+            convenio_ids = Afiliado.objects.filter(
+                vehiculos__es_convenio_caranavi=True
+            ).values_list('id', flat=True)
+            
+            queryset = queryset.filter(estado='activo', is_active=True).exclude(id__in=la_paz_ids).exclude(id__in=convenio_ids).distinct()
+            
+        return queryset
 
     @action(detail=False, methods=['get'])
     def reporte(self, request):
@@ -105,6 +125,25 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
         return response
 
     @action(detail=False, methods=['get'])
+    def lista_turno_la_paz(self, request):
+        """
+        Retorna la lista de afiliados activos con vehículos IPSUM/MINIBUS 
+        con placa (no indocumentados) para el turno a La Paz.
+        """
+        from django.db.models import Q
+        queryset = Afiliado.objects.filter(
+            estado='activo',
+            is_active=True
+        ).filter(
+            Q(vehiculos__tipo__iexact='IPSUM') | Q(vehiculos__tipo__iexact='MINIBUS')
+        ).filter(
+            vehiculos__indocumentado=False
+        ).distinct().order_by('apellidos', 'nombres')
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
     def generar_lista_punteros(self, request):
         """Generar lista de punteros (rotación de turnos) en PDF"""
         import io
@@ -139,11 +178,17 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
         elements.append(Paragraph("LISTA DE PUNTEROS - PROGRAMACIÓN DE TURNOS", title_style))
         elements.append(Spacer(1, 20))
 
-        # Obtener afiliados activos ordenados alfabéticamente
+        # Obtener solo afiliados activos que NO tienen vehiculo indocumentado (que pueden ir a La Paz)
+        # Y que NO son de convenio caranavi
+        from django.db.models import Q
         afiliados_activos = list(Afiliado.objects.filter(
             estado='activo',
             is_active=True
-        ).order_by('apellidos', 'nombres'))
+        ).filter(
+            Q(vehiculos__tipo__iexact='IPSUM') | Q(vehiculos__tipo__iexact='MINIBUS')
+        ).filter(
+            vehiculos__indocumentado=False
+        ).exclude(vehiculos__es_convenio_caranavi=True).distinct().order_by('apellidos', 'nombres'))
 
         if not afiliados_activos:
             elements.append(Paragraph("No hay afiliados activos para generar la programación.", styles['Normal']))
@@ -248,9 +293,27 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
             fecha_inicio = datetime.now().date()
             
         # 2. Obtener afiliados activos
-        afiliados = list(Afiliado.objects.filter(estado='activo', is_active=True).order_by('apellidos', 'nombres'))
+        # EXCLUIR: 
+        # - Los que van a La Paz (Ipsum/Minibus con placa)
+        # - Los de Convenio Integración Caranavi
+        from django.db.models import Q
+        
+        la_paz_ids = Afiliado.objects.filter(
+            Q(vehiculos__tipo__iexact='IPSUM') | Q(vehiculos__tipo__iexact='MINIBUS'),
+            vehiculos__indocumentado=False
+        ).values_list('id', flat=True)
+        
+        convenio_ids = Afiliado.objects.filter(
+            vehiculos__es_convenio_caranavi=True
+        ).values_list('id', flat=True)
+
+        afiliados = list(Afiliado.objects.filter(
+            estado='activo', 
+            is_active=True
+        ).exclude(id__in=la_paz_ids).exclude(id__in=convenio_ids).distinct().order_by('apellidos', 'nombres'))
+        
         if not afiliados:
-            return Response({'detail': 'No hay afiliados activos'}, status=400)
+            return Response({'detail': 'No hay afiliados disponibles para Agente de Parada (la mayoría están en La Paz o Convenio)'}, status=400)
 
         # 3. Calcular índice de rotación
         # Si continuamos, debemos saber a quién le toca.
@@ -452,9 +515,24 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
         } for s in sanciones_pendientes]
 
         # 4. Hojas de ruta recientes (Sus viajes)
-        hojas_recientes = HojaRuta.objects.filter(
+        hojas_recientes_qs = HojaRuta.objects.filter(
             afiliado=afiliado
-        ).order_by('-fecha_salida')[:5]
+        ).order_by('-fecha_salida', '-id')
+        
+        # Encontrar hoja de HOY específicamente para mostrarla en el Dashboard del Chofer
+        hoy = timezone.now().date()
+        hoja_hoy = hojas_recientes_qs.filter(fecha_salida=hoy).first()
+        
+        data['hoja_hoy'] = {
+            'id': hoja_hoy.id,
+            'nro': hoja_hoy.nro,
+            'fecha': hoja_hoy.fecha_salida,
+            'ruta': hoja_hoy.ruta.nombre if hoja_hoy.ruta else 'N/A',
+            'estado': hoja_hoy.estado,
+            'precio': str(hoja_hoy.precio),
+            'qr_url': f"/verificar-hoja/{hoja_hoy.id}"
+        } if hoja_hoy else None
+
         data['hojas_recientes'] = [{
             'id': h.id,
             'nro': h.nro,
@@ -462,7 +540,7 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
             'ruta': h.ruta.nombre if h.ruta else 'N/A',
             'estado': h.estado,
             'precio': str(h.precio)
-        } for h in hojas_recientes]
+        } for h in hojas_recientes_qs[:20]]
 
         # 5. Historial de Pagos Realizados
         pagos_recientes = Pago.objects.filter(afiliado=afiliado).order_by('-fecha_pago')[:10]
@@ -513,3 +591,56 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
 
 
 
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    def kiosco_consulta(self, request):
+        """
+        Consulta rápida para Kiosko mediante CI y Extensión.
+        """
+        from cuotas.models import Cuota
+        from sanciones.models import Sancion
+        from .models import TurnoAgente
+        from datetime import date
+
+        ci = request.query_params.get('ci')
+        ci_exp = request.query_params.get('ci_exp')
+
+        if not ci:
+            return Response({'detail': 'CI es requerido'}, status=400)
+
+        afiliado = Afiliado.objects.filter(ci=ci, ci_exp=ci_exp).first() if ci_exp else Afiliado.objects.filter(ci=ci).first()
+
+        if not afiliado:
+            return Response({'detail': 'Afiliado no encontrado'}, status=404)
+
+        # 1. Datos básicos
+        resumen = {
+            'id': afiliado.id,
+            'nombre_completo': afiliado.nombre_completo,
+            'estado': afiliado.estado,
+            'ci_completo': afiliado.ci_completo,
+        }
+
+        # 2. Deudas
+        deuda_cuotas = sum(c.monto for c in Cuota.objects.filter(afiliado=afiliado, estado='pendiente'))
+        deuda_sanciones = sum(s.monto for s in Sancion.objects.filter(afiliado=afiliado, estado__in=['pendiente', 'notificada']))
+        
+        resumen['finanzas'] = {
+            'total_deuda': float(deuda_cuotas + deuda_sanciones),
+            'deuda_cuotas': float(deuda_cuotas),
+            'deuda_sanciones': float(deuda_sanciones),
+            'tiene_deuda': (deuda_cuotas + deuda_sanciones) > 0
+        }
+
+        # 3. Próximos Turnos (Puntero/Agente de Parada)
+        proximos_turnos = TurnoAgente.objects.filter(
+            afiliado=afiliado, 
+            fecha__gte=date.today()
+        ).order_by('fecha')[:3]
+
+        resumen['turnos'] = [{
+            'fecha': t.fecha,
+            'dia_nombre': t.fecha.strftime('%A'),
+            'observacion': t.observacion
+        } for t in proximos_turnos]
+
+        return Response(resumen)

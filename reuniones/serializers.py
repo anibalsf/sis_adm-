@@ -8,7 +8,7 @@ class ReunionSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Reunion
-        fields = ['id', 'fecha', 'tema', 'tipo', 'quorum', 'estado', 'created_at', 'updated_at', 'asistentes_count', 'faltas_count']
+        fields = ['id', 'fecha', 'tema', 'tipo', 'quorum', 'estado', 'acta_texto', 'acuerdos', 'documento_adjunto', 'created_at', 'updated_at', 'asistentes_count', 'faltas_count']
         read_only_fields = ['id', 'estado', 'created_at', 'updated_at', 'asistentes_count', 'faltas_count']
     
     def get_asistentes_count(self, obj):

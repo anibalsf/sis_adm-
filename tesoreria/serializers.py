@@ -12,7 +12,7 @@ class PagoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Pago
-        fields = ['id', 'afiliado', 'afiliado_nombre', 'tipo_pago', 'tipo_pago_nombre', 'monto', 'saldo_anterior_gestion', 'fecha_pago', 'observaciones', 'hoja_ruta', 'created_at']
+        fields = ['id', 'afiliado', 'afiliado_nombre', 'tipo_pago', 'tipo_pago_nombre', 'monto', 'saldo_anterior_gestion', 'fecha_pago', 'metodo_pago', 'banco', 'nro_operacion', 'estado', 'observaciones', 'hoja_ruta', 'created_at']
     
     def validate_monto(self, value):
         try:
@@ -34,4 +34,4 @@ class EgresoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Egreso
-        fields = ['id', 'fecha', 'monto', 'descripcion', 'tipo_pago', 'tipo_pago_nombre', 'created_at']
+        fields = ['id', 'fecha', 'monto', 'descripcion', 'tipo_pago', 'tipo_pago_nombre', 'metodo_pago', 'banco', 'nro_operacion', 'created_at']

@@ -1,0 +1,306 @@
+.kiosco-landing {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: radial-gradient(circle at 10% 20%, #1a4d4c 0%, #0d2626 90%);
+    color: white;
+    font-family: 'Outfit', sans-serif;
+}
+
+.kiosco-header {
+    text-align: center;
+    margin-bottom: 3rem;
+    animation: fadeInDown 0.8s ease-out;
+}
+
+.kiosco-header h1 {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #4a9d9c 0%, #edb44d 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+}
+
+.kiosco-header p {
+    color: #94a3b8;
+    font-size: 1.2rem;
+}
+
+.kiosco-form-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 2rem;
+    padding: 3rem;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    animation: scaleIn 0.5s ease-out;
+}
+
+.kiosco-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.kiosco-input-wrapper {
+    display: flex;
+    gap: 1rem;
+}
+
+.kiosco-main-input {
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(74, 157, 156, 0.2);
+    border-radius: 1rem;
+    padding: 1.2rem;
+    color: white;
+    font-size: 2rem;
+    flex: 1;
+    text-align: center;
+    letter-spacing: 2px;
+    transition: all 0.3s ease;
+}
+
+.kiosco-main-input:focus {
+    outline: none;
+    border-color: #4a9d9c;
+    box-shadow: 0 0 20px rgba(74, 157, 156, 0.3);
+}
+
+.kiosco-select-exp {
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(74, 157, 156, 0.2);
+    border-radius: 1rem;
+    padding: 1rem;
+    color: white;
+    font-size: 1.5rem;
+    width: 100px;
+    text-align: center;
+    cursor: pointer;
+}
+
+.kiosco-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.keypad-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    font-size: 1.8rem;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.keypad-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.keypad-btn:active {
+    transform: scale(0.95);
+}
+
+.keypad-btn.action {
+    background: #4a9d9c;
+    color: white;
+    border: none;
+}
+
+.keypad-btn.danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+/* --- Result View --- */
+.kiosco-result {
+    width: 100%;
+    max-width: 900px;
+    animation: slideUp 0.6s ease-out;
+}
+
+.result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.btn-back {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 1rem;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.profile-summary {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 2rem;
+    padding: 2.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+}
+
+.afiliado-main-info h2 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.status-indicator {
+    padding: 0.5rem 1.2rem;
+    border-radius: 2rem;
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+.status-indicator.activo {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.status-indicator.sancionado {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.debt-card {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 1.5rem;
+    padding: 2rem;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.debt-card.has-debt {
+    border-color: #ef4444;
+}
+
+.debt-card.clean {
+    border-color: #22c55e;
+}
+
+.debt-amount {
+    font-size: 3rem;
+    font-weight: 800;
+    display: block;
+    margin: 1rem 0;
+}
+
+.turns-list {
+    margin-top: 2rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 1.5rem;
+    padding: 2rem;
+}
+
+.turn-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 1.2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.turn-date {
+    font-weight: bold;
+    color: #4a9d9c;
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(50px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mobile adjustments */
+@media (max-width: 640px) {
+    .kiosco-header h1 {
+        font-size: 2.5rem;
+    }
+
+    .kiosco-form-card {
+        padding: 1.5rem;
+    }
+
+    .kiosco-main-input {
+        font-size: 1.5rem;
+    }
+}
+
+/* Menú Volver Flotante */
+.floating-volver-menu {
+    position: fixed;
+    bottom: 2rem;
+    left: 2rem;
+    z-index: 9999;
+}
+
+.btn-floating-volver {
+    background-color: #10b981;
+    color: #ffffff;
+    border: 2px solid #059669;
+    padding: 1rem 2rem;
+    border-radius: 50px;
+    font-size: 1.2rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.btn-floating-volver:hover {
+    background-color: #059669;
+    transform: translateY(-5px) scale(1.05);
+    box-shadow: 0 15px 30px rgba(16, 185, 129, 0.6);
+}

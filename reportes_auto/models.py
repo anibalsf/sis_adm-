@@ -9,6 +9,7 @@ class ReporteGenerado(models.Model):
         ('diario', 'Diario'),
         ('semanal', 'Semanal'),
         ('mensual', 'Mensual'),
+        ('lunes_control', 'Control Lunes (Hojas Ruta)'),
     ]
     
     ESTADO_CHOICES = [

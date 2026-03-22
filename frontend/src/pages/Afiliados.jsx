@@ -27,6 +27,7 @@ function Afiliados() {
     nombres: '',
     apellidos: '',
     ci: '',
+    ci_exp: 'LP',
     telefono: '',
     direccion: '',
     estado: 'activo',
@@ -67,6 +68,7 @@ function Afiliados() {
       nombres: '',
       apellidos: '',
       ci: '',
+      ci_exp: 'LP',
       telefono: '',
       direccion: '',
       estado: 'activo',
@@ -83,6 +85,7 @@ function Afiliados() {
       nombres: afiliado.nombres || '',
       apellidos: afiliado.apellidos || '',
       ci: afiliado.ci || '',
+      ci_exp: afiliado.ci_exp || 'LP',
       telefono: afiliado.telefono || '',
       direccion: afiliado.direccion || '',
       estado: afiliado.estado || 'activo',
@@ -184,6 +187,7 @@ function Afiliados() {
             <option value="activo">Activo</option>
             <option value="pasivo">Pasivo</option>
             <option value="sancionado">Sancionado</option>
+            <option value="chofer_asalariado">Chofer Asalariado</option>
           </select>
         </div>
       </div>
@@ -209,10 +213,10 @@ function Afiliados() {
             ) : (
               afiliados.map((afiliado) => (
                 <tr key={afiliado.id}>
-                  <td>{afiliado.apellidos} {afiliado.nombres}</td>
-                  <td>{afiliado.ci}</td>
-                  <td>{afiliado.telefono || '-'}</td>
-                  <td>
+                  <td data-label="Nombre Completo">{afiliado.apellidos} {afiliado.nombres}</td>
+                  <td data-label="CI">{afiliado.ci} {afiliado.ci_exp}</td>
+                  <td data-label="Teléfono">{afiliado.telefono || '-'}</td>
+                  <td data-label="Estado">
                     <span className={`badge badge-${afiliado.estado}`}>
                       {afiliado.estado}
                     </span>
@@ -265,64 +269,104 @@ function Afiliados() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h2>{modalMode === 'create' ? 'Nuevo Registro' : 'Editar Afiliado'}</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Nombres</label>
-                <input
-                  name="nombres"
-                  value={formData.nombres}
-                  onChange={handleInputChange}
-                  className={formErrors.nombres ? 'error' : ''}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Apellidos</label>
-                <input
-                  name="apellidos"
-                  value={formData.apellidos}
-                  onChange={handleInputChange}
-                  className={formErrors.apellidos ? 'error' : ''}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>CI</label>
-                <input
-                  name="ci"
-                  value={formData.ci}
-                  onChange={handleInputChange}
-                  className={formErrors.ci ? 'error' : ''}
-                  required
-                />
+            <form onSubmit={handleSubmit} className="afiliado-form">
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Nombres</label>
+                  <input
+                    name="nombres"
+                    placeholder="Ej. Juan Carlos"
+                    value={formData.nombres}
+                    onChange={handleInputChange}
+                    className={formErrors.nombres ? 'error' : ''}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Apellidos</label>
+                  <input
+                    name="apellidos"
+                    placeholder="Ej. Pérez Quispe"
+                    value={formData.apellidos}
+                    onChange={handleInputChange}
+                    className={formErrors.apellidos ? 'error' : ''}
+                    required
+                  />
+                </div>
               </div>
 
-              <div className="form-group">
-                <label>Teléfono</label>
-                <input name="telefono" value={formData.telefono} onChange={handleInputChange} />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Cédula de Identidad (CI)</label>
+                  <div className="ci-container" style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      name="ci"
+                      placeholder="Ej. 1234567"
+                      value={formData.ci}
+                      onChange={handleInputChange}
+                      className={formErrors.ci ? 'error' : ''}
+                      style={{ flex: 2 }}
+                      required
+                    />
+                    <select
+                      name="ci_exp"
+                      value={formData.ci_exp}
+                      onChange={handleInputChange}
+                      style={{ flex: 1, minWidth: '80px' }}
+                    >
+                      <option value="LP">LP</option>
+                      <option value="CB">CB</option>
+                      <option value="SC">SC</option>
+                      <option value="OR">OR</option>
+                      <option value="PT">PT</option>
+                      <option value="TJ">TJ</option>
+                      <option value="CH">CH</option>
+                      <option value="BN">BN</option>
+                      <option value="PA">PA</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Teléfono / Celular</label>
+                  <input
+                    name="telefono"
+                    placeholder="Ej. 76543210"
+                    value={formData.telefono}
+                    onChange={handleInputChange}
+                  />
+                </div>
               </div>
-              <div className="form-group">
-                <label>Fecha de Ingreso</label>
-                <input type="date" name="fecha_ingreso" value={formData.fecha_ingreso} onChange={handleInputChange} />
-              </div>
-              <div className="form-group">
-                <label>Estado</label>
-                <select name="estado" value={formData.estado} onChange={handleInputChange}>
-                  <option value="activo">Activo</option>
-                  <option value="pasivo">Pasivo</option>
-                  <option value="sancionado">Sancionado</option>
-                </select>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Fecha de Ingreso</label>
+                  <input
+                    type="date"
+                    name="fecha_ingreso"
+                    value={formData.fecha_ingreso}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Estado del Afiliado</label>
+                  <select name="estado" value={formData.estado} onChange={handleInputChange}>
+                    <option value="activo">🟢 Activo (Socio)</option>
+                    <option value="pasivo">🟡 Pasivo</option>
+                    <option value="sancionado">🔴 Sancionado</option>
+                    <option value="chofer_asalariado">🔵 Chofer Asalariado</option>
+                  </select>
+                </div>
               </div>
 
               {submitError && (
-                <div className="error-message" style={{ color: 'red', marginTop: '10px', textAlign: 'center' }}>
-                  {submitError}
+                <div className="error-message">
+                  <span>⚠️</span> {submitError}
                 </div>
               )}
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary">Guardar</button>
+                <button type="submit" className="btn btn-primary">Guardar Registro</button>
               </div>
             </form>
           </div>
@@ -336,7 +380,7 @@ function Afiliados() {
             <div className="details-grid">
               <p><strong>Nombres:</strong> {selectedAfiliado.nombres}</p>
               <p><strong>Apellidos:</strong> {selectedAfiliado.apellidos}</p>
-              <p><strong>CI:</strong> {selectedAfiliado.ci}</p>
+              <p><strong>CI:</strong> {selectedAfiliado.ci} {selectedAfiliado.ci_exp}</p>
               <p><strong>Estado:</strong> {selectedAfiliado.estado}</p>
             </div>
             <h3>Vehículos</h3>

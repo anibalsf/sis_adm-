@@ -1,0 +1,23 @@
+{
+  "name": "Sindicato Taipiplaya",
+  "short_name": "Taipiplaya",
+  "description": "Sistema de Gestión Administrativa - Sindicato Mixto Integración Taipiplaya",
+  "start_url": "/mi-perfil",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3a8a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

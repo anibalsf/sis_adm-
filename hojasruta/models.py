@@ -7,9 +7,9 @@ from rutas.models import Ruta
 class HojaRuta(models.Model):
     nro = models.CharField(max_length=30)
     fecha_emision = models.DateField()
-    fecha_salida = models.DateField(null=True, blank=True)
+    fecha_salida = models.DateField(null=True, blank=True, db_index=True)
     afiliado = models.ForeignKey(Afiliado, on_delete=models.PROTECT, related_name='hojas_ruta')
-    estado = models.CharField(max_length=20, default='emitida')
+    estado = models.CharField(max_length=20, default='emitida', db_index=True)
     precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     archivo_url = models.CharField(max_length=255, blank=True)
     vehiculo = models.ForeignKey(Vehiculo, on_delete=models.PROTECT, related_name='hojas_ruta', null=True, blank=True)
@@ -79,4 +79,18 @@ class HojaRuta(models.Model):
             prefix = f"{self.ruta.prefijo}-"
         return f"{prefix}{maxn+1:04d}"
 
-# Create your models here.
+
+class TurnoSalida(models.Model):
+    fecha = models.DateField(db_index=True)
+    afiliado = models.ForeignKey(Afiliado, on_delete=models.CASCADE, related_name='turnos_salida')
+    ruta = models.ForeignKey(Ruta, on_delete=models.CASCADE, related_name='turnos_programados')
+    orden = models.PositiveIntegerField(default=1) # Posición en la salida del día (1º, 2º, etc.)
+    observacion = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['fecha', 'orden']
+        unique_together = ['fecha', 'afiliado', 'ruta']
+
+    def __str__(self):
+        return f"{self.fecha} - {self.ruta} - {self.afiliado} ({self.orden}º)"

@@ -1,0 +1,236 @@
+/* Libro de Actas Digital - Premium Style */
+
+.libro-actas-container {
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin: 0;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -1px;
+}
+
+.actas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.acta-card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 20px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.acta-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.1);
+    border-color: #6366f1;
+}
+
+.acta-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.acta-fecha {
+    font-size: 0.9rem;
+    color: #6366f1;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.acta-tipo {
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    text-transform: uppercase;
+}
+
+.acta-tema {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 0;
+}
+
+.acta-acuerdos-preview {
+    font-size: 0.95rem;
+    color: #475569;
+    background: rgba(0, 0, 0, 0.02);
+    padding: 1rem;
+    border-radius: 12px;
+    line-height: 1.6;
+    max-height: 100px;
+    overflow: hidden;
+    position: relative;
+    border-left: 4px solid #10b981;
+}
+
+.acta-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.btn-detail {
+    background: #6366f1;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-detail:hover {
+    background: #4f46e5;
+    transform: scale(1.05);
+}
+
+/* Modal Styles */
+.modal-acta-full {
+    max-width: 900px !important;
+    width: 95% !important;
+}
+
+.acta-editor-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+
+.acta-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.acta-section label {
+    font-weight: 700;
+    color: #475569;
+    font-size: 0.9rem;
+}
+
+.acta-textarea {
+    width: 100%;
+    min-height: 200px;
+    padding: 1rem;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: #1e293b;
+    resize: vertical;
+}
+
+.acta-textarea:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.acuerdos-textarea {
+    min-height: 120px;
+    border-left: 5px solid #10b981;
+}
+
+.search-filters {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.search-group {
+    flex: 1;
+    min-width: 250px;
+}
+
+.date-group {
+    display: flex;
+    gap: 1rem;
+}
+
+.filter-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.filter-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+[data-theme='dark'] .acta-card {
+    background: rgba(30, 41, 59, 0.7);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='dark'] .acta-tema {
+    color: #f8fafc;
+}
+
+[data-theme='dark'] .acta-acuerdos-preview {
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+}
+
+[data-theme='dark'] .filter-input,
+[data-theme='dark'] .acta-textarea {
+    background: #0f172a;
+    border-color: #334155;
+    color: #f8fafc;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

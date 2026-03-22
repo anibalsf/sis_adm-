@@ -25,9 +25,9 @@ function Bitacora() {
         setLoading(true);
         try {
             const res = await api.getBitacora({ ...filters, page });
-            setEvents(res.data.results);
-            setPageCount(res.data.count);
-            setTotalPages(Math.ceil(res.data.count / 50));
+            setEvents(res.data?.results || (Array.isArray(res.data) ? res.data : []));
+            setPageCount(res.data?.count || 0);
+            setTotalPages(Math.ceil((res.data?.count || 1) / 50));
         } catch (err) {
             console.error(err);
             setError('Error al cargar la bitácora');
@@ -135,21 +135,21 @@ function Bitacora() {
                             </tr>
                         </thead>
                         <tbody>
-                            {events.map(event => (
-                                <tr key={event.id}>
-                                    <td style={{ whiteSpace: 'nowrap' }}>{formatDate(event.fecha_hora)}</td>
+                                {events.map((event, index) => (
+                                    <tr key={event.id || index}>
+                                        <td style={{ whiteSpace: 'nowrap' }}>{formatDate(event.fecha_hora)}</td>
                                     <td>
                                         <div style={{ fontWeight: 'bold' }}>{event.full_name || 'Sistema'}</div>
                                         <div style={{ fontSize: '0.75rem', color: '#888' }}>@{event.username}</div>
                                     </td>
                                     <td>
-                                        <span className={`badge-accion ${event.accion}`}>
-                                            {event.accion_display}
+                                        <span className={`badge-accion ${event.accion || ''}`}>
+                                            {event.accion_display || event.accion || '-'}
                                         </span>
                                     </td>
                                     <td>
-                                        <div className="bitacora-tabla">{event.tabla.toUpperCase()}</div>
-                                        <div className="bitacora-desc">{event.descripcion}</div>
+                                        <div className="bitacora-tabla">{typeof event.tabla === 'string' ? event.tabla.toUpperCase() : String(event.tabla || '')}</div>
+                                        <div className="bitacora-desc">{String(event.descripcion || '')}</div>
                                     </td>
                                     <td>
                                         {event.cambios ? (
@@ -160,9 +160,9 @@ function Bitacora() {
                                                         <div key={campo} className="cambio-item">
                                                             <strong>{campo}:</strong>
                                                             <div className="cambio-valores">
-                                                                <span className="val-antes">{valores.antes || 'vacio'}</span>
+                                                                <span className="val-antes">{typeof valores.antes === 'object' && valores.antes !== null ? JSON.stringify(valores.antes) : String(valores.antes ?? 'vacio')}</span>
                                                                 <span className="val-arrow">→</span>
-                                                                <span className="val-despues">{valores.despues || 'vacio'}</span>
+                                                                <span className="val-despues">{typeof valores.despues === 'object' && valores.despues !== null ? JSON.stringify(valores.despues) : String(valores.despues ?? 'vacio')}</span>
                                                             </div>
                                                         </div>
                                                     ))}

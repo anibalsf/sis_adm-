@@ -1,0 +1,80 @@
+﻿python : Traceback (most 
+recent call last):
+En línea: 1 Carácter: 1
++ python c:\Users\Once\Documen
+ts\trae_projects\sistema_admin
+istracion\t ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
+    + CategoryInfo          : 
+    NotSpecified: (Traceback  
+   (most recent call last):   
+ :String) [], RemoteExcept    
+ion
+    + FullyQualifiedErrorId : 
+    NativeCommandError
+ 
+  File "c:\Users\Once\Document
+s\trae_projects\sistema_admini
+stracion\test_imports.py", 
+line 5, in <module>
+    django.setup()
+    ~~~~~~~~~~~~^^
+  File "C:\Users\Once\AppData\
+Roaming\Python\Python314\site-
+packages\django\__init__.py", 
+line 24, in setup
+    apps.populate(settings.INS
+TALLED_APPS)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^
+^^^^^^^^^^^^
+  File "C:\Users\Once\AppData\
+Roaming\Python\Python314\site-
+packages\django\apps\registry.
+py", line 91, in populate
+    app_config = 
+AppConfig.create(entry)
+  File "C:\Users\Once\AppData\
+Roaming\Python\Python314\site-
+packages\django\apps\config.py
+", line 222, in create
+    return 
+app_config_class(app_name, 
+app_module)
+  File "C:\Users\Once\AppData\
+Roaming\Python\Python314\site-
+packages\django\apps\config.py
+", line 47, in __init__
+    self.path = self._path_fro
+m_module(app_module)
+                ~~~~~~~~~~~~~~
+~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\Once\AppData\
+Roaming\Python\Python314\site-
+packages\django\apps\config.py
+", line 86, in 
+_path_from_module
+    raise 
+ImproperlyConfigured(
+    ...<3 lines>...
+    )
+django.core.exceptions.Imprope
+rlyConfigured: The app module 
+<module 'sanciones' 
+(namespace) from ['C:\\Users\\
+Once\\Documents\\trae_projects
+\\sistema_administracion\\sanc
+iones', 'c:\\Users\\Once\\Docu
+ments\\trae_projects\\sistema_
+administracion\\sanciones']> 
+has multiple filesystem 
+locations (['c:\\Users\\Once\\
+Documents\\trae_projects\\sist
+ema_administracion\\sanciones'
+, 'C:\\Users\\Once\\Documents\
+\trae_projects\\sistema_admini
+stracion\\sanciones']); you 
+must configure this app with 
+an AppConfig subclass with a 
+'path' class attribute.

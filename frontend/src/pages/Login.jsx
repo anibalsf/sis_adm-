@@ -21,7 +21,13 @@ const Login = () => {
         const result = await login(username, password, remember);
 
         if (result.success) {
-            navigate('/');
+            // Redirección inteligente según el rol
+            const role = result.user?.role;
+            if (role === 'Afiliado') {
+                navigate('/mi-perfil');
+            } else {
+                navigate('/dashboard');
+            }
         } else {
             setError(result.error);
         }
@@ -34,10 +40,11 @@ const Login = () => {
             <div className="login-container">
                 <div className="login-card">
                     <div className="login-header">
-                        <div className="user-icon-container">
-                            👤
+                        <div className="logo-login-container">
+                            <img src="/login_avatar.svg" alt="Login Avatar" className="login-logo" />
                         </div>
-                        <h1>SINDICATO INTEGRACIÓN</h1>
+                        <h1>SINDICATO MIXTO</h1>
+                        <h2 className="subtitle">"INTEGRACIÓN TAIPIPLAYA"</h2>
                     </div>
 
                     <form onSubmit={handleSubmit} className="login-form">
@@ -50,29 +57,30 @@ const Login = () => {
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                placeholder="Usuario"
+                                placeholder="Email ID / Usuario / CI"
                                 required
                                 autoFocus
                             />
                         </div>
+                        <div className="login-hint">
+                            💡 Afiliado: Su Usuario y Contraseña es su CI (sin extensión).
+                        </div>
 
-                        <div className="form-group" style={{ display: 'flex', alignItems: 'center' }}>
+                        <div className="form-group">
                             <span className="input-icon">🔒</span>
                             <input
                                 id="password"
                                 type={showPassword ? 'text' : 'password'}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Contraseña"
+                                placeholder="Password"
                                 required
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(v => !v)}
                                 className="btn-toggle-password"
-                                style={{ marginLeft: '8px' }}
                                 aria-label="Mostrar/Ocultar contraseña"
-                                title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                             >
                                 {showPassword ? '🙈' : '👁️'}
                             </button>
@@ -81,25 +89,21 @@ const Login = () => {
                         <div className="form-options">
                             <label>
                                 <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-                                Recordarme
+                                Remember me
                             </label>
-                            <a href="#" className="forgot-password" onClick={(e) => e.preventDefault()}>¿Olvidó su contraseña?</a>
+                            <a href="#" className="forgot-password" onClick={(e) => e.preventDefault()}>Forgot Password?</a>
                         </div>
 
                         <button type="submit" className="btn-login" disabled={loading}>
-                            {loading ? 'Validando...' : 'INICIAR SESIÓN'}
+                            {loading ? 'Validating...' : 'LOGIN'}
                         </button>
-
-                        <div className="create-account">
-                            ¿No es miembro?
-                            <a href="#" onClick={(e) => e.preventDefault()}>Crear cuenta</a>
-                            <div style={{ marginTop: '10px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
-                                <Link to="/web" style={{ color: '#1a73e8', fontWeight: 'bold' }}>
-                                    ← Volver al Sitio Web
-                                </Link>
-                            </div>
-                        </div>
                     </form>
+
+                    <div className="passenger-footer">
+                        <Link to="/pizarra" className="link-pizarra">
+                            🚌 VER SALIDAS Y RESERVAR
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>

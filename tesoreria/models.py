@@ -28,6 +28,22 @@ class Pago(models.Model):
     monto = models.DecimalField(max_digits=10, decimal_places=2)
     fecha_pago = models.DateField()
     saldo_anterior_gestion = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Saldo de la gestión anterior")
+    METODO_PAGO_CHOICES = [
+        ('efectivo', 'Efectivo'),
+        ('qr', 'QR / Yape'),
+        ('transferencia', 'Transferencia'),
+    ]
+    metodo_pago = models.CharField(max_length=20, choices=METODO_PAGO_CHOICES, default='efectivo')
+    banco = models.CharField(max_length=100, blank=True, null=True, help_text="Nombre del banco si es transferencia")
+    nro_operacion = models.CharField(max_length=100, blank=True, null=True, help_text="Número de operación / transacción")
+    
+    ESTADO_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('completado', 'Completado'),
+        ('cancelado', 'Cancelado'),
+    ]
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='completado')
+
     observaciones = models.TextField(blank=True, null=True)
     hoja_ruta = models.ForeignKey(HojaRuta, on_delete=models.SET_NULL, null=True, blank=True, related_name='pagos_tesoreria')
 
@@ -45,6 +61,16 @@ class Egreso(models.Model):
     monto = models.DecimalField(max_digits=10, decimal_places=2)
     descripcion = models.CharField(max_length=255)
     tipo_pago = models.ForeignKey(TipoPago, on_delete=models.PROTECT, limit_choices_to={'tipo': 'egreso'})
+    
+    METODO_PAGO_CHOICES = [
+        ('efectivo', 'Efectivo'),
+        ('qr', 'QR / Yape'),
+        ('transferencia', 'Transferencia'),
+    ]
+    metodo_pago = models.CharField(max_length=20, choices=METODO_PAGO_CHOICES, default='efectivo')
+    banco = models.CharField(max_length=100, blank=True, null=True, help_text="Nombre del banco si es transferencia")
+    nro_operacion = models.CharField(max_length=100, blank=True, null=True, help_text="Número de operación / transacción")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

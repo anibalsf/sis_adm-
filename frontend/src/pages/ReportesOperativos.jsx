@@ -45,8 +45,9 @@ function ReportesOperativos() {
             setDatos(res.data);
             setError('');
         } catch (err) {
-            setError('Error al cargar los reportes operativos');
-            console.error(err);
+            const errorMsg = err.response?.data?.error || err.response?.data?.detail || err.message || 'Error desconocido';
+            setError(`Error al cargar los reportes operativos: ${errorMsg}`);
+            console.error('Error cargando reportes operativos:', err);
         } finally {
             setLoading(false);
         }

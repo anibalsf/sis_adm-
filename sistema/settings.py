@@ -38,7 +38,7 @@ RAILWAY_DOMAIN = config('RAILWAY_PUBLIC_DOMAIN', default='')
 if RAILWAY_DOMAIN and RAILWAY_DOMAIN not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RAILWAY_DOMAIN)
 
-CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173', cast=Csv())
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173,http://192.168.1.10:5173', cast=Csv())
 if RAILWAY_DOMAIN:
     CSRF_TRUSTED_ORIGINS.append(f"https://{RAILWAY_DOMAIN}")
 
@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     'web_publica',
     'mantenimiento',
     'reportes_auto',
+    'encomiendas',
 ]
 
 # Twilio Configuration
@@ -100,6 +101,7 @@ TWILIO_WEBHOOK_URL = None
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.middleware.gzip.GZipMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # CORS debe estar antes de CommonMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -202,7 +204,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'DEFAULT_PAGINATION_CLASS': 'sistema.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': config('PAGE_SIZE', default=20, cast=int),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_THROTTLE_CLASSES': [
@@ -250,7 +252,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:5173,http://localhost:5174', cast=Csv())
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:5173,http://localhost:5174,http://192.168.1.10:5173,http://127.0.0.1:5173', cast=Csv())
 CORS_ALLOW_CREDENTIALS = config('CORS_ALLOW_CREDENTIALS', default=True, cast=bool)
 
 # Configuraciones de negocio
@@ -432,6 +434,16 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000  # 1 año
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+ 
+# ==============================================================================
+# CACHING CONFIGURATION (Performance)
+# ==============================================================================
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'taipiplaya-cache',
+    }
+}
 
 # ==============================================================================
 # CELERY / REDIS CONFIGURATION (MODO SEGURO SIN REDIS)
@@ -492,5 +504,15 @@ CELERY_BEAT_SCHEDULE = {
     'send-debt-reminders-weekly': {
         'task': 'whatsapp_notif.tasks.send_debt_reminders',
         'schedule': crontab(hour=9, minute=0, day_of_week=1),
+    },
+    # Lista de Control Oficial - Lunes 10:00 PM
+    'send-monday-control-report': {
+        'task': 'reportes_auto.tasks.send_monday_hojas_ruta_report_task',
+        'schedule': crontab(hour=22, minute=0, day_of_week=1),
+    },
+    # Notificación Puntero La Paz - Diario 7:00 AM
+    'send-daily-puntero-report': {
+        'task': 'reportes_auto.tasks.send_daily_puntero_la_paz_task',
+        'schedule': crontab(hour=7, minute=0),
     },
 }

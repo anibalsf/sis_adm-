@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { Link } from 'react-router-dom';
 import QRScanner from './QRScanner';
 import { IconQrCode } from './Icons';
+import NotificationBell from './NotificationBell';
 
 const Header = ({ toggleSidebar }) => {
     const { user, logout } = useAuth();
@@ -13,12 +14,14 @@ const Header = ({ toggleSidebar }) => {
     return (
         <header className="header flex items-center justify-between px-4 sm:px-6 py-4 bg-surface dark:bg-gray-800 border-b border-subtle dark:border-gray-700 sticky top-0 z-50">
             <div className="flex items-center">
-                <button
-                    className="lg:hidden text-primary text-2xl mr-4 hover:bg-primary/10 p-2 rounded-xl transition-colors"
-                    onClick={toggleSidebar}
-                >
-                    ☰
-                </button>
+                {user?.role !== 'Afiliado' && (
+                    <button
+                        className="lg:hidden text-primary text-2xl mr-4 hover:bg-primary/10 p-2 rounded-xl transition-colors"
+                        onClick={toggleSidebar}
+                    >
+                        ☰
+                    </button>
+                )}
                 <div className="hidden lg:flex flex-col ml-2">
                     <div className="max-w-fit">
                         <h1 className="text-2xl font-extrabold bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-600 bg-clip-text text-transparent uppercase tracking-tight leading-none animate-typing-title">
@@ -41,6 +44,9 @@ const Header = ({ toggleSidebar }) => {
                     <IconQrCode className="w-5 h-5" />
                     <span className="hidden sm:inline">Escanear QR</span>
                 </button>
+                
+                <NotificationBell />
+
                 <button
                     onClick={toggleDarkMode}
                     className="p-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-lg hover:scale-110 active:scale-95 transition-all shadow-sm"

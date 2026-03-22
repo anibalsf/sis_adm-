@@ -4,7 +4,7 @@ import {
     IconHome, IconUser, IconUsers, IconBus, IconLayout,
     IconMapPin, IconList, IconCalendar, IconCash,
     IconTrendingUp, IconBarChart, IconAlertTriangle,
-    IconHistory, IconLock, IconShield
+    IconHistory, IconLock, IconShield, IconBook
 } from './Icons';
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
@@ -36,6 +36,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             items: [
                 { path: '/', icon: <IconHome />, label: 'Inicio', color: '#10b981' }, // Emerald
                 { path: '/mi-perfil', icon: <IconUser />, label: 'Mi Perfil', color: '#3b82f6' }, // Blue
+                { path: '/pizarra', icon: <IconLayout />, label: 'Pizarra de Salidas', color: '#10b981' }, // Emerald
+                { path: '/kiosco', icon: <IconLayout />, label: 'Kiosco Digital', color: '#f59e0b', roles: ['Directiva', 'Secretaria', 'Sistemas', 'Agente'] }, // Amber
             ]
         },
         {
@@ -54,9 +56,17 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             items: [
                 { path: '/pagos-y-egresos', icon: <IconCash />, label: 'Pagos y Egresos', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#22c55e' }, // Green
                 { path: '/balance', icon: <IconTrendingUp />, label: 'Balance Financiero', roles: ['Directiva', 'Sistemas'], color: '#f97316' }, // Orange
+                { path: '/encomiendas', icon: <IconList />, label: 'Encomiendas', roles: ['Directiva', 'Secretaria', 'Sistemas', 'Agente'], color: '#f59e0b' }, // Amber
                 { path: '/reportes', icon: <IconBarChart />, label: 'Reportes', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#a855f7' }, // Purple
                 { path: '/reportes-automaticos', icon: <IconBarChart />, label: 'Reportes Automáticos', roles: ['Directiva', 'Sistemas'], color: '#06b6d4' }, // Cyan
                 { path: '/sanciones-asistencia', icon: <IconAlertTriangle />, label: 'Sanciones / Asistencia', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#ef4444' }, // Red
+                { path: '/libro-actas', icon: <IconBook />, label: 'Libro de Actas', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#8b5cf6' }, // Violet
+            ]
+        },
+        {
+            title: 'COMUNICACIÓN',
+            items: [
+                { path: '/whatsapp', icon: <IconLayout />, label: '📱 WhatsApp', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#25d366' },
             ]
         },
         {
@@ -71,20 +81,22 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
     return (
         <aside className={`sidebar fixed inset-y-0 left-0 z-50 w-72 bg-surface/80 dark:bg-gray-900/90 backdrop-blur-xl border-r border-subtle dark:border-gray-800 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-            <div className="flex items-center justify-between h-48 px-6 border-b border-subtle dark:border-gray-800">
-                <div className="w-full flex justify-center">
-                    <div className="flex-shrink-0 w-32 h-32 logo-container rounded-full overflow-hidden shadow-2xl border-4 border-primary/30 bg-white animate-logo-premium">
-                        <img
-                            src="/logo_smit.jpg"
-                            alt="Logo SMIT"
-                            className="w-full h-full object-contain rounded-full scale-110"
-                            onError={handleLogoError}
-                        />
-                        <div className="logo-shimmer-overlay"></div>
+            <div className="flex items-center justify-between h-20 px-6">
+                <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-tr from-primary to-primary-dark rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+                        <IconShield className="text-white w-6 h-6" />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-lg font-black tracking-tighter bg-gradient-to-r from-primary to-primary-dark bg-clip-text text-transparent uppercase leading-none">
+                            S.M.I.T.
+                        </span>
+                        <span className="text-[11px] font-bold text-primary/80 tracking-widest uppercase leading-none mt-1.5">
+                            SISTEMA
+                        </span>
                     </div>
                 </div>
                 <button
-                    className="lg:hidden p-2 text-muted hover:text-primary transition-colors absolute right-4"
+                    className="lg:hidden p-2 text-muted hover:text-primary transition-colors"
                     onClick={toggleSidebar}
                 >
                     ✕
@@ -92,7 +104,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             </div>
 
 
-            <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-8 custom-scrollbar">
+            <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-1 custom-scrollbar">
                 {menuGroups.map((group, gIndex) => {
                     const filteredItems = group.items.filter(item => {
                         if (!item.roles) return true;
@@ -102,45 +114,40 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                     if (filteredItems.length === 0) return null;
 
                     return (
-                        <div key={gIndex} className="space-y-2">
-                            <h4 className="px-4 text-[10px] font-bold text-muted dark:text-gray-500 uppercase tracking-[0.2em]">
-                                {group.title}
-                            </h4>
-                            <div className="space-y-1">
-                                {filteredItems.map((item) => {
-                                    const isActive = location.pathname === item.path;
-                                    return (
-                                        <Link
-                                            key={item.path}
-                                            to={item.path}
-                                            className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl transition-all duration-300 group ${isActive
-                                                ? 'bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg shadow-primary/25 translate-x-1'
-                                                : 'text-main/80 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 hover:translate-x-1'
+                        <div key={gIndex} className="space-y-1">
+                            {filteredItems.map((item) => {
+                                const isActive = location.pathname === item.path;
+                                return (
+                                    <Link
+                                        key={item.path}
+                                        to={item.path}
+                                        className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl transition-all duration-300 group ${isActive
+                                            ? 'bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg shadow-primary/25 translate-x-1'
+                                            : 'text-main/80 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 hover:translate-x-1'
+                                            }`}
+                                    >
+                                        <span
+                                            className={`transition-all duration-300 flex items-center justify-center ${isActive
+                                                ? 'text-white'
+                                                : 'group-hover:scale-110'
                                                 }`}
+                                            style={!isActive ? { color: item.color } : {}}
                                         >
-                                            <span
-                                                className={`p-2 rounded-xl transition-all duration-300 flex items-center justify-center ${isActive
-                                                    ? 'bg-white/20 text-white shadow-none ring-1 ring-white/30'
-                                                    : 'bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 group-hover:scale-110 group-hover:shadow-md'
-                                                    }`}
-                                                style={!isActive ? { color: item.color } : {}}
-                                            >
-                                                {item.icon}
-                                            </span>
-                                            <span className={`text-[13px] font-bold tracking-tight transition-colors ${isActive ? 'text-white font-extrabold' : 'group-hover:text-primary'}`}>
-                                                {item.label}
-                                            </span>
-                                            {isActive && (
-                                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_white]"></div>
-                                            )}
-                                        </Link>
-                                    );
-                                })}
-                            </div>
+                                            {item.icon}
+                                        </span>
+                                        <span className={`text-[13px] font-bold tracking-tight transition-colors ${isActive ? 'text-white font-extrabold' : 'group-hover:text-primary'}`}>
+                                            {item.label}
+                                        </span>
+                                        {isActive && (
+                                            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_white]"></div>
+                                        )}
+                                    </Link>
+                                );
+                            })}
                         </div>
                     );
                 })}
-            </nav>
+            </nav >
 
             <div className="p-4 mt-auto">
                 <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700/50">
@@ -157,7 +164,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                     </div>
                 </div>
             </div>
-        </aside>
+        </aside >
     );
 
 };

@@ -1,20 +1,20 @@
-from rest_framework import viewsets
-from rest_framework.permissions import BasePermission, SAFE_METHODS
-from rest_framework import filters
+from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
-from .models import HojaRuta
-from .models import HojaRuta
-from .serializers import HojaRutaSerializer
+from django.utils import timezone
+from .models import HojaRuta, TurnoSalida
+from .serializers import HojaRutaSerializer, TurnoSalidaSerializer
+from afiliados.models import Afiliado
+from rutas.models import Ruta
 from sanciones.models import Sancion
 from sanciones.serializers import SancionSerializer
 from comunicacion.models import Notificacion
 from django.contrib.contenttypes.models import ContentType
 from historial.models import CambioEstado
-from django.conf import settings
 import json
 import urllib.request
+from datetime import date, timedelta
 
 
 class HojaRutaViewSet(viewsets.ModelViewSet):
@@ -274,6 +274,60 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
             ct = ContentType.objects.get_for_model(HojaRuta)
             CambioEstado.objects.create(content_type=ct, object_id=instance.id, estado_anterior='', estado_nuevo=instance.estado)
             self._generate_pdf(instance)
+            # Notificación automática al administrador cuando es Ruta La Paz
+            try:
+                es_la_paz = (
+                    instance.ruta and (
+                        'la paz' in (instance.ruta.nombre or '').lower() or
+                        'la paz' in (instance.ruta.destino or '').lower()
+                    )
+                )
+                if es_la_paz:
+                    self._notificar_admin_la_paz(instance)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"No se pudo enviar notif admin La Paz: {e}")
+
+    def _notificar_admin_la_paz(self, hoja):
+        """Enviar WhatsApp automático al administrador cuando se asigna ruta La Paz."""
+        ADMIN_PHONE = '71275002'
+        
+        afiliado_nombre = f"{hoja.afiliado.apellidos} {hoja.afiliado.nombres}" if hoja.afiliado else 'N/A'
+        placa = hoja.vehiculo.placa if hoja.vehiculo else 'Sin placa'
+        tipo = (hoja.vehiculo.tipo or '').upper() if hoja.vehiculo else 'N/A'
+        color = (hoja.vehiculo.color or 'No registrado') if hoja.vehiculo else 'N/A'
+        fecha_salida = str(hoja.fecha_salida or hoja.fecha_emision or '')
+        # Formatear fecha DD/MM/YYYY
+        if fecha_salida and '-' in fecha_salida:
+            parts = fecha_salida.split('-')
+            if len(parts) == 3:
+                fecha_salida = f"{parts[2]}/{parts[1]}/{parts[0]}"
+        
+        mensaje = (
+            f"\U0001f6a8 *NUEVA SALIDA - RUTA LA PAZ*\n\n"
+            f"\U0001f4cb Hoja N\u00ba: {hoja.nro}\n"
+            f"\U0001f464 Afiliado: {afiliado_nombre}\n"
+            f"\U0001f697 Modelo: {tipo}\n"
+            f"\U0001f4cd Placa: {placa}\n"
+            f"\U0001f3a8 Color: {color}\n"
+            f"\U0001f4c5 Fecha de Salida: {fecha_salida}\n"
+            f"\U0001f4b0 Monto: Bs. {hoja.precio}\n\n"
+            f"_Sindicato Mixto de Transporte Integraci\u00f3n Taipiplaya_"
+        )
+        
+        try:
+            from whatsapp_notif.services import whatsapp_service
+            whatsapp_service.send_message(
+                phone=ADMIN_PHONE,
+                message=mensaje,
+                message_type='la_paz_salida',
+                related_hoja_id=hoja.id,
+                recipient_name='Administrador',
+                use_celery=True,
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error enviando WhatsApp admin: {e}")
 
     @action(detail=False, methods=['get'])
     def disponibles_hoy(self, request):
@@ -302,21 +356,43 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
             fecha_salida__lte=hasta
         ).order_by('ruta__nombre', 'fecha_salida')
         
-        # Serializar con información adicional
+        # Optimización: Obtener de una vez todas las reservas relevantes para evitar N+1
+        rutas_ids = {h.ruta_id for h in hojas if h.ruta_id}
+        fechas_salida = {h.fecha_salida for h in hojas if h.fecha_salida}
+        
+        from reservas.models import Reserva
+        from django.db.models import Sum
+        
+        # 1. Agregado de cupos totales por ruta y fecha
+        reservas_stats = Reserva.objects.filter(
+            ruta_id__in=rutas_ids,
+            fecha_viaje__in=fechas_salida,
+            estado__in=['pendiente', 'confirmada']
+        ).values('ruta_id', 'fecha_viaje').annotate(total=Sum('cantidad'))
+        
+        stats_map = {(r['ruta_id'], r['fecha_viaje']): r['total'] for r in reservas_stats}
+        
+        # 2. Mapa de asientos ocupados
+        asientos_qs = Reserva.objects.filter(
+            ruta_id__in=rutas_ids,
+            fecha_viaje__in=fechas_salida,
+            estado__in=['pendiente', 'confirmada']
+        ).exclude(asiento__isnull=True).values('ruta_id', 'fecha_viaje', 'asiento')
+        
+        asientos_map = {}
+        for r in asientos_qs:
+            key = (r['ruta_id'], r['fecha_viaje'])
+            if key not in asientos_map:
+                asientos_map[key] = []
+            asientos_map[key].append(r['asiento'])
+        
+        # Serializar con información pre-calculada
         data = []
         for hoja in hojas:
-            # Calcular cupos reservados para esta hoja de ruta
-            reservas_qs = Reserva.objects.filter(
-                ruta=hoja.ruta,
-                fecha_viaje=hoja.fecha_salida,
-                estado__in=['pendiente', 'confirmada']
-            )
+            key = (hoja.ruta_id, hoja.fecha_salida)
             
-            reservas_activas = reservas_qs.aggregate(total=Sum('cantidad'))
-            cupos_reservados = reservas_activas['total'] or 0
-            
-            # Obtener lista de asientos ocupados
-            asientos_ocupados = list(reservas_qs.exclude(asiento__isnull=True).values_list('asiento', flat=True))
+            cupos_reservados = stats_map.get(key, 0)
+            asientos_ocupados = asientos_map.get(key, [])
             
             capacidad_total = hoja.vehiculo.capacidad if hoja.vehiculo else 0
             cupos_disponibles = max(0, capacidad_total - cupos_reservados)
@@ -372,6 +448,28 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
                 'estado': r.estado,
                 'telefono': r.telefono,
             })
+        return Response(data)
+
+    @action(detail=False, methods=['get'])
+    def puntero_hoy(self, request):
+        """Lista simplificada de hojas de ruta de hoy para los afiliados (Puntero del día)"""
+        from django.utils import timezone
+        hoy = timezone.now().date()
+        
+        hojas = HojaRuta.objects.filter(
+            fecha_emision=hoy
+        ).select_related('afiliado', 'ruta', 'vehiculo').order_by('nro')
+        
+        data = [{
+            'id': h.id,
+            'nro': h.nro,
+            'afiliado': h.afiliado.nombre_completo if h.afiliado else 'N/A',
+            'ruta': h.ruta.nombre if h.ruta else 'N/A',
+            'vehiculo': h.vehiculo.placa if h.vehiculo else 'N/A',
+            'estado': h.estado,
+            'hora': h.created_at.strftime('%H:%M') if h.created_at else ''
+        } for h in hojas]
+        
         return Response(data)
 
     @action(detail=False, methods=['get'])
@@ -662,3 +760,87 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
             traceback.print_exc()
             from rest_framework.response import Response
             return Response({'detail': f'Error al generar PDF: {str(e)}'}, status=500)
+
+class TurnoSalidaViewSet(viewsets.ModelViewSet):
+    queryset = TurnoSalida.objects.select_related('afiliado', 'ruta').all()
+    serializer_class = TurnoSalidaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        fecha = self.request.query_params.get('fecha')
+        ruta_id = self.request.query_params.get('ruta_id')
+        if fecha:
+            qs = qs.filter(fecha=fecha)
+        if ruta_id:
+            qs = qs.filter(ruta_id=ruta_id)
+        return qs
+
+    @action(detail=False, methods=['post'])
+    def generar_programacion(self, request):
+        """
+        Genera turnos de salida (puntero) automáticos para la ruta La Paz.
+        """
+        import datetime
+        
+        # 1. Obtener Ruta La Paz
+        ruta_la_paz = Ruta.objects.filter(destino__iexact='la paz').first()
+        if not ruta_la_paz:
+             return Response({'detail': 'No se encontró la ruta a La Paz'}, status=400)
+             
+        # 2. Obtener Afiliados aptos para La Paz (Activos, con Minibus/Ipsum CON placa)
+        afiliados = list(Afiliado.objects.filter(
+            estado='activo',
+            is_active=True,
+            vehiculos__tipo__in=['minibus', 'ipsum'],
+            vehiculos__indocumentado=False
+        ).distinct().order_by('apellidos', 'nombres'))
+        
+        if not afiliados:
+            return Response({'detail': 'No hay aliados aptos para la programación de La Paz'}, status=400)
+            
+        # 3. Determinar fecha de inicio
+        ultimo = TurnoSalida.objects.filter(ruta=ruta_la_paz).order_by('-fecha').first()
+        if ultimo:
+            fecha_inicio = ultimo.fecha + timedelta(days=1)
+        else:
+            fecha_inicio = date.today()
+            
+        # 4. Índice de inicio
+        total_previo = TurnoSalida.objects.filter(ruta=ruta_la_paz).count()
+        idx = total_previo % len(afiliados)
+        
+        # 5. Generar para 30 días laborables
+        dias_a_generar = 30
+        dias_hechos = 0
+        offset = 0
+        creados = []
+        
+        while dias_hechos < dias_a_generar:
+            fecha = fecha_inicio + timedelta(days=offset)
+            offset += 1
+            
+            # Excluir Martes (1) y Jueves (3) que salen integración Caranavi
+            if fecha.weekday() in [1, 3]:
+                continue
+                
+            # Por ahora, 1 turno oficial por día en el puntero (pueden ser más si se requiere)
+            af = afiliados[idx % len(afiliados)]
+            
+            ts = TurnoSalida.objects.create(
+                fecha=fecha,
+                afiliado=af,
+                ruta=ruta_la_paz,
+                orden=1
+            )
+            creados.append(f"{fecha}: {af.nombre_completo}")
+            
+            idx += 1
+            dias_hechos += 1
+            
+        return Response({
+            'detail': f'Se generaron {len(creados)} turnos nuevos para La Paz.',
+            'total_afiliados': len(afiliados),
+            'desde': fecha_inicio,
+            'hasta': fecha
+        })

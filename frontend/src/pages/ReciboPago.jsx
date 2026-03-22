@@ -10,6 +10,7 @@ function ReciboPago() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [layout, setLayout] = useState('thermal'); // 'thermal' o 'standard'
 
     useEffect(() => {
         const fetchData = async () => {
@@ -57,11 +58,269 @@ function ReciboPago() {
     const baseHoja = 20;
     const multaHoja = 50;
 
+    const renderTicket = (copiaLabel) => (
+        <div className="ticket-thermal" key={copiaLabel}>
+            {/* Etiqueta de Copia */}
+            <div className="ticket-copy-label">*** {copiaLabel} ***</div>
+
+            {/* Header */}
+            <div className="ticket-header">
+                <div className="ticket-logo">
+                    <img src="/logo-taipiplaya.png" alt="Logo Taipiplaya" className="logo-img" />
+                </div>
+                <div className="ticket-title">SINDICATO MIXTO</div>
+                <div className="ticket-title">INTEGRACIÓN TAIPIPLAYA</div>
+                <div className="ticket-separator">================================</div>
+                <div className="ticket-doc-type">{titulo}</div>
+                <div className="ticket-doc-number">Nº {numero}</div>
+                <div className="ticket-separator">================================</div>
+            </div>
+
+            {/* Meta Info */}
+            <div className="ticket-meta">
+                <div className="ticket-row">
+                    <span>Fecha:</span>
+                    <span>{data.fecha_pago || data.fecha}</span>
+                </div>
+                <div className="ticket-row">
+                    <span>Lugar:</span>
+                    <span>Taipiplaya</span>
+                </div>
+            </div>
+
+            <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
+
+            {/* Body */}
+            <div className="ticket-body">
+                {isIngreso ? (
+                    <>
+                        <div className="ticket-item">
+                            <div className="ticket-label">RECIBÍ DE:</div>
+                            <div className="ticket-value">{data.afiliado_nombre || 'Afiliado ID: ' + data.afiliado}</div>
+                        </div>
+
+                        <div className="ticket-item">
+                            <div className="ticket-label">CONCEPTO:</div>
+                            <div className="ticket-value">{data.tipo_pago_nombre || 'Tipo ID: ' + data.tipo_pago}</div>
+                        </div>
+
+                        {esHojaRuta && (
+                            <div className="ticket-detalle">
+                                <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
+                                <div className="ticket-detalle-title">DETALLE:</div>
+                                <div className="ticket-row">
+                                    <span>Hoja de Ruta</span>
+                                    <span>{baseHoja.toFixed(2)} Bs</span>
+                                </div>
+                                {total > baseHoja && (
+                                    <div className="ticket-row">
+                                        <span>Multa</span>
+                                        <span>{multaHoja.toFixed(2)} Bs</span>
+                                    </div>
+                                )}
+                                <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
+                            </div>
+                        )}
+
+                        {data.observaciones && (
+                            <div className="ticket-item">
+                                <div className="ticket-label">OBSERVACIONES:</div>
+                                <div className="ticket-value">{data.observaciones}</div>
+                            </div>
+                        )}
+                        {data.metodo_pago === 'transferencia' && (
+                            <>
+                                <div className="ticket-item">
+                                    <div className="ticket-label">BANCO:</div>
+                                    <div className="ticket-value">{data.banco || '-'}</div>
+                                </div>
+                                <div className="ticket-item">
+                                    <div className="ticket-label">NRO OPERACIÓN:</div>
+                                    <div className="ticket-value">{data.nro_operacion || '-'}</div>
+                                </div>
+                            </>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        <div className="ticket-item">
+                            <div className="ticket-label">PAGADO A:</div>
+                            <div className="ticket-value">{data.descripcion}</div>
+                        </div>
+
+                        <div className="ticket-item">
+                            <div className="ticket-label">CONCEPTO:</div>
+                            <div className="ticket-value">{data.tipo_pago_nombre || 'Tipo ID: ' + data.tipo_pago}</div>
+                        </div>
+                        
+                        {data.metodo_pago === 'transferencia' && (
+                            <>
+                                <div className="ticket-item">
+                                    <div className="ticket-label">BANCO:</div>
+                                    <div className="ticket-value">{data.banco || '-'}</div>
+                                </div>
+                                <div className="ticket-item">
+                                    <div className="ticket-label">NRO OPERACIÓN:</div>
+                                    <div className="ticket-value">{data.nro_operacion || '-'}</div>
+                                </div>
+                            </>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* Total */}
+            <div className="ticket-total-section">
+                <div className="ticket-separator">================================</div>
+                <div className="ticket-total">
+                    <span>TOTAL:</span>
+                    <span>Bs. {parseFloat(data.monto).toFixed(2)}</span>
+                </div>
+                <div className="ticket-separator">================================</div>
+            </div>
+
+            {/* QR Code */}
+            <div className="ticket-qr">
+                <QRCodeSVG
+                    value={`${isIngreso ? 'INGRESO' : 'EGRESO'}:${id}|FECHA:${data.fecha_pago || data.fecha}|MONTO:${data.monto}|TIPO:${data.tipo_pago_nombre || ''}`}
+                    size={100}
+                    level="M"
+                />
+            </div>
+
+            {/* Footer */}
+            <div className="ticket-footer">
+                <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
+                <div className="ticket-firma">
+                    <div className="firma-line">_____________________</div>
+                    <div className="firma-text">Firma Autorizada</div>
+                </div>
+                <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
+                <div className="ticket-thanks">¡Gracias por su pago!</div>
+                <div className="ticket-info">Sistema de Gestión v1.0</div>
+            </div>
+        </div>
+    );
+
+    const renderStandardReceipt = (copiaLabel) => (
+        <div className="receipt-standard" key={copiaLabel}>
+            <div className="standard-header">
+                <div className="standard-logo-section">
+                    <img src="/logo-taipiplaya.png" alt="Logo Taipiplaya" className="standard-logo" />
+                    <div className="standard-header-text">
+                        <h3>S.M.I.T. "INTEGRACIÓN TAIPIPLAYA"</h3>
+                        <p>FUNDADO EL 22 DE SEPTIEMBRE DEL 2011 CON PERSONERÍA JURÍDICA R.S. NRO. 20095</p>
+                        <p>TAIPIPLAYA – CARANAVI LA PAZ BOLIVIA</p>
+                    </div>
+                </div>
+                <div className="standard-number-section">
+                    <div className="doc-number-box">
+                        <small>{titulo}</small>
+                        <h2>Nº {numero}</h2>
+                    </div>
+                    <div className="doc-date-box">
+                        <p><strong>FECHA:</strong> {data.fecha_pago || data.fecha}</p>
+                        <p><strong>MONTO:</strong> Bs. {total.toFixed(2)}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="standard-copy-tag">{copiaLabel}</div>
+
+            <div className="standard-body">
+                <div className="standard-row">
+                    <span className="label">RECIBÍ DE:</span>
+                    <span className="value">{data.afiliado_nombre || 'Afiliado ID: ' + data.afiliado}</span>
+                </div>
+
+                <div className="standard-row">
+                    <span className="label">LA SUMA DE:</span>
+                    <span className="value text-capitalize">{total.toFixed(2)} BOLIVIANOS</span>
+                </div>
+
+                <div className="standard-row">
+                    <span className="label">POR CONCEPTO DE:</span>
+                    <span className="value">{data.tipo_pago_nombre || 'Tipo ID: ' + data.tipo_pago}</span>
+                </div>
+
+                {esHojaRuta && (
+                    <div className="standard-details">
+                        <table className="details-table">
+                            <thead>
+                                <tr>
+                                    <th>Descripción</th>
+                                    <th>Monto Base</th>
+                                    <th>Multas/Recargos</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Hoja de Ruta</td>
+                                    <td>20.00 Bs.</td>
+                                    <td>{(total > 20) ? (total - 20).toFixed(2) : '0.00'} Bs.</td>
+                                    <td>{total.toFixed(2)} Bs.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                <div className="standard-row">
+                    <span className="label">OBSERVACIONES:</span>
+                    <span className="value">{data.observaciones || 'Sin observaciones adicionales.'}</span>
+                </div>
+
+                {data.metodo_pago === 'transferencia' && (
+                    <div className="standard-row">
+                        <span className="label">DATOS TRANSFERENCIA:</span>
+                        <span className="value">Banco: {data.banco || '-'} | Operación: {data.nro_operacion || '-'}</span>
+                    </div>
+                )}
+            </div>
+
+            <div className="standard-footer">
+                <div className="standard-qr-section">
+                    <QRCodeSVG
+                        value={`${isIngreso ? 'INGRESO' : 'EGRESO'}:${id}|FECHA:${data.fecha_pago || data.fecha}|MONTO:${data.monto}`}
+                        size={80}
+                    />
+                </div>
+                <div className="standard-signatures">
+                    <div className="signature-box">
+                        <div className="line"></div>
+                        <span>ENTREGUE CONFORME</span>
+                    </div>
+                    <div className="signature-box">
+                        <div className="line"></div>
+                        <span>TESORERÍA / RECAUDACIONES</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
     return (
         <div className="recibo-container">
             <div className="recibo-actions no-print">
                 <button className="btn btn-secondary" onClick={handleBack}>Volver</button>
-                <button className="btn btn-primary" onClick={handlePrint}>🖨️ Imprimir</button>
+
+                <div className="layout-selector">
+                    <button
+                        className={`btn-layout ${layout === 'thermal' ? 'active' : ''}`}
+                        onClick={() => setLayout('thermal')}
+                    >
+                        📟 Ticket Térmico
+                    </button>
+                    <button
+                        className={`btn-layout ${layout === 'standard' ? 'active' : ''}`}
+                        onClick={() => setLayout('standard')}
+                    >
+                        📄 Formato Carta/A4
+                    </button>
+                </div>
+
+                <button className="btn btn-primary" onClick={handlePrint}>🖨️ Imprimir Formato {layout === 'thermal' ? 'Ticket' : 'Carta'}</button>
                 {isIngreso && (
                     <button
                         className="btn btn-primary"
@@ -81,122 +340,25 @@ function ReciboPago() {
                 )}
             </div>
 
-            {/* FORMATO TICKET TÉRMICO */}
-            <div className="ticket-thermal">
-                {/* Header */}
-                <div className="ticket-header">
-                    <div className="ticket-logo">
-                        <img src="/logo-taipiplaya.png" alt="Logo Taipiplaya" className="logo-img" />
-                    </div>
-                    <div className="ticket-title">SINDICATO MIXTO</div>
-                    <div className="ticket-title">INTEGRACIÓN TAIPIPLAYA</div>
-                    <div className="ticket-separator">================================</div>
-                    <div className="ticket-doc-type">{titulo}</div>
-                    <div className="ticket-doc-number">Nº {numero}</div>
-                    <div className="ticket-separator">================================</div>
-                </div>
-
-                {/* Meta Info */}
-                <div className="ticket-meta">
-                    <div className="ticket-row">
-                        <span>Fecha:</span>
-                        <span>{data.fecha_pago || data.fecha}</span>
-                    </div>
-                    <div className="ticket-row">
-                        <span>Lugar:</span>
-                        <span>Taipiplaya</span>
-                    </div>
-                </div>
-
-                <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
-
-                {/* Body */}
-                <div className="ticket-body">
-                    {isIngreso ? (
-                        <>
-                            <div className="ticket-item">
-                                <div className="ticket-label">RECIBÍ DE:</div>
-                                <div className="ticket-value">{data.afiliado_nombre || 'Afiliado ID: ' + data.afiliado}</div>
-                            </div>
-
-                            <div className="ticket-item">
-                                <div className="ticket-label">CONCEPTO:</div>
-                                <div className="ticket-value">{data.tipo_pago_nombre || 'Tipo ID: ' + data.tipo_pago}</div>
-                            </div>
-
-                            {esHojaRuta && (
-                                <div className="ticket-detalle">
-                                    <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
-                                    <div className="ticket-detalle-title">DETALLE:</div>
-                                    <div className="ticket-row">
-                                        <span>Hoja de Ruta</span>
-                                        <span>{baseHoja.toFixed(2)} Bs</span>
-                                    </div>
-                                    {total > baseHoja && (
-                                        <div className="ticket-row">
-                                            <span>Multa</span>
-                                            <span>{multaHoja.toFixed(2)} Bs</span>
-                                        </div>
-                                    )}
-                                    <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
-                                </div>
-                            )}
-
-                            {data.observaciones && (
-                                <div className="ticket-item">
-                                    <div className="ticket-label">OBSERVACIONES:</div>
-                                    <div className="ticket-value">{data.observaciones}</div>
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                        <>
-                            <div className="ticket-item">
-                                <div className="ticket-label">PAGADO A:</div>
-                                <div className="ticket-value">{data.descripcion}</div>
-                            </div>
-
-                            <div className="ticket-item">
-                                <div className="ticket-label">CONCEPTO:</div>
-                                <div className="ticket-value">{data.tipo_pago_nombre || 'Tipo ID: ' + data.tipo_pago}</div>
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                {/* Total */}
-                <div className="ticket-total-section">
-                    <div className="ticket-separator">================================</div>
-                    <div className="ticket-total">
-                        <span>TOTAL:</span>
-                        <span>Bs. {parseFloat(data.monto).toFixed(2)}</span>
-                    </div>
-                    <div className="ticket-separator">================================</div>
-                </div>
-
-                {/* QR Code */}
-                <div className="ticket-qr">
-                    <QRCodeSVG
-                        value={`${isIngreso ? 'INGRESO' : 'EGRESO'}:${id}|FECHA:${data.fecha_pago || data.fecha}|MONTO:${data.monto}|TIPO:${data.tipo_pago_nombre || ''}`}
-                        size={120}
-                        level="M"
-                    />
-                </div>
-
-                {/* Footer */}
-                <div className="ticket-footer">
-                    <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
-                    <div className="ticket-firma">
-                        <div className="firma-line">_____________________</div>
-                        <div className="firma-text">Firma Autorizada</div>
-                    </div>
-                    <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
-                    <div className="ticket-thanks">¡Gracias por su pago!</div>
-                    <div className="ticket-info">Sistema de Gestión v1.0</div>
-                </div>
+            {/* LISTA DE TICKETS (ORIGINAL Y COPIA) */}
+            <div className={`tickets-wrapper ${layout}`}>
+                {layout === 'thermal' ? (
+                    <>
+                        {renderTicket("ORIGINAL - CLIENTE")}
+                        <div className="ticket-cut-line no-print">- - - - - - - - - - - - - - - - - - - - - - - -</div>
+                        {renderTicket("COPIA - CONTABILIDAD")}
+                    </>
+                ) : (
+                    <>
+                        {renderStandardReceipt("ORIGINAL - CLIENTE")}
+                        <div className="standard-separator"></div>
+                        {renderStandardReceipt("COPIA - ARCHIVO SINDICATO")}
+                    </>
+                )}
             </div>
         </div>
     );
 }
+
 
 export default ReciboPago;

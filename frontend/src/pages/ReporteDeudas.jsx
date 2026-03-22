@@ -1,7 +1,17 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import YapeQRModal from '../components/YapeQRModal';
+import { Pie } from 'react-chartjs-2';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+import {
+    Chart as ChartJS,
+    ArcElement,
+    Tooltip,
+    Legend
+} from 'chart.js';
 import './ReportesFinancieros.css'; // Reutilizamos estilos
+
+ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
 
 function ReporteDeudas() {
     const [afiliados, setAfiliados] = useState([]);
@@ -10,6 +20,7 @@ function ReporteDeudas() {
     const [totales, setTotales] = useState({ deuda: 0, morosos: 0 });
     const [pagina, setPagina] = useState(1);
     const [paginasTotales, setPaginasTotales] = useState(1);
+    const [totalAfiliados, setTotalAfiliados] = useState(0);
 
     // QR States
     const [qrData, setQrData] = useState(null);
@@ -32,6 +43,10 @@ function ReporteDeudas() {
                     morosos: res.data.count || 0
                 });
                 setPaginasTotales(res.data.total_pages || 1);
+
+                // Cargar total de afiliados para el porcentaje
+                const afRes = await api.getAfiliados({ limit: 1 });
+                setTotalAfiliados(afRes.data.count || 0);
             }
             setError('');
         } catch (err) {
@@ -97,14 +112,46 @@ function ReporteDeudas() {
                 </button>
             </div>
 
-            <div className="metrics-grid">
+            <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr', gap: '20px' }}>
                 <div className="metric-card">
                     <h3>Total Deuda Sistema</h3>
                     <div className="metric-value" style={{ color: '#e53e3e' }}>Bs. {totales.deuda.toFixed(2)}</div>
+                    <p style={{ fontSize: '0.9rem', color: '#718096' }}>Monto total por cobrar</p>
                 </div>
                 <div className="metric-card">
-                    <h3>Afiliados con Deuda/Falta</h3>
+                    <h3>Afiliados con Deuda</h3>
                     <div className="metric-value">{totales.morosos}</div>
+                    <p style={{ fontSize: '0.9rem', color: '#718096' }}>De un total de {totalAfiliados} afiliados</p>
+                </div>
+                <div className="chart-card" style={{ padding: '15px', height: 'fit-content' }}>
+                    <h3 style={{ marginBottom: '10px', fontSize: '1rem' }}>Estado de Morosidad (%)</h3>
+                    <div style={{ maxWidth: '250px', margin: '0 auto' }}>
+                        <Pie
+                            data={{
+                                labels: ['Al Día', 'Con Deuda'],
+                                datasets: [{
+                                    data: [Math.max(0, totalAfiliados - totales.morosos), totales.morosos],
+                                    backgroundColor: ['#48bb78', '#f56565'],
+                                    hoverBackgroundColor: ['#38a169', '#e53e3e'],
+                                    borderWidth: 2,
+                                    borderColor: '#ffffff'
+                                }]
+                            }}
+                            options={{
+                                plugins: {
+                                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                                    datalabels: {
+                                        color: '#fff',
+                                        font: { weight: 'bold', size: 12 },
+                                        formatter: (value, ctx) => {
+                                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                            return total > 0 ? ((value / total) * 100).toFixed(1) + "%" : "0%";
+                                        }
+                                    }
+                                }
+                            }}
+                        />
+                    </div>
                 </div>
             </div>
 

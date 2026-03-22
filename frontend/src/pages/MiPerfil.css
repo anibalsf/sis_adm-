@@ -108,6 +108,157 @@
     border: 2px solid #3b82f6;
 }
 
+/* Dashboard del Chofer - Hoja Hoy */
+.hoja-hoy-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+    border: 2px solid #0ea5e9;
+    overflow: hidden;
+    position: relative;
+}
+
+.hoja-hoy-card::before {
+    content: 'OFICIAL';
+    position: absolute;
+    top: 10px;
+    right: -30px;
+    background: #0ea5e9;
+    color: white;
+    font-size: 0.6rem;
+    font-weight: 800;
+    padding: 5px 40px;
+    transform: rotate(45deg);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-header.highlight {
+    border-bottom: 2px solid #e0f2fe;
+}
+
+.hoja-nro {
+    margin-left: auto;
+    background: #0ea5e9;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-weight: 800;
+    font-size: 0.9rem;
+}
+
+.hoja-hoy-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+}
+
+.hoja-details {
+    flex: 1;
+}
+
+.h-route {
+    font-size: 1.75rem;
+    font-weight: 900;
+    color: #0369a1;
+    margin-bottom: 1rem;
+    line-height: 1.2;
+}
+
+.h-meta {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.verification-label {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #64748b;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+}
+
+.verification-text {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    max-width: 300px;
+    line-height: 1.4;
+}
+
+.qr-wrapper-main {
+    position: relative;
+    padding: 15px;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    border: 1px solid #e2e8f0;
+}
+
+.qr-scan-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: #0ea5e9;
+    box-shadow: 0 0 15px #0ea5e9;
+    animation: scan 3s linear infinite;
+    z-index: 10;
+}
+
+@keyframes scan {
+    0% { top: 10%; }
+    50% { top: 90%; }
+    100% { top: 10%; }
+}
+
+.no-hoja-msg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 3rem;
+    color: #64748b;
+    text-align: center;
+}
+
+.no-hoja-msg span {
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+@media (max-width: 768px) {
+    .hoja-hoy-body {
+        flex-direction: column;
+        text-align: center;
+        gap: 2rem;
+    }
+    .h-meta {
+        justify-content: center;
+    }
+    .verification-text {
+        margin: 0 auto;
+    }
+    .perfil-container {
+        padding: 1rem;
+    }
+    .mi-perfil-container {
+        padding: 0.5rem;
+        padding-bottom: 100px; /* Space for bottom nav */
+    }
+    .perfil-header {
+        padding: 1.5rem;
+        border-radius: 1rem;
+    }
+    .avatar-placeholder {
+        width: 70px;
+        height: 70px;
+    }
+    .perfil-info-main h1 { font-size: 1.5rem; }
+}
+
 .info-item {
     display: flex;
     flex-direction: column;
@@ -686,8 +837,164 @@ td {
     cursor: pointer;
 }
 
+.btn-icon-profile {
+    background: #eff6ff;
+    color: #3b82f6;
+    border: none;
+    padding: 0.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon-profile:hover {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-icon-profile:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
-    .detalles-grid {
+
+    .detalles-grid,
+    .detalles-extended-grid {
         grid-template-columns: 1fr;
+    }
+
+    .table-mini-wrapper table,
+    .table-mini-wrapper thead,
+    .table-mini-wrapper tbody,
+    .table-mini-wrapper th,
+    .table-mini-wrapper td,
+    .table-mini-wrapper tr {
+        display: block;
+    }
+
+    .table-mini-wrapper thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+
+    .table-mini-wrapper tr {
+        margin-bottom: 1rem;
+        background: white;
+        border-radius: 12px;
+        padding: 0.5rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e2e8f0;
+    }
+
+    .table-mini-wrapper td {
+        border: none;
+        position: relative;
+        padding-left: 50%;
+        text-align: right;
+        min-height: 2.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .table-mini-wrapper td:before {
+        content: attr(data-label);
+        position: absolute;
+        left: 1rem;
+        width: 45%;
+        padding-right: 10px;
+        white-space: nowrap;
+        text-align: left;
+        font-weight: 700;
+        color: #64748b;
+        font-size: 0.8rem;
+    }
+
+    .btn-icon-profile {
+        width: 40px;
+        height: 40px;
+        margin-left: auto;
+    }
+}
+
+/* Estilos para Tabs */
+.perfil-tabs {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    background: rgba(255, 255, 255, 0.5);
+    padding: 0.5rem;
+    border-radius: 1rem;
+    backdrop-filter: blur(10px);
+}
+
+.tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: none;
+    background: transparent;
+    border-radius: 0.75rem;
+    color: #64748b;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.tab-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.tab-btn:hover {
+    background: rgba(255, 255, 255, 0.8);
+    color: #1e3a8a;
+}
+
+.tab-btn.active {
+    background: white;
+    color: #3b82f6;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.btn-refresh {
+    margin-left: auto;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    padding: 0.4rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-refresh:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.puntero-section {
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }

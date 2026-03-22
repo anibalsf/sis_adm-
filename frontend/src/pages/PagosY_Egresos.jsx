@@ -15,6 +15,8 @@ function PagosYEgresos() {
     const [tiposPago, setTiposPago] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [vehiculos, setVehiculos] = useState([]);
+    const [rutas, setRutas] = useState([]);
     const [activeTab, setActiveTab] = useState('ingresos');
     const [searchQuery, setSearchQuery] = useState('');
     const [showModal, setShowModal] = useState(false);
@@ -60,12 +62,16 @@ function PagosYEgresos() {
     useEffect(() => {
         const loadAuxData = async () => {
             try {
-                const [afiRes, tiposRes] = await Promise.all([
-                    api.getAfiliados({ page_size: 1000, ordering: 'apellidos' }), // Cargar más afiliados para el select
-                    api.getTiposPago()
+                const [afiRes, tiposRes, veRes, ruRes] = await Promise.all([
+                    api.getAfiliados({ page_size: 1000, ordering: 'apellidos' }),
+                    api.getTiposPago(),
+                    api.getVehiculos({ page_size: 1000 }),
+                    api.getRutas({ page_size: 1000 })
                 ]);
                 setAfiliados(afiRes.data?.results || afiRes.data || []);
                 setTiposPago(tiposRes.data?.results || tiposRes.data || []);
+                setVehiculos(veRes.data?.results || veRes.data || []);
+                setRutas(ruRes.data?.results || ruRes.data || []);
             } catch (err) {
                 console.error("Error cargando datos auxiliares:", err);
             }
@@ -83,17 +89,37 @@ function PagosYEgresos() {
         const isHoja = tp && /hoja/i.test(tp?.nombre || '') && /ruta/i.test(tp?.nombre || '');
         if (!isHoja) return;
 
-        let targetMonto = '20';
+        // No forzar monto si el usuario ya eligió uno manualmente o si podemos calcular uno mejor
+        if (form.monto && parseFloat(form.monto) > 0 && !form._autoSet) return;
+
+        let targetMonto = '20'; // Default Caranavi
+        const rutaSelected = rutas.find(r => String(r.id) === String(form.ruta_id));
+        const vehiculoSelected = vehiculos.find(v => String(v.id) === String(form.vehiculo_id));
+
+        if (rutaSelected) {
+            const nom = (rutaSelected.nombre || rutaSelected.destino || '').toLowerCase();
+            if (nom.includes('la paz')) {
+                if (vehiculoSelected) {
+                    const tipo = (vehiculoSelected.tipo || '').toLowerCase();
+                    if (tipo.includes('ipsum')) targetMonto = '0.00';
+                    else if (tipo.includes('minibus') || tipo.includes('minibús')) targetMonto = '0.00';
+                    else targetMonto = '0.00';
+                } else {
+                    targetMonto = '0.00';
+                }
+            } else if (nom.includes('caranavi')) {
+                targetMonto = '0.00';
+            }
+        }
+
         if (aplicarMulta && multaInfo && multaInfo.monto_total) {
             targetMonto = String(multaInfo.monto_total);
-        } else if (!aplicarMulta) {
-            targetMonto = '20';
         }
 
         if (String(form.monto || '') !== String(targetMonto)) {
-            setForm(prev => ({ ...prev, monto: targetMonto }));
+            setForm(prev => ({ ...prev, monto: targetMonto, _autoSet: true }));
         }
-    }, [multaInfo, form.tipo_pago, form.monto, activeTab, tiposPago, aplicarMulta]);
+    }, [multaInfo, form.tipo_pago, form.monto, form.ruta_id, form.vehiculo_id, activeTab, tiposPago, aplicarMulta, rutas, vehiculos]);
 
 
 
@@ -101,10 +127,11 @@ function PagosYEgresos() {
         console.log("➡️ Abriendo modal de creación...");
         setModalMode('create');
         if (activeTab === 'ingresos') {
-            setForm({ fecha_pago: '', monto: '', tipo_pago: '', afiliado: '', observaciones: '', saldo_anterior_gestion: '0' });
+            setForm({ fecha_pago: '', monto: '0.00', tipo_pago: '', afiliado: '', observaciones: '', saldo_anterior_gestion: '0.00', banco: '', nro_operacion: '' });
             setMetodoPago('efectivo');
         } else {
-            setForm({ fecha: '', monto: '', descripcion: '', tipo_pago: '' });
+            setForm({ fecha: '', monto: '0.00', descripcion: '', tipo_pago: '', banco: '', nro_operacion: '' });
+            setMetodoPago('efectivo');
         }
         setSubmitError('');
         setFieldErrors({});
@@ -120,16 +147,22 @@ function PagosYEgresos() {
                 monto: String(item.monto || ''),
                 tipo_pago: item.tipo_pago || '',
                 afiliado: item.afiliado || '',
-                saldo_anterior_gestion: String(item.saldo_anterior_gestion || '0'),
-                observaciones: item.observaciones || ''
+                saldo_anterior_gestion: String(item.saldo_anterior_gestion || '0.00'),
+                observaciones: item.observaciones || '',
+                banco: item.banco || '',
+                nro_operacion: item.nro_operacion || ''
             });
+            setMetodoPago(item.metodo_pago || 'efectivo');
         } else {
             setForm({
                 fecha: item.fecha || '',
                 monto: String(item.monto || ''),
                 descripcion: item.descripcion || '',
-                tipo_pago: item.tipo_pago || ''
+                tipo_pago: item.tipo_pago || '',
+                banco: item.banco || '',
+                nro_operacion: item.nro_operacion || ''
             });
+            setMetodoPago(item.metodo_pago || 'efectivo');
         }
         setSubmitError('');
         setFieldErrors({});
@@ -145,9 +178,27 @@ function PagosYEgresos() {
             const tp = tiposPago.find(t => String(t.id) === String(value));
             const isHojaRuta = tp && /hoja/i.test(tp.nombre || '') && /ruta/i.test(tp.nombre || '');
             if (isHojaRuta) {
-                const current = parseFloat(nextForm.monto || '0');
-                if (!current || current < 20) nextForm.monto = '20';
+                // Si es hoja de ruta, intentar inicializar campos extras
+                if (!nextForm.ruta_id) {
+                    const rLP = rutas.find(r => (r.nombre || '').toLowerCase().includes('la paz'));
+                    if (rLP) nextForm.ruta_id = rLP.id;
+                }
+                nextForm.monto = '0.00'; // Default with leading zero for accounting
             }
+        }
+
+        if (activeTab === 'ingresos' && name === 'afiliado') {
+            // Autofill vehiculo si solo tiene uno
+            const vs = vehiculos.filter(v => String(v.afiliado) === String(value));
+            if (vs.length > 0) {
+                nextForm.vehiculo_id = vs[0].id;
+            } else {
+                nextForm.vehiculo_id = '';
+            }
+        }
+
+        if (name === 'monto') {
+            nextForm._autoSet = false; // El usuario editó manualmente
         }
 
         setForm(nextForm);
@@ -230,10 +281,18 @@ function PagosYEgresos() {
             // Asegurarnos de que el monto sea el calculado si existe
             const montoFinal = parseFloat(montoCalculado);
 
+            if (metodoPago === 'transferencia') {
+                if (!form.banco || !form.nro_operacion) {
+                    setSubmitError('Para transferencias, debe ingresar el Banco y el Nro de Operación.');
+                    return;
+                }
+            }
+
             const payload = {
                 ...form,
                 monto: isNaN(montoFinal) ? 0 : montoFinal,
-                saldo_anterior_gestion: isNaN(saldoGestion) ? 0 : saldoGestion
+                saldo_anterior_gestion: isNaN(saldoGestion) ? 0 : saldoGestion,
+                metodo_pago: metodoPago
             };
 
             console.log("Payload a enviar:", payload);
@@ -575,7 +634,26 @@ function PagosYEgresos() {
                                         if (!isHoja) return null;
 
                                         return (
-                                            <div className="form-group" style={{ background: 'rgba(99, 102, 241, 0.05)', padding: '15px', borderRadius: '12px', border: '1px dashed #6366f1', marginBottom: '15px' }}>
+                                            <>
+                                                <div className="form-group">
+                                                    <label htmlFor="ruta_id">Ruta / Destino</label>
+                                                    <select id="ruta_id" name="ruta_id" value={form.ruta_id} onChange={onChange}>
+                                                        <option value="">Selecciona ruta...</option>
+                                                        {rutas.map(r => (
+                                                            <option key={r.id} value={r.id}>{r.nombre}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="form-group">
+                                                    <label htmlFor="vehiculo_id">Vehículo del Afiliado</label>
+                                                    <select id="vehiculo_id" name="vehiculo_id" value={form.vehiculo_id} onChange={onChange}>
+                                                        <option value="">Selecciona vehículo...</option>
+                                                        {vehiculos.filter(v => String(v.afiliado) === String(form.afiliado)).map(v => (
+                                                            <option key={v.id} value={v.id}>{v.placa} — {(v.tipo || '').toUpperCase()}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="form-group" style={{ background: 'rgba(99, 102, 241, 0.05)', padding: '15px', borderRadius: '12px', border: '1px dashed #6366f1', marginBottom: '15px' }}>
                                                 <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
                                                     <span>🚨 ¿Aplicar multa de 50 Bs?</span>
                                                     <div className="toggle-switch" style={{ position: 'relative', width: '50px', height: '26px' }}>
@@ -600,6 +678,7 @@ function PagosYEgresos() {
                                                     {aplicarMulta ? 'La multa se sumará al monto base del pasaje.' : 'Se cobrará solo el monto base (20 Bs).'}
                                                 </small>
                                             </div>
+                                            </>
                                         );
                                     })()}
 
@@ -648,6 +727,16 @@ function PagosYEgresos() {
                                                     />
                                                     📱 Yape (QR)
                                                 </label>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                                    <input
+                                                        type="radio"
+                                                        name="metodoPago"
+                                                        value="transferencia"
+                                                        checked={metodoPago === 'transferencia'}
+                                                        onChange={() => setMetodoPago('transferencia')}
+                                                    />
+                                                    🏦 Transferencia
+                                                </label>
                                             </div>
                                         </div>
                                     )}
@@ -661,14 +750,20 @@ function PagosYEgresos() {
                                                 <input
                                                     id="monto"
                                                     name="monto"
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder="0.00"
                                                     value={form.monto}
-                                                    onChange={onChange}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                            onChange(e);
+                                                        }
+                                                    }}
+                                                    onFocus={(e) => { if(e.target.value === '0' || e.target.value === '0.00') setForm(prev => ({...prev, monto: ''})) }}
+                                                    onBlur={(e) => { if(e.target.value === '') setForm(prev => ({...prev, monto: '0.00'})) }}
                                                     required
-                                                    readOnly={!!isHojaRuta}
-                                                    title={isHojaRuta ? 'Monto calculado automáticamente para Hoja de Ruta' : undefined}
+                                                    title={isHojaRuta ? 'Ingrese el monto manualmente' : undefined}
                                                 />
                                             );
                                         })()}
@@ -679,14 +774,35 @@ function PagosYEgresos() {
                                         <input
                                             id="saldo_anterior_gestion"
                                             name="saldo_anterior_gestion"
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
+                                            type="text"
+                                            inputMode="decimal"
+                                            placeholder="0.00"
                                             value={form.saldo_anterior_gestion}
-                                            onChange={onChange}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                    onChange(e);
+                                                }
+                                            }}
+                                            onFocus={(e) => { if(e.target.value === '0' || e.target.value === '0.00') setForm(prev => ({...prev, saldo_anterior_gestion: ''})) }}
+                                            onBlur={(e) => { if(e.target.value === '') setForm(prev => ({...prev, saldo_anterior_gestion: '0.00'})) }}
                                         />
                                         {fieldErrors.saldo_anterior_gestion && <div className="error">{fieldErrors.saldo_anterior_gestion}</div>}
                                     </div>
+                                    
+                                    {metodoPago === 'transferencia' && (
+                                        <div style={{ display: 'flex', gap: '15px' }}>
+                                            <div className="form-group" style={{ flex: 1 }}>
+                                                <label htmlFor="banco">Banco *</label>
+                                                <input id="banco" name="banco" type="text" placeholder="Ej. BNB, BMSC..." value={form.banco} onChange={onChange} required={metodoPago === 'transferencia'} />
+                                            </div>
+                                            <div className="form-group" style={{ flex: 1 }}>
+                                                <label htmlFor="nro_operacion">Nro Transacción / Operación *</label>
+                                                <input id="nro_operacion" name="nro_operacion" type="text" placeholder="Ej. 12345678" value={form.nro_operacion} onChange={onChange} required={metodoPago === 'transferencia'} />
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="form-group">
                                         <label htmlFor="observaciones">Observaciones</label>
                                         <textarea id="observaciones" name="observaciones" value={form.observaciones} onChange={onChange} rows="3"></textarea>
@@ -715,9 +831,60 @@ function PagosYEgresos() {
                                         <input id="descripcion" name="descripcion" type="text" value={form.descripcion} onChange={onChange} required />
                                         {fieldErrors.descripcion && <div className="error">{fieldErrors.descripcion}</div>}
                                     </div>
+
+                                    {modalMode === 'create' && (
+                                        <div className="form-group">
+                                            <label>Método de Pago *</label>
+                                            <div style={{ display: 'flex', gap: '20px', marginTop: '10px' }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                                    <input
+                                                        type="radio"
+                                                        name="metodoPago"
+                                                        value="efectivo"
+                                                        checked={metodoPago === 'efectivo'}
+                                                        onChange={() => setMetodoPago('efectivo')}
+                                                    />
+                                                    💵 Efectivo
+                                                </label>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                                    <input
+                                                        type="radio"
+                                                        name="metodoPago"
+                                                        value="transferencia"
+                                                        checked={metodoPago === 'transferencia'}
+                                                        onChange={() => setMetodoPago('transferencia')}
+                                                    />
+                                                    🏦 Transferencia
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {metodoPago === 'transferencia' && (
+                                        <div style={{ display: 'flex', gap: '15px' }}>
+                                            <div className="form-group" style={{ flex: 1 }}>
+                                                <label htmlFor="banco">Banco *</label>
+                                                <input id="banco" name="banco" type="text" placeholder="Ej. BNB, BMSC..." value={form.banco} onChange={onChange} required={metodoPago === 'transferencia'} />
+                                            </div>
+                                            <div className="form-group" style={{ flex: 1 }}>
+                                                <label htmlFor="nro_operacion">Nro Transacción / Operación *</label>
+                                                <input id="nro_operacion" name="nro_operacion" type="text" placeholder="Ej. 12345678" value={form.nro_operacion} onChange={onChange} required={metodoPago === 'transferencia'} />
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="form-group">
                                         <label htmlFor="monto">Monto (Bs.) *</label>
-                                        <input id="monto" name="monto" type="number" step="0.01" min="0" value={form.monto} onChange={onChange} required />
+                                        <input id="monto" name="monto" type="text" inputMode="decimal" placeholder="0.00" value={form.monto} 
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                    onChange(e);
+                                                }
+                                            }}
+                                            onFocus={(e) => { if(e.target.value === '0' || e.target.value === '0.00') setForm(prev => ({...prev, monto: ''})) }}
+                                            onBlur={(e) => { if(e.target.value === '') setForm(prev => ({...prev, monto: '0.00'})) }}
+                                            required />
                                         {fieldErrors.monto && <div className="error">{fieldErrors.monto}</div>}
                                     </div>
                                 </>

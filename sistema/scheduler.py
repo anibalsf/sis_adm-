@@ -240,6 +240,28 @@ def enviar_alertas_morosos_semanal():
         logger.error(f"❌ Error enviando reporte semanal: {str(e)}")
         return 0
 
+
+def enviar_notificacion_puntero_diario():
+    """
+    Envía notificación diaria del puntero La Paz al administrador (07:00 AM)
+    """
+    from reportes_auto.report_generator import ReportGenerator
+    from comunicacion.services import WhatsAppService
+    
+    try:
+        summary = ReportGenerator.get_daily_puntero_la_paz_report()
+        # Número solicitado por el usuario
+        admin_phone = '71275002'
+        
+        service = WhatsAppService()
+        service.send_message(admin_phone, summary)
+        
+        logger.info(f"✅ Notificación diaria de puntero enviada a {admin_phone}")
+        return 1
+    except Exception as e:
+        logger.error(f"❌ Error enviando notificación diaria de puntero: {str(e)}")
+        return 0
+
 def start_scheduler():
     """
     Inicia el scheduler con las tareas programadas
@@ -260,6 +282,9 @@ def start_scheduler():
         
         # Reporte Morosos: Viernes 18:00
         scheduler.add_job(enviar_alertas_morosos_semanal, 'cron', day_of_week='fri', hour=18, minute=0, id='morosos', replace_existing=True)
+        
+        # Notificación Puntero La Paz: Diario 07:00
+        scheduler.add_job(enviar_notificacion_puntero_diario, 'cron', hour=7, minute=0, id='puntero_diario', replace_existing=True)
         
         scheduler.start()
         logger.info("🚀 Scheduler iniciado con tareas de reportes y recordatorios")

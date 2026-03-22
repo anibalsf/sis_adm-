@@ -146,14 +146,14 @@ function Usuarios() {
                             </tr>
                         </thead>
                         <tbody>
-                            {users.map(user => (
+                            {(users || []).map(user => (
                                 <tr key={user.id}>
                                     <td><strong>@{user.username}</strong></td>
-                                    <td>{user.first_name} {user.last_name}</td>
-                                    <td>{user.email || '-'}</td>
+                                    <td>{typeof user.first_name === 'object' ? '' : user.first_name} {typeof user.last_name === 'object' ? '' : user.last_name}</td>
+                                    <td>{typeof user.email === 'object' ? '' : (user.email || '-')}</td>
                                     <td>
-                                        <span className={`badge-role role-${user.role?.toLowerCase()}`}>
-                                            {user.role}
+                                        <span className={`badge-role role-${typeof user.role === 'string' ? user.role.toLowerCase() : ''}`}>
+                                            {typeof user.role === 'object' && user.role !== null ? (user.role.name || JSON.stringify(user.role)) : user.role}
                                         </span>
                                     </td>
                                     <td>

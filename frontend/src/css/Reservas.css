@@ -1,9 +1,44 @@
 ﻿.reservas-container {
-    padding: 2rem;
+    padding: 2.5rem;
+    background: var(--dashboard-bg, #f8fafc);
+    min-height: 100vh;
+    animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .reservas-container h1 {
-    margin-bottom: 1rem;
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(to right, #059669, #10b981, #059669);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+    overflow: hidden;
+    white-space: nowrap;
+    width: 0;
+    animation: typing-fast 1.8s steps(40, end) forwards, shine-text 5s linear infinite;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+}
+
+.reservas-container p {
+    color: #64748b;
+    font-size: 1.1rem;
+    margin-bottom: 2.5rem;
 }
 
 .rutas-disponibles {
@@ -317,9 +352,7 @@
     cursor: default;
 }
 
-.seat-regular {}
 
-.seat-wide {}
 
 .seat-number {
     font-weight: bold;
@@ -374,50 +407,41 @@
     max-width: 450px;
 }
 
-.seat-grid-ipsum {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 12px;
-    background: #fff;
-    padding: 15px;
-    border: 2px solid #333;
-    border-radius: 4px;
-    max-width: 350px;
-}
-
-.seat-grid-ipsum .seat-box {
-    height: 60px;
-    border: 1px solid #333;
+.seat-grid-ipsum-enhanced,
+.seat-grid-minibus-enhanced {
+    background: #f8fafc;
+    padding: 1.5rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    gap: 15px;
+    width: fit-content;
+    margin: 0 auto;
+}
+
+.seat-row-ipsum,
+.seat-row-minibus {
+    display: flex;
+    gap: 12px;
     justify-content: center;
-    background: #fff;
-    border-radius: 4px;
-    padding: 5px;
-    position: relative;
 }
 
-.seat-grid-ipsum .seat-box.occupied {
-    background-color: #FFCDD2;
-}
-
-.seat-grid-ipsum .seat-box.selected {
-    background-color: #BBDEFB;
-    border-color: #2196F3;
-}
-
-.seat-grid-ipsum .seat-conductor {
-    background-color: #f5f5f5;
-    border-style: dashed;
-    font-weight: bold;
-    font-size: 0.7rem;
-    color: #999;
-}
-
-.seat-grid-ipsum .seat-spacer {
-    display: block;
+.seat-grid-ipsum-enhanced .seat-box,
+.seat-grid-minibus-enhanced .seat-box {
+    width: 60px;
     height: 60px;
+    flex: 0 0 60px;
+}
+
+.seat-spacer {
+    width: 60px;
+}
+
+.seat-grid-generic {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
 }
 
 .seat-grid-minibus .seat-box {

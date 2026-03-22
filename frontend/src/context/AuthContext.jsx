@@ -4,141 +4,111 @@ import { API_URL } from '../services/api';
 
 const AuthContext = createContext(null);
 
-export const useAuth = () => useContext(AuthContext);
-
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
-    const [accessToken, setAccessToken] = useState(localStorage.getItem('accessToken'));
-    const [refreshToken, setRefreshToken] = useState(localStorage.getItem('refreshToken'));
+    const [accessToken, setAccessToken] = useState(() => localStorage.getItem('accessToken'));
+    const [refreshToken] = useState(() => localStorage.getItem('refreshToken'));
     const [loading, setLoading] = useState(true);
 
-    // Configurar baseURL
     axios.defaults.baseURL = API_URL;
 
-    // Interceptor para agregar token a todas las requests
+    // Interceptor: adjuntar token en cada request
     useEffect(() => {
-        const requestInterceptor = axios.interceptors.request.use(
-            (config) => {
-                if (accessToken) {
-                    config.headers.Authorization = `Bearer ${accessToken}`;
-                }
-                return config;
-            },
-            (error) => Promise.reject(error)
-        );
+        const id = axios.interceptors.request.use((config) => {
+            const token = localStorage.getItem('accessToken');
+            if (token) config.headers.Authorization = `Bearer ${token}`;
+            return config;
+        });
+        return () => axios.interceptors.request.eject(id);
+    }, []);
 
-        return () => axios.interceptors.request.eject(requestInterceptor);
-    }, [accessToken]);
-
-    // Interceptor para manejar refresh automático
+    // Interceptor: auto-refresh cuando el token expira
     useEffect(() => {
-        const responseInterceptor = axios.interceptors.response.use(
-            (response) => response,
+        const id = axios.interceptors.response.use(
+            (res) => res,
             async (error) => {
-                const originalRequest = error.config;
-
-                // Si el token expiró y tenemos refresh token
-                if (error.response?.status === 401 && refreshToken && !originalRequest._retry) {
-                    originalRequest._retry = true;
-
-                    try {
-                        const response = await axios.post('/auth/token/refresh/', {
-                            refresh: refreshToken
-                        });
-
-                        const newAccessToken = response.data.access;
-                        setAccessToken(newAccessToken);
-                        localStorage.setItem('accessToken', newAccessToken);
-
-                        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-                        return axios(originalRequest);
-                    } catch (refreshError) {
-                        // Si el refresh falla, hacer logout
-                        logout();
-                        return Promise.reject(refreshError);
+                const original = error.config;
+                const isAuthUrl = original.url?.includes('/auth/');
+                if (error.response?.status === 401 && !isAuthUrl && !original._retry) {
+                    original._retry = true;
+                    const stored = localStorage.getItem('refreshToken');
+                    if (stored) {
+                        try {
+                            const { data } = await axios.post('/auth/token/refresh/', { refresh: stored });
+                            localStorage.setItem('accessToken', data.access);
+                            setAccessToken(data.access);
+                            original.headers.Authorization = `Bearer ${data.access}`;
+                            return axios(original);
+                        } catch {
+                            clearSession();
+                        }
+                    } else {
+                        clearSession();
                     }
                 }
-
                 return Promise.reject(error);
             }
         );
+        return () => axios.interceptors.response.eject(id);
+    }, []);
 
-        return () => axios.interceptors.response.eject(responseInterceptor);
-    }, [refreshToken]);
-
+    // Cargar usuario al iniciar
     useEffect(() => {
-        if (accessToken) {
-            loadUser();
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+            axios.get('/auth/me')
+                .then((res) => setUser(res.data))
+                .catch(() => clearSession())
+                .finally(() => setLoading(false));
         } else {
             setLoading(false);
         }
-    }, [accessToken]);
+    }, []);
 
-    const loadUser = async () => {
+    function clearSession() {
+        setUser(null);
+        setAccessToken(null);
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+    }
+
+    async function login(username, password, remember = false) {
         try {
-            const response = await axios.get('/auth/me');
-            setUser(response.data);
-        } catch (error) {
-            console.error('Error loading user:', error);
-            logout();
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const login = async (username, password, remember = false) => {
-        try {
-            console.log('🔵 Intentando login...', { username, API_URL });
-
-            const response = await axios.post('/auth/login', { username, password, remember });
-
-            console.log('✅ Login exitoso:', response.data);
-
-            const { access, refresh, user: userData } = response.data;
-
-            setAccessToken(access);
-            setRefreshToken(refresh);
-            setUser(userData);
+            const { data } = await axios.post('/auth/login', { username, password, remember });
+            const { access, refresh, user: userData } = data;
 
             localStorage.setItem('accessToken', access);
             localStorage.setItem('refreshToken', refresh);
+            setAccessToken(access);
+            setUser(userData);
 
-            return { success: true };
+            return { success: true, user: userData };
         } catch (error) {
-            console.error('❌ Login error:', error);
-
-            const data = error.response?.data;
-            let message = data?.detail;
-            if (!message && data && typeof data === 'object') {
-                message = (data.non_field_errors && data.non_field_errors[0])
-                    || (Array.isArray(Object.values(data)) && Array.isArray(Object.values(data)[0]) ? Object.values(data)[0][0] : undefined);
-            }
-            return { success: false, error: message || 'Error al iniciar sesión' };
+            const msg = error.response?.data?.detail
+                || error.response?.data?.non_field_errors?.[0]
+                || 'Error al iniciar sesión';
+            return { success: false, error: msg };
         }
-    };
+    }
 
-    const logout = async () => {
+    async function logout() {
         try {
-            // Intentar blacklistear el refresh token
-            if (refreshToken) {
-                await axios.post('/auth/logout', { refresh: refreshToken });
-            }
-        } catch (error) {
-            console.error('Error during logout:', error);
-        } finally {
-            setAccessToken(null);
-            setRefreshToken(null);
-            setUser(null);
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
+            const stored = localStorage.getItem('refreshToken');
+            if (stored) await axios.post('/auth/logout', { refresh: stored });
+        } catch { /* ignorar */ } finally {
+            clearSession();
         }
-    };
-
-    const value = { user, accessToken, login, logout, loading, isAuthenticated: !!user };
+    }
 
     return (
-        <AuthContext.Provider value={value}>
+        <AuthContext.Provider value={{ user, accessToken, login, logout, loading, isAuthenticated: !!user }}>
             {!loading && children}
         </AuthContext.Provider>
     );
-};
+}
+
+export function useAuth() {
+    const ctx = useContext(AuthContext);
+    if (!ctx) throw new Error('useAuth debe usarse dentro de AuthProvider');
+    return ctx;
+}

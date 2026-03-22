@@ -406,12 +406,27 @@ class BalanceView(APIView):
         
         saldo = total_ingresos - total_egresos
         
+        # Calcular gastos por tipo para el desglose
+        egresos_por_tipo = egresos_query.values(
+            'tipo_pago__nombre'
+        ).annotate(
+            total=Sum('monto'),
+            count=Count('id')
+        ).order_by('-total')
+
         response_data = {
             'total_ingresos': float(total_ingresos),
             'count_ingresos': count_ingresos,
             'total_egresos': float(total_egresos),
             'count_egresos': count_egresos,
-            'saldo': float(saldo)
+            'saldo': float(saldo),
+            'egresos_por_tipo': [
+                {
+                    'tipo': item['tipo_pago__nombre'] or 'Otros',
+                    'total': float(item['total']),
+                    'count': item['count']
+                } for item in egresos_por_tipo
+            ]
         }
         
         # Agregar información del período si se filtró
@@ -432,7 +447,8 @@ class ReportesGraficosView(APIView):
     
     def get(self, request):
         from tesoreria.models import Pago, Egreso, TipoPago
-        from django.db.models.functions import TruncMonth
+        from hojasruta.models import HojaRuta
+        from django.db.models.functions import TruncMonth, TruncDay
         
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
@@ -471,14 +487,14 @@ class ReportesGraficosView(APIView):
             return Response({
                 'ingresos': [
                     {
-                        'mes': item['mes'].strftime('%Y-%m'),
-                        'total': float(item['total'])
+                        'mes': item['mes'].strftime('%Y-%m') if item['mes'] else 'N/A',
+                        'total': float(item['total'] or 0)
                     } for item in ingresos_mensuales
                 ],
                 'egresos': [
                     {
-                        'mes': item['mes'].strftime('%Y-%m'),
-                        'total': float(item['total'])
+                        'mes': item['mes'].strftime('%Y-%m') if item['mes'] else 'N/A',
+                        'total': float(item['total'] or 0)
                     } for item in egresos_mensuales
                 ]
             })
@@ -492,7 +508,7 @@ class ReportesGraficosView(APIView):
             ).order_by('-total')
             
             egresos_por_tipo = egresos_query.values(
-                'descripcion'
+                'tipo_pago__nombre'
             ).annotate(
                 total=Sum('monto')
             ).order_by('-total')
@@ -501,17 +517,61 @@ class ReportesGraficosView(APIView):
                 'ingresos': [
                     {
                         'tipo': item['tipo_pago__nombre'] or 'Sin tipo',
-                        'total': float(item['total'])
+                        'total': float(item['total'] or 0)
                     } for item in ingresos_por_tipo
                 ],
                 'egresos': [
                     {
-                        'tipo': item['descripcion'] or 'Sin descripción',
-                        'total': float(item['total'])
+                        'tipo': item['tipo_pago__nombre'] or 'Sin categoría',
+                        'total': float(item['total'] or 0)
                     } for item in egresos_por_tipo[:10]  # Top 10
                 ]
             })
         
+        elif tipo == 'salidas':
+            # Salidas por día (últimos 14 días)
+            fecha_referencia = datetime.now() - timedelta(days=14)
+            salidas_por_dia = HojaRuta.objects.filter(
+                fecha_emision__gte=fecha_referencia
+            ).annotate(
+                dia=TruncDay('fecha_emision')
+            ).values('dia').annotate(
+                total=Count('id')
+            ).order_by('dia')
+            
+            return Response({
+                'salidas': [
+                    {
+                        'fecha': item['dia'].strftime('%Y-%m-%d') if item['dia'] else 'N/A',
+                        'dia_semana': item['dia'].strftime('%A') if item['dia'] else 'N/A',
+                        'total': item['total']
+                    } for item in salidas_por_dia
+                ]
+            })
+
+        elif tipo == 'semanal':
+            # Ingresos diarios de la semana actual
+            hoy = datetime.now()
+            inicio_semana = hoy - timedelta(days=hoy.weekday())
+            
+            ingresos_diarios = pagos_query.filter(
+                fecha_pago__gte=inicio_semana
+            ).annotate(
+                dia=TruncDay('fecha_pago')
+            ).values('dia').annotate(
+                total=Sum('monto')
+            ).order_by('dia')
+            
+            return Response({
+                'semana': [
+                    {
+                        'fecha': item['dia'].strftime('%Y-%m-%d') if item['dia'] else 'N/A',
+                        'dia_semana': item['dia'].strftime('%A') if item['dia'] else 'N/A',
+                        'total': float(item['total'] or 0)
+                    } for item in ingresos_diarios
+                ]
+            })
+
         return Response({'error': 'Tipo no válido'}, status=400)
 
 
@@ -547,22 +607,22 @@ class TransaccionesView(APIView):
         
         for pago in pagos_query:
             transacciones.append({
-                'fecha': str(pago.fecha_pago),
+                'fecha': str(pago.fecha_pago) if pago.fecha_pago else 'N/A',
                 'tipo': 'INGRESO',
                 'afiliado': pago.afiliado.nombre_completo if pago.afiliado else 'N/A',
                 'tipo_pago': pago.tipo_pago.nombre if pago.tipo_pago else 'N/A',
                 'descripcion': pago.observaciones or 'Pago',
-                'monto': float(pago.monto)
+                'monto': float(pago.monto or 0)
             })
         
         for egreso in egresos_query:
             transacciones.append({
-                'fecha': str(egreso.fecha),
+                'fecha': str(egreso.fecha) if egreso.fecha else 'N/A',
                 'tipo': 'EGRESO',
                 'afiliado': None,
                 'tipo_pago': None,
                 'descripcion': egreso.descripcion or 'Egreso',
-                'monto': float(egreso.monto)
+                'monto': float(egreso.monto or 0)
             })
         
         # Ordenar por fecha descendente

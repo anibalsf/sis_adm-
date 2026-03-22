@@ -44,7 +44,7 @@ function Balance() {
 
     return (
         <div className="balance-container">
-            <h1>Balance Financiero</h1>
+            <h1>Módulo de Balance Financiero</h1>
             <p>Resumen del estado financiero del sindicato</p>
 
             {/* Filtros de fecha */}
@@ -110,6 +110,49 @@ function Balance() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Desglose de Egresos por Categoría */}
+                    {balance.egresos_por_tipo && balance.egresos_por_tipo.length > 0 && (
+                        <div className="card categories-card" style={{ marginTop: '2rem' }}>
+                            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                📊 Desglose de Gastos por Categoría
+                            </h2>
+                            <div className="table-container">
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Categoría</th>
+                                            <th>Cantidad Serv.</th>
+                                            <th style={{ textAlign: 'right' }}>Total (Bs.)</th>
+                                            <th style={{ textAlign: 'right' }}>%</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {balance.egresos_por_tipo.map((item, idx) => (
+                                            <tr key={idx}>
+                                                <td><strong>{item.tipo}</strong></td>
+                                                <td>{item.count}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                                    {item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </td>
+                                                <td style={{ textAlign: 'right' }}>
+                                                    {((item.total / (balance.total_egresos || 1)) * 100).toFixed(1)}%
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr style={{ background: 'rgba(0,0,0,0.05)', fontWeight: 'bold' }}>
+                                            <td>TOTAL</td>
+                                            <td>{balance.count_egresos}</td>
+                                            <td style={{ textAlign: 'right' }}>Bs. {balance.total_egresos.toFixed(2)}</td>
+                                            <td style={{ textAlign: 'right' }}>100%</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Información del periodo */}
                     {(balance.fecha_inicio || balance.fecha_fin) && (

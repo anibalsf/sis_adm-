@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 import YapeQRModal from '../components/YapeQRModal';
 import '../css/Reservas.css';
@@ -42,6 +43,27 @@ function Reservas() {
                 return [...prev, seatNum].sort((a, b) => a - b);
             }
         });
+    };
+
+    const renderSeatButton = (num) => {
+        const occupied = isSeatOccupied(num);
+        const selected = selectedSeats.includes(num);
+        return (
+            <div
+                key={num}
+                className={`seat-box seat-regular ${occupied ? 'occupied' : selected ? 'selected' : ''}`}
+                onClick={() => toggleSeat(num)}
+            >
+                <span className="seat-number">{num}</span>
+                <input
+                    type="checkbox"
+                    className="seat-checkbox"
+                    checked={selected || occupied}
+                    disabled={occupied}
+                    readOnly
+                />
+            </div>
+        );
     };
 
     const verificarPago = async () => {
@@ -273,8 +295,26 @@ function Reservas() {
 
     return (
         <div className="reservas-container">
-            <h1>Módulo de Reservas</h1>
-            <p>Selecciona una ruta para realizar tu reserva</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div>
+                    <h1>Módulo de Reservas</h1>
+                    <p>Selecciona una ruta para realizar tu reserva</p>
+                </div>
+                <Link to="/pizarra" style={{
+                    background: '#10b981',
+                    color: 'white',
+                    padding: '0.8rem 1.5rem',
+                    borderRadius: '12px',
+                    textDecoration: 'none',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    boxShadow: '0 4px 10px rgba(16, 185, 129, 0.2)'
+                }}>
+                    🚌 IR A PIZARRA PÚBLICA
+                </Link>
+            </div>
 
             {verPasajerosModulo && (
                 <div className="modal-overlay">
@@ -484,84 +524,50 @@ function Reservas() {
                             {(() => {
                                 const isIpsum = String(hojaSeleccionada.vehiculo?.tipo || '').toLowerCase() === 'ipsum';
 
-                                if (hojaSeleccionada.capacidad_total > 7) {
+                                if (isIpsum) {
                                     return (
-                                        <div className="seat-grid-minibus">
-                                            {/* Fila 1: Conductor, 1, 2 */}
-                                            <div className="seat-box seat-conductor">CONDUCTOR</div>
-                                            {[1, 2].map(num => (
-                                                <div key={num} className={`seat-box seat-regular ${isSeatOccupied(num) ? 'occupied' : selectedSeats.includes(num) ? 'selected' : ''}`}>
-                                                    <span className="seat-number">{num}</span>
-                                                    <input type="checkbox" className="seat-checkbox" checked={selectedSeats.includes(num) || isSeatOccupied(num)} disabled={isSeatOccupied(num)} onChange={() => toggleSeat(num)} />
-                                                </div>
-                                            ))}
-
-                                            {/* Filas 2-5: 3-14 */}
-                                            {Array.from({ length: 12 }, (_, i) => i + 3).map(num => (
-                                                <div key={num} className={`seat-box seat-regular ${isSeatOccupied(num) ? 'occupied' : selectedSeats.includes(num) ? 'selected' : ''}`}>
-                                                    <span className="seat-number">{num}</span>
-                                                    <input type="checkbox" className="seat-checkbox" checked={selectedSeats.includes(num) || isSeatOccupied(num)} disabled={isSeatOccupied(num)} onChange={() => toggleSeat(num)} />
-                                                </div>
-                                            ))}
+                                        <div className="seat-grid-ipsum-enhanced">
+                                            {/* Fila 1: Chofer + 1 */}
+                                            <div className="seat-row-ipsum">
+                                                <div className="seat-box seat-conductor">CHOFER</div>
+                                                <div className="seat-spacer"></div>
+                                                {renderSeatButton(1)}
+                                            </div>
+                                            {/* Fila 2: 3 Pasajeros */}
+                                            <div className="seat-row-ipsum">
+                                                {renderSeatButton(2)}
+                                                {renderSeatButton(3)}
+                                                {renderSeatButton(4)}
+                                            </div>
+                                            {/* Fila 3: 2 Pasajeros */}
+                                            <div className="seat-row-ipsum" style={{ justifyContent: 'center', gap: '15px' }}>
+                                                {renderSeatButton(5)}
+                                                {renderSeatButton(6)}
+                                            </div>
                                         </div>
                                     );
-                                } else if (isIpsum) {
+                                } else if (hojaSeleccionada.capacidad_total > 8) {
                                     return (
-                                        <div className="seat-grid-ipsum">
-                                            {/* Fila 1: Chofer y 1 Pasajero (2+2+2 = 6) */}
-                                            <div className="seat-box seat-conductor" style={{ gridColumn: 'span 2' }}>CHOFER</div>
-                                            <div className="seat-box seat-spacer" style={{ gridColumn: 'span 2', border: 'none', background: 'transparent' }}></div>
-                                            <div className={`seat-box seat-regular ${isSeatOccupied(1) ? 'occupied' : selectedSeats.includes(1) ? 'selected' : ''}`} style={{ gridColumn: 'span 2' }}>
-                                                <span className="seat-number">1</span>
-                                                <input type="checkbox" className="seat-checkbox" checked={selectedSeats.includes(1) || isSeatOccupied(1)} disabled={isSeatOccupied(1)} onChange={() => toggleSeat(1)} />
+                                        <div className="seat-grid-minibus-enhanced">
+                                            <div className="seat-row-minibus">
+                                                <div className="seat-box seat-conductor">CHOFER</div>
+                                                {renderSeatButton(1)}
+                                                {renderSeatButton(2)}
                                             </div>
-
-                                            {/* Fila 2: 3 Pasajeros (2+2+2 = 6) */}
-                                            {[2, 3, 4].map(num => (
-                                                <div key={num} className={`seat-box seat-regular ${isSeatOccupied(num) ? 'occupied' : selectedSeats.includes(num) ? 'selected' : ''}`} style={{ gridColumn: 'span 2' }}>
-                                                    <span className="seat-number">{num}</span>
-                                                    <input type="checkbox" className="seat-checkbox" checked={selectedSeats.includes(num) || isSeatOccupied(num)} disabled={isSeatOccupied(num)} onChange={() => toggleSeat(num)} />
+                                            {[3, 6, 9, 12].map(base => (
+                                                <div key={base} className="seat-row-minibus">
+                                                    {renderSeatButton(base)}
+                                                    {renderSeatButton(base + 1)}
+                                                    {renderSeatButton(base + 2)}
                                                 </div>
                                             ))}
-
-                                            {/* Fila 3: 2 Pasajeros Centrados (1+2+2+1 = 6) */}
-                                            <div style={{ gridColumn: 'span 1' }}></div>
-                                            <div className={`seat-box seat-regular ${isSeatOccupied(5) ? 'occupied' : selectedSeats.includes(5) ? 'selected' : ''}`} style={{ gridColumn: 'span 2' }}>
-                                                <span className="seat-number">5</span>
-                                                <input type="checkbox" className="seat-checkbox" checked={selectedSeats.includes(5) || isSeatOccupied(5)} disabled={isSeatOccupied(5)} onChange={() => toggleSeat(5)} />
-                                            </div>
-                                            <div className={`seat-box seat-regular ${isSeatOccupied(6) ? 'occupied' : selectedSeats.includes(6) ? 'selected' : ''}`} style={{ gridColumn: 'span 2' }}>
-                                                <span className="seat-number">6</span>
-                                                <input type="checkbox" className="seat-checkbox" checked={selectedSeats.includes(6) || isSeatOccupied(6)} disabled={isSeatOccupied(6)} onChange={() => toggleSeat(6)} />
-                                            </div>
-                                            <div style={{ gridColumn: 'span 1' }}></div>
                                         </div>
                                     );
                                 } else {
+                                    // Layout genérico para otros casos o vehículos pequeños
                                     return (
-                                        <div className="seat-grid-custom">
-                                            {/* Fila 1 */}
-                                            <div className="seat-box seat-conductor">CONDUCTOR</div>
-                                            <div className={`seat-box seat-regular ${isSeatOccupied(1) ? 'occupied' : selectedSeats.includes(1) ? 'selected' : ''}`}>
-                                                <span className="seat-number">1</span>
-                                                <input type="checkbox" className="seat-checkbox" checked={selectedSeats.includes(1) || isSeatOccupied(1)} disabled={isSeatOccupied(1)} onChange={() => toggleSeat(1)} />
-                                            </div>
-
-                                            {/* Fila 2 */}
-                                            {[2, 3, 4].map(num => (
-                                                <div key={num} className={`seat-box seat-regular ${isSeatOccupied(num) ? 'occupied' : selectedSeats.includes(num) ? 'selected' : ''}`}>
-                                                    <span className="seat-number">{num}</span>
-                                                    <input type="checkbox" className="seat-checkbox" checked={selectedSeats.includes(num) || isSeatOccupied(num)} disabled={isSeatOccupied(num)} onChange={() => toggleSeat(num)} />
-                                                </div>
-                                            ))}
-
-                                            {/* Fila 3 */}
-                                            {[5, 6, 7].map(num => (
-                                                <div key={num} className={`seat-box seat-regular ${isSeatOccupied(num) ? 'occupied' : selectedSeats.includes(num) ? 'selected' : ''}`}>
-                                                    <span className="seat-number">{num}</span>
-                                                    <input type="checkbox" className="seat-checkbox" checked={selectedSeats.includes(num) || isSeatOccupied(num)} disabled={isSeatOccupied(num)} onChange={() => toggleSeat(num)} />
-                                                </div>
-                                            ))}
+                                        <div className="seat-grid-generic">
+                                            {Array.from({ length: hojaSeleccionada.capacidad_total }).map((_, i) => renderSeatButton(i + 1))}
                                         </div>
                                     );
                                 }

@@ -11,7 +11,7 @@ class ReunionViewSet(viewsets.ModelViewSet):
     queryset = Reunion.objects.all()
     serializer_class = ReunionSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['tema', 'tipo']
+    search_fields = ['tema', 'tipo', 'acuerdos']
     ordering_fields = ['fecha', 'quorum']
 
     @action(detail=True, methods=['post'])

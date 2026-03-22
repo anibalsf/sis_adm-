@@ -1,0 +1,80 @@
+﻿python : Traceback (most 
+recent call last):
+En línea: 1 Carácter: 1
++ python c:\Users\Once\Documen
+ts\trae_projects\sistema_admin
+istracion\c ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
+    + CategoryInfo          : 
+    NotSpecified: (Traceback  
+   (most recent call last):   
+ :String) [], RemoteExcept    
+ion
+    + FullyQualifiedErrorId : 
+    NativeCommandError
+ 
+  File "c:\Users\Once\Document
+s\trae_projects\sistema_admini
+stracion\check_path.py", line 
+8, in <module>
+    django.setup()
+    ~~~~~~~~~~~~^^
+  File "C:\Users\Once\AppData\
+Roaming\Python\Python314\site-
+packages\django\__init__.py", 
+line 24, in setup
+    apps.populate(settings.INS
+TALLED_APPS)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^
+^^^^^^^^^^^^
+  File "C:\Users\Once\AppData\
+Roaming\Python\Python314\site-
+packages\django\apps\registry.
+py", line 91, in populate
+    app_config = 
+AppConfig.create(entry)
+  File "C:\Users\Once\AppData\
+Roaming\Python\Python314\site-
+packages\django\apps\config.py
+", line 222, in create
+    return 
+app_config_class(app_name, 
+app_module)
+  File "C:\Users\Once\AppData\
+Roaming\Python\Python314\site-
+packages\django\apps\config.py
+", line 47, in __init__
+    self.path = self._path_fro
+m_module(app_module)
+                ~~~~~~~~~~~~~~
+~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\Once\AppData\
+Roaming\Python\Python314\site-
+packages\django\apps\config.py
+", line 86, in 
+_path_from_module
+    raise 
+ImproperlyConfigured(
+SYS.PATH: ['c:\\Users\\Once\\Documents\\trae_projects\\sistema_administracion', 'C:\\Program Files\\Python314\\python314.zip', 'C:\\Program Files\\Python314\\DLLs', 'C:\\Program Files\\Python314\\Lib', 'C:\\Program Files\\Python314', 'C:\\Users\\Once\\AppData\\Roaming\\Python\\Python314\\site-packages', 'C:\\Program Files\\Python314\\Lib\\site-packages']
+    ...<3 lines>...
+    )
+django.core.exceptions.Imprope
+rlyConfigured: The app module 
+<module 'rutas' (namespace) 
+from ['C:\\Users\\Once\\Docume
+nts\\trae_projects\\sistema_ad
+ministracion\\rutas', 'c:\\Use
+rs\\Once\\Documents\\trae_proj
+ects\\sistema_administracion\\
+rutas']> has multiple 
+filesystem locations (['C:\\Us
+ers\\Once\\Documents\\trae_pro
+jects\\sistema_administracion\
+\rutas', 'c:\\Users\\Once\\Doc
+uments\\trae_projects\\sistema
+_administracion\\rutas']); 
+you must configure this app 
+with an AppConfig subclass 
+with a 'path' class attribute.

@@ -13,12 +13,17 @@ class ReservaSerializer(serializers.ModelSerializer):
     afiliado_nombre = serializers.SerializerMethodField()
     afiliado_telefono = serializers.CharField(source='afiliado.telefono', read_only=True)
     
+    # Campos relacionados de Vehículo
+    vehiculo_tipo = serializers.SerializerMethodField()
+    vehiculo_placa = serializers.SerializerMethodField()
+    
     class Meta:
         model = Reserva
         fields = [
             'id', 'afiliado', 'cliente', 'telefono', 'ruta', 'fecha_viaje', 'cantidad', 'asiento', 'estado',
             'ruta_nombre', 'ruta_origen', 'ruta_destino', 'ruta_tarifa',
             'afiliado_nombre', 'afiliado_telefono',
+            'vehiculo_tipo', 'vehiculo_placa',
             'created_at', 'updated_at'
         ]
     
@@ -26,3 +31,13 @@ class ReservaSerializer(serializers.ModelSerializer):
         if obj.afiliado:
             return f"{obj.afiliado.apellidos} {obj.afiliado.nombres}"
         return None
+
+    def get_vehiculo_tipo(self, obj):
+        from hojasruta.models import HojaRuta
+        hoja = HojaRuta.objects.filter(ruta=obj.ruta, fecha_salida=obj.fecha_viaje, estado='emitida').first()
+        return hoja.vehiculo.tipo if hoja and hoja.vehiculo else "No asignado"
+
+    def get_vehiculo_placa(self, obj):
+        from hojasruta.models import HojaRuta
+        hoja = HojaRuta.objects.filter(ruta=obj.ruta, fecha_salida=obj.fecha_viaje, estado='emitida').first()
+        return hoja.vehiculo.placa if hoja and hoja.vehiculo else None

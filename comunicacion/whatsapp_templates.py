@@ -8,6 +8,8 @@ class WhatsAppTemplates:
             f"📅 Fecha: {fecha}\n"
             f"💺 Asiento: {asiento}\n"
             f"🔢 Código: *{codigo_reserva}*\n\n"
+            f"🎫 Ver Boleto Digital:\n"
+            f"https://sindicato-taipiplaya.com/voucher/{codigo_reserva}\n\n"
             f"Por favor llega 15 min antes. ¡Buen viaje!\n"
             f"_Sindicato Integración Taipiplaya_"
         )

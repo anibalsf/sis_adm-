@@ -1,17 +1,32 @@
 .reportes-container {
-    padding: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
+    padding: 2.5rem;
+    background: var(--dashboard-bg, #f8fafc);
+    min-height: 100vh;
+    animation: fadeIn 0.6s ease-out;
 }
 
 .reportes-container h1 {
-    color: #2d3748;
+    font-size: 2.5rem;
+    font-weight: 800;
     margin-bottom: 0.5rem;
+    background: linear-gradient(to right, #059669, #10b981, #059669);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+    overflow: hidden;
+    white-space: nowrap;
+    width: 0;
+    animation: typing-fast 1.8s steps(40, end) forwards, shine-text 5s linear infinite;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
 }
 
 .reportes-container p {
-    color: #718096;
-    margin-bottom: 2rem;
+    color: #64748b;
+    font-size: 1.1rem;
+    margin-bottom: 2.5rem;
 }
 
 /* Filtros - Reutilizando estilos del Balance */
@@ -159,6 +174,7 @@
         padding: 1rem;
     }
 }
+
 /* Tabs */
 .reportes-wrapper {
     width: 100%;
@@ -201,9 +217,12 @@
 @keyframes fadeIn {
     from {
         opacity: 0;
+        transform: translateY(10px);
     }
+
     to {
         opacity: 1;
+        transform: translateY(0);
     }
 }
 
@@ -253,7 +272,7 @@
     .tabs-container {
         padding: 0 1rem;
     }
-    
+
     .tab-button {
         padding: 0.75rem 1rem;
         font-size: 0.875rem;

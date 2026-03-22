@@ -92,6 +92,27 @@ _Sindicato Mixto Integración Taipiplaya_''',
             'is_active': True
         },
         {
+            'name': 'reservation_received',
+            'message_type': 'reservation_confirmation',
+            'template_content': '''⏳ *RESERVA RECIBIDA*
+
+Hola {nombre},
+
+Hemos registrado tu solicitud de reserva:
+🎫 Código: *{codigo}*
+🚌 Ruta: {ruta}
+📅 Fecha: {fecha}
+💺 Asiento: *{asiento}*
+
+⚠️ *Estado: PENDIENTE*
+Para confirmar tu espacio, por favor realiza el pago por QR o en oficina.
+
+¡Gracias por elegirnos! 🚍
+
+_Sindicato Mixto Integración Taipiplaya_''',
+            'is_active': True
+        },
+        {
             'name': 'meeting_reminder',
             'message_type': 'meeting_reminder',
             'template_content': '''📣 *RECORDATORIO DE REUNIÓN*

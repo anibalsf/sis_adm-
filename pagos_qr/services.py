@@ -68,6 +68,12 @@ class QRService:
         """
         Método para simular verificación o llamar a API del banco.
         """
+        from whatsapp_notif.services import whatsapp_service
+        from tesoreria.models import Pago
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         try:
             qr = QRTransaccion.objects.get(transaction_id=transaction_id)
             if qr.estado == 'pendiente':
@@ -75,6 +81,43 @@ class QRService:
                 # Por ahora simulamos éxito
                 qr.estado = 'pagado'
                 qr.save()
+
+                # Si el objeto vinculado es un Pago, actualizar su estado para disparar la señal
+                if isinstance(qr.content_object, Pago):
+                    pago = qr.content_object
+                    pago.estado = 'completado'
+                    pago.save(update_fields=['estado', 'updated_at'])
+                    logger.info(f"Pago {pago.id} marcado como COMPLETADO tras verificación QR")
+
+                # Si el objeto vinculado es una Reserva, enviamos confirmación de reserva
+                elif qr.content_object.__class__.__name__ == 'Reserva':
+                    reserva = qr.content_object
+                    # Actualizar estado de la reserva
+                    reserva.estado = 'confirmada'
+                    reserva.save()
+                    
+                    if hasattr(reserva, 'telefono') and reserva.telefono:
+                        try:
+                            mensaje = f"✅ *PAGO DE RESERVA VERIFICADO*\n\n"
+                            mensaje += f"Estimado(a) *{reserva.cliente}*,\n"
+                            mensaje += f"Su pago de reserva ha sido verificado.\n\n"
+                            mensaje += f"📍 *Ruta:* {reserva.ruta.nombre if reserva.ruta else 'N/A'}\n"
+                            mensaje += f"📅 *Fecha de Viaje:* {reserva.fecha_viaje.strftime('%d/%m/%Y')}\n"
+                            mensaje += f"🎟️ *Asientos:* {reserva.cantidad}\n"
+                            mensaje += f"💰 *Monto:* {qr.monto} Bs.\n\n"
+                            mensaje += f"¡Buen viaje! 🚌\n"
+                            mensaje += f"_Sindicato S.M.I.T. Taipiplaya_"
+
+                            whatsapp_service.send_message(
+                                phone=reserva.telefono,
+                                message=mensaje,
+                                message_type='reserva_confirmation',
+                                recipient_name=reserva.cliente,
+                                related_reservation_id=reserva.id
+                            )
+                        except Exception as we:
+                            logger.error(f"Error enviando WhatsApp tras pago QR de Reserva: {str(we)}")
+
                 return True, "Pagado exitosamente"
             return False, f"Estado actual: {qr.estado}"
         except QRTransaccion.DoesNotExist:

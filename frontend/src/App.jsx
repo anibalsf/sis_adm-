@@ -1,5 +1,5 @@
+import React, { useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import Sidebar from './components/Sidebar';
@@ -7,6 +7,7 @@ import Header from './components/Header';
 import ErrorBoundary from './components/ErrorBoundary';
 import SkeletonLoader from './components/SkeletonLoader';
 import ChatbotWidget from './components/ChatbotWidget';
+import MobileBottomNav from './components/MobileBottomNav';
 import './index.css';
 import './App.css';
 
@@ -34,6 +35,12 @@ const Bitacora = lazy(() => import('./pages/Bitacora'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
 const MiPerfil = lazy(() => import('./pages/MiPerfil'));
 const ReportesAutomaticos = lazy(() => import('./pages/ReportesAutomaticos'));
+const PizarraPublica = lazy(() => import('./pages/PizarraPublica'));
+const VoucherReserva = lazy(() => import('./pages/VoucherReserva'));
+const LibroActas = lazy(() => import('./pages/LibroActas'));
+const Kiosco = lazy(() => import('./pages/Kiosco'));
+const Encomiendas = lazy(() => import('./pages/Encomiendas'));
+const WhatsAppAdmin = lazy(() => import('./pages/WhatsAppAdmin'));
 
 const PageLoader = () => (
     <div style={{ padding: '2rem' }}>
@@ -42,7 +49,11 @@ const PageLoader = () => (
 );
 
 function MainLayout() {
-    const { isAuthenticated, loading } = useAuth();
+    const { user, isAuthenticated, loading } = useAuth();
+
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
     if (loading) {
         return <div className="loading-screen">Cargando sistema...</div>;
@@ -54,9 +65,15 @@ function MainLayout() {
 
     return (
         <div className="app-layout">
-            <Sidebar />
+            <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
+                    onClick={toggleSidebar}
+                ></div>
+            )}
             <div className="main-content">
-                <Header />
+                <Header toggleSidebar={toggleSidebar} />
                 <div className="content">
                     <ErrorBoundary>
                         <Suspense fallback={<PageLoader />}>
@@ -80,12 +97,16 @@ function MainLayout() {
                                 <Route path="/change-password" element={<ChangePassword />} />
                                 <Route path="/mi-perfil" element={<MiPerfil />} />
                                 <Route path="/reportes-automaticos" element={<ReportesAutomaticos />} />
+                                <Route path="/libro-actas" element={<LibroActas />} />
+                                <Route path="/encomiendas" element={<Encomiendas />} />
+                                <Route path="/whatsapp" element={<WhatsAppAdmin />} />
                             </Routes>
                         </Suspense>
                     </ErrorBoundary>
                 </div>
             </div>
             <ChatbotWidget />
+            {user?.role === 'Afiliado' && <MobileBottomNav />}
         </div>
     );
 }
@@ -102,6 +123,9 @@ function App() {
                             <Route path="/forgot-password" element={<ForgotPassword />} />
                             <Route path="/hojas-ruta/print" element={<PrintHojaRuta />} />
                             <Route path="/verificar-hoja/:id" element={<VerificarHoja />} />
+                            <Route path="/pizarra" element={<PizarraPublica />} />
+                            <Route path="/kiosco" element={<Kiosco />} />
+                            <Route path="/voucher/:id" element={<VoucherReserva />} />
                             <Route path="/*" element={<MainLayout />} />
                         </Routes>
                     </Suspense>

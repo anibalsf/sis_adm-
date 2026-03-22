@@ -17,6 +17,7 @@ const StatusBadge = ({ status, type = 'default', size = 'md', icon, children }) 
             // Estados generales
             'activo': 'badge-success',
             'inactivo': 'badge-secondary',
+            'chofer_asalariado': 'badge-info',
             'confirmado': 'badge-success',
             'cancelado': 'badge-danger',
 
@@ -43,6 +44,7 @@ const StatusBadge = ({ status, type = 'default', size = 'md', icon, children }) 
             'vencido': '❌',
             'activo': '✓',
             'inactivo': '○',
+            'chofer_asalariado': '👤',
             'confirmado': '✓',
             'cancelado': '✗',
             'generado': '📄',

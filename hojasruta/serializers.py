@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import HojaRuta
+from .models import HojaRuta, TurnoSalida
 
 
 class HojaRutaSerializer(serializers.ModelSerializer):
@@ -10,6 +10,7 @@ class HojaRutaSerializer(serializers.ModelSerializer):
             'nro': {'required': False, 'allow_blank': True},
             'agente_parada': {'required': False, 'allow_blank': True}
         }
+
 
     def validate_afiliado(self, value):
         """Validar que el afiliado esté activo"""
@@ -92,3 +93,12 @@ class HojaRutaSerializer(serializers.ModelSerializer):
         if not validated_data.get('agente_parada') and afiliado and getattr(afiliado, 'telefono', ''):
             validated_data['agente_parada'] = afiliado.telefono
         return super().update(instance, validated_data)
+
+
+class TurnoSalidaSerializer(serializers.ModelSerializer):
+    afiliado_nombre = serializers.ReadOnlyField(source='afiliado.nombre_completo')
+    ruta_nombre = serializers.ReadOnlyField(source='ruta.nombre')
+
+    class Meta:
+        model = TurnoSalida
+        fields = '__all__'

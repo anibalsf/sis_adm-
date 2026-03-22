@@ -1,4 +1,4 @@
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, permissions
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -27,18 +27,32 @@ class ReservaViewSet(viewsets.ModelViewSet):
     search_fields = ['cliente', 'ruta__nombre', 'afiliado__ci']
     ordering_fields = ['fecha_viaje', 'cantidad']
 
-    class IsSecretariaOrDirectivaOrReadOnly(BasePermission):
-        def has_permission(self, request, view):
-            if request.method in SAFE_METHODS:
-                return True
-            user = request.user
-            if not user or not user.is_authenticated:
-                return False
-            if user.is_superuser:
-                return True
-            return user.groups.filter(name__in=['Secretaria', 'Directiva']).exists()
-
-    permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
+    def get_permissions(self):
+        """
+        Permisos especiales:
+        - Crear reservas y generar QR de pago es público (para pasajeros).
+        - Ver detalles o editar requiere ser personal autorizado.
+        """
+        if self.action in ['create', 'generar_pago_qr', 'public_retrieve']:
+            return [permissions.AllowAny()]
+        
+        if self.action == 'notificar':
+            class OnlySecretaria(BasePermission):
+                def has_permission(self, request, view):
+                    return request.user and request.user.is_authenticated and \
+                           request.user.groups.filter(name='Secretaria').exists()
+            return [OnlySecretaria()]
+            
+        # Para el resto de acciones (LIST, RETRIEVE, UPDATE, DELETE)
+        class IsStaffOrAuthenticatedReadOnly(BasePermission):
+            def has_permission(self, request, view):
+                if request.method in SAFE_METHODS:
+                    return True # Ver lista de reservas requiere login (o no?)
+                return request.user and request.user.is_authenticated and \
+                       (request.user.is_superuser or \
+                        request.user.groups.filter(name__in=['Secretaria', 'Directiva']).exists())
+        
+        return [IsStaffOrAuthenticatedReadOnly()]
 
     def create(self, request, *args, **kwargs):
         """Validar capacidad antes de crear reserva"""
@@ -95,17 +109,6 @@ class ReservaViewSet(viewsets.ModelViewSet):
             WhatsAppService().send_reserva_confirmation(instance)
         except Exception as e:
             print(f"Error enviando confirmación WhatsApp: {e}")
-
-    def get_permissions(self):
-        if getattr(self, 'action', None) == 'notificar':
-            class OnlySecretaria(BasePermission):
-                def has_permission(self, request, view):
-                    user = request.user
-                    if not user or not user.is_authenticated:
-                        return False
-                    return user.groups.filter(name='Secretaria').exists()
-            return [OnlySecretaria()]
-        return super().get_permissions()
 
     @action(detail=True, methods=['post'])
     def notificar(self, request, pk=None):
@@ -351,3 +354,10 @@ Por favor conserve este mensaje."""
             })
         except Exception as e:
             return Response({'detail': f'Error al generar QR: {str(e)}'}, status=500)
+
+    @action(detail=True, methods=['get'], url_path='public-retrieve')
+    def public_retrieve(self, request, pk=None):
+        """Versión pública de retrieve para el voucher del pasajero"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)

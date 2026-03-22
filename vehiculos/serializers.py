@@ -5,7 +5,7 @@ from .models import Vehiculo
 class VehiculoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehiculo
-        fields = ['id', 'placa', 'tipo', 'capacidad', 'afiliado', 'estado', 'created_at', 'updated_at']
+        fields = ['id', 'placa', 'tipo', 'color', 'capacidad', 'afiliado', 'estado', 'indocumentado', 'created_at', 'updated_at']
 
     def validate_placa(self, value):
         import re
