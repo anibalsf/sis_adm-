@@ -23,6 +23,7 @@ const HojasRuta = lazy(() => import('./pages/HojasRuta'));
 const PrintHojaRuta = lazy(() => import('./pages/PrintHojaRuta'));
 const VerificarHoja = lazy(() => import('./pages/VerificarHoja'));
 const PagosYEgresos = lazy(() => import('./pages/PagosY_Egresos'));
+const ArqueoCaja = lazy(() => import('./pages/ArqueoCaja'));
 const Balance = lazy(() => import('./pages/Balance'));
 const Reportes = lazy(() => import('./pages/Reportes'));
 const ReciboPago = lazy(() => import('./pages/ReciboPago'));
@@ -86,6 +87,7 @@ function MainLayout() {
                                 <Route path="/hojas-ruta" element={<HojasRuta />} />
                                 <Route path="/asignacion-la-paz" element={<AsignacionLaPaz />} />
                                 <Route path="/pagos-y-egresos" element={<PagosYEgresos />} />
+                                <Route path="/arqueo-caja" element={<ArqueoCaja />} />
                                 <Route path="/balance" element={<Balance />} />
                                 <Route path="/reportes" element={<Reportes />} />
                                 <Route path="/recibo/:type/:id" element={<ReciboPago />} />

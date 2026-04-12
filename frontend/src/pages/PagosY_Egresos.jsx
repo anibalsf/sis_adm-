@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import YapeQRModal from '../components/YapeQRModal';
 import '../css/PagosYEgresos.css';
-import { IconPrinter, IconPencil, IconTrash } from '../components/Icons';
+import { IconPrinter, IconPencil, IconTrash, IconBan, IconCheck } from '../components/Icons';
+import { useAuth } from '../context/AuthContext';
 
 function PagosYEgresos() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [pagos, setPagos] = useState([]);
     const [egresos, setEgresos] = useState([]);
     const [countPagos, setCountPagos] = useState(0);
@@ -399,6 +401,58 @@ function PagosYEgresos() {
         }
     };
 
+    const handleAnularPago = async (id) => {
+        const motivo = window.prompt('Motivo de anulación:');
+        if (!motivo) return;
+        try {
+            await api.anularPago(id, { motivo_anulacion: motivo });
+            await loadTableData();
+        } catch (err) {
+            alert('Error al anular el pago');
+            console.error(err);
+        }
+    };
+
+    const handleAnularEgreso = async (id) => {
+        const motivo = window.prompt('Motivo de anulación:');
+        if (!motivo) return;
+        try {
+            await api.anularEgreso(id, { motivo_anulacion: motivo });
+            await loadTableData();
+        } catch (err) {
+            alert('Error al anular el egreso');
+            console.error(err);
+        }
+    };
+
+    const handleAprobarEgreso = async (id) => {
+        if (!window.confirm('¿Aprobar este egreso?')) return;
+        try {
+            await api.aprobarEgreso(id);
+            await loadTableData();
+        } catch (err) {
+            alert('Error al aprobar el egreso');
+            console.error(err);
+        }
+    };
+
+    const handleDescargarComprobanteEgreso = async (id) => {
+        try {
+            const response = await api.downloadComprobanteEgreso(id);
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `comprobante_egreso_${id}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            alert('Error al descargar el comprobante');
+            console.error(err);
+        }
+    };
+
     const handleDescargarRecibo = async (id) => {
         try {
             const response = await api.generarReciboPago(id);
@@ -492,6 +546,7 @@ function PagosYEgresos() {
                                         <th>Afiliado</th>
                                         <th>Tipo de Pago</th>
                                         <th>Monto (Bs.)</th>
+                                        <th>Estado</th>
                                         <th>Observaciones</th>
                                         <th>Acciones</th>
                                     </tr>
@@ -499,23 +554,33 @@ function PagosYEgresos() {
                                 <tbody>
                                     {filteredPagos.length > 0 ? (
                                         filteredPagos.map((pago) => (
-                                            <tr key={pago.id}>
+                                            <tr key={pago.id} style={{ opacity: pago.estado === 'anulado' ? 0.6 : 1, textDecoration: pago.estado === 'anulado' ? 'line-through' : 'none' }}>
                                                 <td>{pago.id}</td>
                                                 <td>{pago.fecha_pago}</td>
                                                 <td>{pago.afiliado_nombre}</td>
                                                 <td>{pago.tipo_pago_nombre}</td>
                                                 <td>{parseFloat(pago.monto).toFixed(2)}</td>
+                                                <td>
+                                                    <span className={`badge ${pago.estado === 'anulado' ? 'badge-danger' : 'badge-success'}`}>
+                                                        {pago.estado.toUpperCase()}
+                                                    </span>
+                                                    {pago.estado === 'anulado' && pago.motivo_anulacion && <div style={{fontSize: '0.8em', color: 'red'}}>Mtvo: {pago.motivo_anulacion}</div>}
+                                                </td>
                                                 <td>{pago.observaciones || '-'}</td>
-                                                <td className="actions">
-                                                    <button className="btn-icon btn-print" onClick={() => handleDescargarRecibo(pago.id)} title="Descargar Recibo"><IconPrinter /></button>
-                                                    <button className="btn-icon btn-edit" onClick={() => openEdit(pago)} title="Editar"><IconPencil /></button>
-                                                    <button className="btn-icon btn-delete" onClick={() => remove(pago.id)} title="Eliminar"><IconTrash /></button>
+                                                <td className="actions" style={{textDecoration: 'none'}}>
+                                                    {pago.estado !== 'anulado' && (
+                                                        <>
+                                                            <button className="btn-icon btn-print" onClick={() => handleDescargarRecibo(pago.id)} title="Descargar Recibo"><IconPrinter /></button>
+                                                            <button className="btn-icon btn-edit" onClick={() => openEdit(pago)} title="Editar"><IconPencil /></button>
+                                                            <button className="btn-icon btn-delete" onClick={() => handleAnularPago(pago.id)} title="Anular"><IconBan /></button>
+                                                        </>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan="7" style={{ textAlign: 'center' }}>No se encontraron ingresos</td>
+                                            <td colSpan="8" style={{ textAlign: 'center' }}>No se encontraron ingresos</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -529,27 +594,43 @@ function PagosYEgresos() {
                                         <th>Tipo de Egreso</th>
                                         <th>Descripción</th>
                                         <th>Monto (Bs.)</th>
+                                        <th>Estado</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredEgresos.length > 0 ? (
                                         filteredEgresos.map((egreso) => (
-                                            <tr key={egreso.id}>
+                                            <tr key={egreso.id} style={{ opacity: egreso.estado === 'anulado' ? 0.6 : 1, textDecoration: egreso.estado === 'anulado' ? 'line-through' : 'none' }}>
                                                 <td>{egreso.id}</td>
                                                 <td>{egreso.fecha}</td>
                                                 <td>{egreso.tipo_pago_nombre}</td>
                                                 <td>{egreso.descripcion}</td>
                                                 <td>{parseFloat(egreso.monto).toFixed(2)}</td>
-                                                <td className="actions">
-                                                    <button className="btn-icon btn-edit" onClick={() => openEdit(egreso)} title="Editar"><IconPencil /></button>
-                                                    <button className="btn-icon btn-delete" onClick={() => remove(egreso.id)} title="Eliminar"><IconTrash /></button>
+                                                <td>
+                                                    <span className={`badge ${egreso.estado === 'aprobado' ? 'badge-success' : egreso.estado === 'anulado' ? 'badge-danger' : 'badge-warning'}`}>
+                                                        {egreso.estado ? egreso.estado.replace('_', ' ').toUpperCase() : 'APROBADO'}
+                                                    </span>
+                                                    {egreso.estado === 'anulado' && egreso.motivo_anulacion && <div style={{fontSize: '0.8em', color: 'red'}}>Mtvo: {egreso.motivo_anulacion}</div>}
+                                                    {egreso.aprobado_por_nombre && <div style={{fontSize: '0.8em', color: 'green'}}>Por: {egreso.aprobado_por_nombre}</div>}
+                                                </td>
+                                                <td className="actions" style={{textDecoration: 'none'}}>
+                                                    {egreso.estado !== 'anulado' && (
+                                                        <>
+                                                            <button className="btn-icon btn-print" onClick={() => handleDescargarComprobanteEgreso(egreso.id)} title="Imprimir Comprobante"><IconPrinter /></button>
+                                                            {egreso.estado === 'pendiente_aprobacion' && ['Directiva', 'Secretaria', 'Sistemas'].includes(user?.role) && (
+                                                                <button className="btn-icon btn-success" onClick={() => handleAprobarEgreso(egreso.id)} title="Aprobar Egreso" style={{color: 'green'}}><IconCheck /></button>
+                                                            )}
+                                                            <button className="btn-icon btn-edit" onClick={() => openEdit(egreso)} title="Editar"><IconPencil /></button>
+                                                            <button className="btn-icon btn-delete" onClick={() => handleAnularEgreso(egreso.id)} title="Anular"><IconBan /></button>
+                                                        </>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan="6" style={{ textAlign: 'center' }}>No se encontraron egresos</td>
+                                            <td colSpan="7" style={{ textAlign: 'center' }}>No se encontraron egresos</td>
                                         </tr>
                                     )}
                                 </tbody>

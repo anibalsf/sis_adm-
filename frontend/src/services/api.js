@@ -233,7 +233,8 @@ export const api = {
     createPago: (data) => axios.post('/pagos/', data),
     updatePago: (id, data) => axios.put(`/pagos/${id}/`, data),
     deletePago: (id) => axios.delete(`/pagos/${id}/`),
-    downloadRecibo: (id) => axios.get(`/pagos/${id}/recibo/`, { responseType: 'blob' }),
+    anularPago: (id, data) => axios.post(`/pagos/${id}/anular/`, data),
+    downloadRecibo: (id) => axios.get(`/pagos/${id}/generar_recibo/`, { responseType: 'blob' }),
     generarPagoQrIngreso: (id) => axios.post(`/pagos/${id}/generar_pago_qr/`),
 
     // Egresos
@@ -242,6 +243,18 @@ export const api = {
     createEgreso: (data) => axios.post('/egresos/', data),
     updateEgreso: (id, data) => axios.put(`/egresos/${id}/`, data),
     deleteEgreso: (id) => axios.delete(`/egresos/${id}/`),
+    anularEgreso: (id, data) => axios.post(`/egresos/${id}/anular/`, data),
+    aprobarEgreso: (id) => axios.post(`/egresos/${id}/aprobar/`),
+    downloadComprobanteEgreso: (id) => axios.get(`/egresos/${id}/generar_comprobante/`, { responseType: 'blob' }),
+
+    // Arqueos
+    getArqueos: (params) => axios.get('/arqueos/', { params }),
+    getArqueo: (id) => axios.get(`/arqueos/${id}/`),
+    createArqueo: (data) => axios.post('/arqueos/', data),
+    updateArqueo: (id, data) => axios.put(`/arqueos/${id}/`, data),
+    deleteArqueo: (id) => axios.delete(`/arqueos/${id}/`),
+    calcularArqueo: (data) => axios.post('/arqueos/calcular/', data),
+
     // Usuarios
     getUsers: (params) => axios.get('/users/', { params }),
     createUser: (data) => axios.post('/users/', data),
@@ -315,6 +328,13 @@ export const api = {
     downloadEgresosExcel: async (params = {}) => {
         const q = new URLSearchParams(params).toString();
         return await downloadFile(`/egresos/export_excel/?${q}`, 'egresos.xlsx');
+    },
+    downloadArqueosExcel: async (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return await downloadFile(`/arqueos/export_excel/?${q}`, 'informe_economico_arqueos.xlsx');
+    },
+    downloadArqueoIndividualExcel: async (id) => {
+        return await downloadFile(`/arqueos/${id}/export_excel_individual/`, `arqueo_${id}.xlsx`);
     },
 
     // Nuevos Reportes Avanzados

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Egreso, Pago, TipoPago
+from .models import Egreso, Pago, TipoPago, ArqueoCaja
 
 class TipoPagoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -12,7 +12,7 @@ class PagoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Pago
-        fields = ['id', 'afiliado', 'afiliado_nombre', 'tipo_pago', 'tipo_pago_nombre', 'monto', 'saldo_anterior_gestion', 'fecha_pago', 'metodo_pago', 'banco', 'nro_operacion', 'estado', 'observaciones', 'hoja_ruta', 'created_at']
+        fields = ['id', 'afiliado', 'afiliado_nombre', 'tipo_pago', 'tipo_pago_nombre', 'monto', 'saldo_anterior_gestion', 'fecha_pago', 'metodo_pago', 'banco', 'nro_operacion', 'estado', 'motivo_anulacion', 'observaciones', 'hoja_ruta', 'created_at']
     
     def validate_monto(self, value):
         try:
@@ -31,7 +31,15 @@ class PagoSerializer(serializers.ModelSerializer):
 
 class EgresoSerializer(serializers.ModelSerializer):
     tipo_pago_nombre = serializers.CharField(source='tipo_pago.nombre', read_only=True)
+    aprobado_por_nombre = serializers.CharField(source='aprobado_por.username', read_only=True)
 
     class Meta:
         model = Egreso
-        fields = ['id', 'fecha', 'monto', 'descripcion', 'tipo_pago', 'tipo_pago_nombre', 'metodo_pago', 'banco', 'nro_operacion', 'created_at']
+        fields = ['id', 'fecha', 'monto', 'descripcion', 'tipo_pago', 'tipo_pago_nombre', 'metodo_pago', 'banco', 'nro_operacion', 'estado', 'motivo_anulacion', 'aprobado_por', 'aprobado_por_nombre', 'created_at']
+
+class ArqueoCajaSerializer(serializers.ModelSerializer):
+    creado_por_nombre = serializers.CharField(source='creado_por.username', read_only=True)
+
+    class Meta:
+        model = ArqueoCaja
+        fields = '__all__'

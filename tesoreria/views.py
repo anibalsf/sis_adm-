@@ -3,8 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.views import APIView  
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Egreso, Pago, TipoPago
-from .serializers import EgresoSerializer, PagoSerializer, TipoPagoSerializer
+from .models import Egreso, Pago, TipoPago, ArqueoCaja
+from .serializers import EgresoSerializer, PagoSerializer, TipoPagoSerializer, ArqueoCajaSerializer
 from pagos_qr.services import QRService
 from django.http import HttpResponse, FileResponse
 from reportlab.pdfgen import canvas
@@ -18,6 +18,117 @@ import locale
 class EgresoViewSet(viewsets.ModelViewSet):
     queryset = Egreso.objects.all()
     serializer_class = EgresoSerializer
+
+    def perform_create(self, serializer):
+        monto = float(self.request.data.get('monto', 0))
+        estado = 'pendiente_aprobacion' if monto > 500 else 'aprobado'
+        serializer.save(estado=estado)
+
+    @action(detail=True, methods=['post'])
+    def anular(self, request, pk=None):
+        egreso = self.get_object()
+        motivo = request.data.get('motivo_anulacion', '')
+        if not motivo:
+            return Response({'error': 'Debe proporcionar un motivo de anulación'}, status=400)
+        egreso.estado = 'anulado'
+        egreso.motivo_anulacion = motivo
+        egreso.save()
+        return Response({'status': 'Egreso anulado'})
+
+    @action(detail=True, methods=['post'])
+    def aprobar(self, request, pk=None):
+        egreso = self.get_object()
+        if egreso.estado != 'pendiente_aprobacion':
+            return Response({'error': 'El egreso no está pendiente de aprobación'}, status=400)
+        egreso.estado = 'aprobado'
+        egreso.aprobado_por = request.user if request.user.is_authenticated else None
+        egreso.save()
+        return Response({'status': 'Egreso aprobado'})
+
+    @action(detail=True, methods=['get'])
+    def generar_comprobante(self, request, pk=None):
+        from datetime import datetime
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+
+        egreso = self.get_object()
+        buffer = BytesIO()
+
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch, leftMargin=0.75*inch, rightMargin=0.75*inch)
+        elements = []
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#B71C1C'), spaceAfter=6, alignment=TA_CENTER, fontName='Helvetica-Bold')
+        right_style = ParagraphStyle('Right', parent=styles['Normal'], fontSize=10, alignment=TA_RIGHT)
+
+        elements.append(Paragraph("SINDICATO MIXTO \"INTEGRACIÓN TAIPIPLAYA\"", title_style))
+        elements.append(Paragraph("COMPROBANTE DE EGRESO", title_style))
+        elements.append(Spacer(1, 12))
+
+        comprobante_nro = f"EGR-{egreso.id:04d}"
+        fecha_str = egreso.fecha.strftime("%d/%m/%Y") if egreso.fecha else datetime.now().strftime("%d/%m/%Y")
+
+        elements.append(Paragraph(f"<b>Nº:</b> {comprobante_nro}", right_style))
+        elements.append(Paragraph(f"<b>Fecha:</b> {fecha_str}", right_style))
+        
+        status_text = ""
+        if egreso.estado == 'anulado':
+            status_text = " (ANULADO)"
+        elif egreso.estado == 'pendiente_aprobacion':
+            status_text = " (PENDIENTE DE APROBACIÓN)"
+        elements.append(Paragraph(f"<b>Estado:</b> {egreso.get_estado_display()}{status_text}", right_style))
+        elements.append(Spacer(1, 20))
+
+        data = [
+            ['<b>Detalle</b>', '<b>Información</b>'],
+            ['Tipo de Egreso', egreso.tipo_pago.nombre if egreso.tipo_pago else '-'],
+            ['Descripción', egreso.descripcion],
+            ['Método de Pago', egreso.get_metodo_pago_display()],
+        ]
+        if egreso.metodo_pago == 'transferencia':
+            data.append(['Datos Transfer', f"Banco: {egreso.banco or '-'} | Operación: {egreso.nro_operacion or '-'}"])
+        
+        if egreso.aprobado_por:
+            data.append(['Aprobado por', egreso.aprobado_por.username])
+
+        data.append(['Monto', f"Bs. {float(egreso.monto):.2f}"])
+
+        table = Table(data, colWidths=[2*inch, 4*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#B71C1C')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 60))
+
+        # Firmas
+        firmas_data = [
+            ['_________________________', '_________________________'],
+            ['Entregué Conforme', 'Recibí Conforme'],
+            ['Tesorero / Responsable', 'Beneficiario / Proveedor']
+        ]
+        firmas_table = Table(firmas_data, colWidths=[3*inch, 3*inch])
+        firmas_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('FONTSIZE', (0, 2), (-1, -1), 8),
+            ('TEXTCOLOR', (0, 2), (-1, -1), colors.grey),
+        ]))
+        elements.append(firmas_table)
+
+        doc.build(elements)
+        buffer.seek(0)
+        return FileResponse(buffer, as_attachment=True, filename=f'comprobante_egreso_{comprobante_nro}.pdf')
 
     @action(detail=False, methods=['get'])
     def export_excel(self, request):
@@ -69,6 +180,17 @@ class PagoViewSet(viewsets.ModelViewSet):
             
         # La notificación de WhatsApp se maneja vía Signals en signals.py
         return obj
+
+    @action(detail=True, methods=['post'])
+    def anular(self, request, pk=None):
+        pago = self.get_object()
+        motivo = request.data.get('motivo_anulacion', '')
+        if not motivo:
+            return Response({'error': 'Debe proporcionar un motivo de anulación'}, status=400)
+        pago.estado = 'anulado'
+        pago.motivo_anulacion = motivo
+        pago.save()
+        return Response({'status': 'Pago anulado'})
     
     @action(detail=True, methods=['get'])
     def generar_recibo(self, request, pk=None):
@@ -534,4 +656,355 @@ class ReciboView(APIView):
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="recibo_{pago.id}.pdf"'
+        return response
+
+class ArqueoCajaViewSet(viewsets.ModelViewSet):
+    queryset = ArqueoCaja.objects.all()
+    serializer_class = ArqueoCajaSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(creado_por=self.request.user if self.request.user.is_authenticated else None)
+
+    @action(detail=False, methods=['post'])
+    def calcular(self, request):
+        """Calcula teóricamente los ingresos y egresos hasta la fecha_fin, para que coincida con TODAS las transacciones"""
+        from django.db.models import Sum
+        fecha_inicio = request.data.get('fecha_inicio')
+        fecha_fin = request.data.get('fecha_fin')
+        
+        if not fecha_inicio or not fecha_fin:
+            return Response({'error': 'Debe proporcionar fecha_inicio y fecha_fin'}, status=400)
+            
+        # Para que coincida con la caja física real acumulada, sumamos TODAS las transacciones hasta la fecha_fin
+        ingresos = Pago.objects.filter(fecha_pago__lte=fecha_fin, estado='completado').aggregate(Sum('monto'))['monto__sum'] or 0
+        egresos = Egreso.objects.filter(fecha__lte=fecha_fin, estado__in=['aprobado', 'completado']).aggregate(Sum('monto'))['monto__sum'] or 0
+        
+        # Opcional: mostrar lo del periodo actual
+        pagos_periodo_qs = Pago.objects.filter(fecha_pago__range=[fecha_inicio, fecha_fin], estado='completado')
+        egresos_periodo_qs = Egreso.objects.filter(fecha__range=[fecha_inicio, fecha_fin], estado__in=['aprobado', 'completado'])
+
+        ingresos_periodo = pagos_periodo_qs.aggregate(Sum('monto'))['monto__sum'] or 0
+        egresos_periodo = egresos_periodo_qs.aggregate(Sum('monto'))['monto__sum'] or 0
+
+        ingresos_breakdown = list(pagos_periodo_qs.values('tipo_pago__nombre').annotate(total=Sum('monto')).order_by('-total'))
+        egresos_breakdown = list(egresos_periodo_qs.values('tipo_pago__nombre').annotate(total=Sum('monto')).order_by('-total'))
+
+        saldo_teorico = float(ingresos) - float(egresos)
+        
+        return Response({
+            'total_ingresos': ingresos,
+            'total_egresos': egresos,
+            'ingresos_periodo': ingresos_periodo,
+            'egresos_periodo': egresos_periodo,
+            'saldo_teorico': saldo_teorico,
+            'ingresos_breakdown': ingresos_breakdown,
+            'egresos_breakdown': egresos_breakdown
+        })
+
+    @action(detail=False, methods=['get'])
+    def export_excel(self, request):
+        """Exportar lista de arqueos a Excel (Informe Económico)"""
+        from openpyxl import Workbook
+        from django.http import HttpResponse
+        import json
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Informe Económico - Arqueos"
+        
+        headers = [
+            'ID', 'Mes', 'Año', 'Periodo (Inicio)', 'Periodo (Fin)', 
+            'Ingresos (Acum.)', 'Egresos (Acum.)', 'Saldo Teórico', 
+            'Saldo Real', 'Diferencia', 'Billetes 200', 'Billetes 100', 
+            'Billetes 50', 'Billetes 20', 'Billetes 10', 'Monedas 5', 
+            'Monedas 2', 'Monedas 1', 'M 0.50', 'M 0.20', 'M 0.10',
+            'Estado', 'Observaciones', 'Creado El'
+        ]
+        ws.append(headers)
+        
+        for obj in self.get_queryset().order_by('-anho', '-mes', '-fecha_fin'):
+            # Convert timestamp to timezone naive
+            created_str = obj.created_at.strftime('%Y-%m-%d %H:%M') if obj.created_at else ''
+            
+            # Desglose fallback
+            desg = obj.detalle_efectivo or {}
+            
+            ws.append([
+                obj.id,
+                obj.mes,
+                obj.anho,
+                obj.fecha_inicio.strftime('%Y-%m-%d') if obj.fecha_inicio else '',
+                obj.fecha_fin.strftime('%Y-%m-%d') if obj.fecha_fin else '',
+                float(obj.total_ingresos),
+                float(obj.total_egresos),
+                float(obj.saldo_teorico),
+                float(obj.saldo_real),
+                float(obj.diferencia),
+                desg.get('b200', 0),
+                desg.get('b100', 0),
+                desg.get('b50', 0),
+                desg.get('b20', 0),
+                desg.get('b10', 0),
+                desg.get('m5', 0),
+                desg.get('m2', 0),
+                desg.get('m1', 0),
+                desg.get('m050', 0),
+                desg.get('m020', 0),
+                desg.get('m010', 0),
+                obj.estado.upper(),
+                obj.observaciones or '',
+                created_str
+            ])
+            
+        for cell in ws[1]:
+            cell.font = cell.font.copy(bold=True)
+            
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename=informe_economico_arqueos.xlsx'
+        wb.save(response)
+        return response
+
+    @action(detail=True, methods=['get'])
+    def export_excel_individual(self, request, pk=None):
+        """Exportar formato físico de arqueo para un registro individual"""
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+        from django.http import HttpResponse
+        
+        arqueo = self.get_object()
+        desg = arqueo.detalle_efectivo or {}
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Arqueo Físico"
+        
+        ws.sheet_view.showGridLines = False
+
+        # Styles
+        title_font = Font(name='Calibri', size=18, bold=True)
+        subtitle_font = Font(name='Calibri', size=14, bold=True)
+        bold_font = Font(name='Calibri', size=11, bold=True)
+        normal_font = Font(name='Calibri', size=11)
+        
+        center_align = Alignment(horizontal='center', vertical='center')
+        right_align = Alignment(horizontal='right', vertical='center')
+        left_align = Alignment(horizontal='left', vertical='center')
+        
+        medium_border = Border(
+            left=Side(style='medium'), right=Side(style='medium'),
+            top=Side(style='medium'), bottom=Side(style='medium')
+        )
+        thin_border = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin')
+        )
+        
+        cyan_fill = PatternFill(start_color="99FFFF", end_color="99FFFF", fill_type="solid")
+
+        def set_border(ws, cell_range, border_style=thin_border):
+            from openpyxl.utils import range_boundaries
+            min_col, min_row, max_col, max_row = range_boundaries(cell_range)
+            for row in ws.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col):
+                for cell in row:
+                    cell.border = border_style
+
+        # Headers
+        ws.merge_cells('B1:E1')
+        ws['B1'] = "SINDICATO MIXTO DE TRANSPORTE INTEGRACIÓN TAIPIPLAYA"
+        ws['B1'].font = subtitle_font
+        ws['B1'].alignment = center_align
+
+        ws.merge_cells('B2:E2')
+        ws['B2'] = "ARQUEO DE CAJA CHICA"
+        ws['B2'].font = title_font
+        ws['B2'].alignment = center_align
+
+        # --- Bloque Fecha y Hora ---
+        # FECHA
+        ws.merge_cells('B4:D4')
+        ws['B4'] = "FECHA:"
+        ws['B4'].font = bold_font
+        ws['E4'] = arqueo.fecha_fin.strftime('%d/%m/%Y') if arqueo.fecha_fin else ''
+        ws['E4'].fill = cyan_fill
+        ws['E4'].alignment = right_align
+        
+        # Hr. INICIO
+        ws.merge_cells('B5:D5')
+        ws['B5'] = "Hr. INICIO:"
+        ws['B5'].font = bold_font
+        ws['E5'] = ""
+        ws['E5'].fill = cyan_fill
+        ws['E5'].alignment = right_align
+        
+        # Hr. TERMINO
+        ws.merge_cells('B6:D6')
+        ws['B6'] = "Hr. TÉRMINO:"
+        ws['B6'].font = bold_font
+        ws['E6'] = arqueo.created_at.strftime('%H:%M') if arqueo.created_at else ''
+        ws['E6'].fill = cyan_fill
+        ws['E6'].alignment = right_align
+        
+        set_border(ws, 'B4:E6', medium_border)
+        set_border(ws, 'B4:E4', medium_border)
+        set_border(ws, 'B5:E5', medium_border)
+        ws['E4'].border = thin_border
+        ws['E5'].border = thin_border
+        ws['E6'].border = thin_border
+
+        # --- Saldo Inicial ---
+        ws.merge_cells('B8:D8')
+        ws['B8'] = "SALDO INICIAL:"
+        ws['B8'].font = bold_font
+        ws['E8'] = ""
+        ws['E8'].fill = cyan_fill
+        set_border(ws, 'B8:E8', medium_border)
+        ws['E8'].border = medium_border
+
+        # --- Titulo Efectivo ---
+        ws['A11'] = "1.-"
+        ws['A11'].font = bold_font
+        ws['B11'] = "EFECTIVO"
+        ws['B11'].font = bold_font
+
+        # --- BILLETES ---
+        ws.merge_cells('C13:E13')
+        ws['C13'] = "BILLETES"
+        ws['C13'].font = bold_font
+        ws['C13'].alignment = center_align
+        
+        headers_b = ['Valor', 'Cantidad', 'Total']
+        for col, val in enumerate(headers_b, start=3):
+            cell = ws.cell(row=14, column=col)
+            cell.value = val
+            cell.font = bold_font
+            cell.alignment = center_align
+            
+        billetes = [
+            (200.00, desg.get('b200', 0)),
+            (100.00, desg.get('b100', 0)),
+            (50.00, desg.get('b50', 0)),
+            (20.00, desg.get('b20', 0)),
+            (10.00, desg.get('b10', 0)),
+        ]
+        
+        r = 15
+        total_billetes = 0
+        for val, cant in billetes:
+            tot = val * cant
+            total_billetes += tot
+            
+            ws.cell(row=r, column=3, value=val).number_format = '0.00'
+            ws.cell(row=r, column=3).alignment = right_align
+            
+            ws.cell(row=r, column=4, value=cant if cant > 0 else '').fill = cyan_fill
+            ws.cell(row=r, column=4).alignment = center_align
+            
+            ws.cell(row=r, column=5, value=tot if tot > 0 else '-').number_format = '#,##0.00'
+            ws.cell(row=r, column=5).alignment = right_align
+            r += 1
+            
+        # Total Billetes
+        ws.merge_cells(f'C{r}:D{r}')
+        ws.cell(row=r, column=3, value="Total Billetes").font = bold_font
+        ws.cell(row=r, column=3).alignment = right_align
+        ws.cell(row=r, column=5, value=total_billetes if total_billetes > 0 else '-').font = bold_font
+        ws.cell(row=r, column=5).number_format = '#,##0.00'
+        
+        set_border(ws, f'C13:E{r}', thin_border)
+        # Apply thick border outside
+        set_border(ws, f'C13:E{r}', medium_border)
+        for i in range(13, r+1):
+            ws.cell(row=i, column=3).border = thin_border
+            ws.cell(row=i, column=4).border = thin_border
+            ws.cell(row=i, column=5).border = thin_border
+        
+        # Fix outer border of Billetes
+        from openpyxl.utils import range_boundaries
+        min_col, min_row, max_col, max_row = range_boundaries(f'C13:E{r}')
+        for row in ws.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col):
+            for cell in row:
+                b = cell.border
+                cell.border = Border(
+                    left=Side(style='medium') if cell.column == min_col else b.left,
+                    right=Side(style='medium') if cell.column == max_col else b.right,
+                    top=Side(style='medium') if cell.row == min_row else b.top,
+                    bottom=Side(style='medium') if cell.row == max_row else b.bottom
+                )
+
+        # --- MONEDAS ---
+        r += 2
+        ws.merge_cells(f'C{r}:E{r}')
+        ws.cell(row=r, column=3, value="MONEDAS").font = bold_font
+        ws.cell(row=r, column=3).alignment = center_align
+        r += 1
+        
+        for col, val in enumerate(headers_b, start=3):
+            cell = ws.cell(row=r, column=col)
+            cell.value = val
+            cell.font = bold_font
+            cell.alignment = center_align
+        r += 1
+            
+        monedas = [
+            (5.00, desg.get('m5', 0)),
+            (2.00, desg.get('m2', 0)),
+            (1.00, desg.get('m1', 0)),
+            (0.50, desg.get('m050', 0)),
+            (0.20, desg.get('m020', 0)),
+            (0.10, desg.get('m010', 0)),
+        ]
+        
+        total_monedas = 0
+        start_monedas = r - 2
+        for val, cant in monedas:
+            tot = val * cant
+            total_monedas += tot
+            
+            ws.cell(row=r, column=3, value=val).number_format = '0.00'
+            ws.cell(row=r, column=3).alignment = right_align
+            
+            ws.cell(row=r, column=4, value=cant if cant > 0 else '').fill = cyan_fill
+            ws.cell(row=r, column=4).alignment = center_align
+            
+            ws.cell(row=r, column=5, value=tot if tot > 0 else '-').number_format = '#,##0.00'
+            ws.cell(row=r, column=5).alignment = right_align
+            r += 1
+            
+        # Total Monedas
+        ws.merge_cells(f'C{r}:D{r}')
+        ws.cell(row=r, column=3, value="Total Monedas").font = bold_font
+        ws.cell(row=r, column=3).alignment = right_align
+        ws.cell(row=r, column=5, value=total_monedas if total_monedas > 0 else '-').font = bold_font
+        ws.cell(row=r, column=5).number_format = '#,##0.00'
+        
+        for i in range(start_monedas, r+1):
+            ws.cell(row=i, column=3).border = thin_border
+            ws.cell(row=i, column=4).border = thin_border
+            ws.cell(row=i, column=5).border = thin_border
+            
+        min_col, min_row, max_col, max_row = range_boundaries(f'C{start_monedas}:E{r}')
+        for row in ws.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col):
+            for cell in row:
+                b = cell.border
+                cell.border = Border(
+                    left=Side(style='medium') if cell.column == min_col else b.left,
+                    right=Side(style='medium') if cell.column == max_col else b.right,
+                    top=Side(style='medium') if cell.row == min_row else b.top,
+                    bottom=Side(style='medium') if cell.row == max_row else b.bottom
+                )
+        
+        # Anchos de columna exactos para simular la imagen
+        ws.column_dimensions['A'].width = 4
+        ws.column_dimensions['B'].width = 8
+        ws.column_dimensions['C'].width = 15
+        ws.column_dimensions['D'].width = 15
+        ws.column_dimensions['E'].width = 15
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename=arqueo_fisico_{arqueo.id}.xlsx'
+        wb.save(response)
         return response

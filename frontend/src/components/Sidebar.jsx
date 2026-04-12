@@ -55,6 +55,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             title: 'ADMINISTRACIÓN',
             items: [
                 { path: '/pagos-y-egresos', icon: <IconCash />, label: 'Pagos y Egresos', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#22c55e' }, // Green
+                { path: '/arqueo-caja', icon: <IconCash />, label: 'Arqueo de Caja', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#10b981' }, // Emerald
                 { path: '/balance', icon: <IconTrendingUp />, label: 'Balance Financiero', roles: ['Directiva', 'Sistemas'], color: '#f97316' }, // Orange
                 { path: '/encomiendas', icon: <IconList />, label: 'Encomiendas', roles: ['Directiva', 'Secretaria', 'Sistemas', 'Agente'], color: '#f59e0b' }, // Amber
                 { path: '/reportes', icon: <IconBarChart />, label: 'Reportes', roles: ['Directiva', 'Secretaria', 'Sistemas'], color: '#a855f7' }, // Purple

@@ -10,7 +10,7 @@ from vehiculos.views import VehiculoViewSet
 from hojasruta.views import HojaRutaViewSet, TurnoSalidaViewSet
 from cuotas.views import CuotaViewSet
 from rutas.views import RutaViewSet
-from tesoreria.views import EgresoViewSet, PagoViewSet, TipoPagoViewSet, ReciboView
+from tesoreria.views import EgresoViewSet, PagoViewSet, TipoPagoViewSet, ReciboView, ArqueoCajaViewSet
 from usuarios.views import RegisterView, LoginView, MeView, LogoutView, UserViewSet, CaptchaView
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from reuniones.views import ReunionViewSet
@@ -61,6 +61,7 @@ router.register(r'directorio', MiembroDirectorioViewSet)
 router.register(r'egresos', EgresoViewSet)
 router.register(r'pagos', PagoViewSet)
 router.register(r'tipos-pago', TipoPagoViewSet)
+router.register(r'arqueos', ArqueoCajaViewSet)
 router.register(r'users', UserViewSet)
 router.register(r'alertas', AlertaSistemaViewSet)
 router.register(r'turnos-salida', TurnoSalidaViewSet)

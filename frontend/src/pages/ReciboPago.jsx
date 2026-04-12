@@ -196,7 +196,7 @@ function ReciboPago() {
                     <div className="firma-text">Firma Autorizada</div>
                 </div>
                 <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
-                <div className="ticket-thanks">¡Gracias por su pago!</div>
+                <div className="ticket-thanks">{isIngreso ? '¡Gracias por su pago!' : 'Comprobante emitido correctamente'}</div>
                 <div className="ticket-info">Sistema de Gestión v1.0</div>
             </div>
         </div>
