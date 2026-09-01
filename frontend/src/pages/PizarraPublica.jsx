@@ -36,6 +36,34 @@ function PizarraPublica() {
         }
     };
 
+    const [movilidadesLaPaz, setMovilidadesLaPaz] = useState([]);
+    const [cargandoTurno, setCargandoTurno] = useState(false);
+
+    useEffect(() => {
+        if (destino.toLowerCase() === 'la paz') {
+            loadMovilidadesLaPaz();
+        } else {
+            setMovilidadesLaPaz([]);
+        }
+    }, [destino]);
+
+    const loadMovilidadesLaPaz = async () => {
+        try {
+            setCargandoTurno(true);
+            const res = await api.getMovilidadesLaPazHoy();
+            if (res.data?.found && res.data?.movilidades) {
+                setMovilidadesLaPaz(res.data.movilidades);
+            } else {
+                setMovilidadesLaPaz([]);
+            }
+        } catch (err) {
+            console.error('Error al obtener movilidades de La Paz:', err);
+            setMovilidadesLaPaz([]);
+        } finally {
+            setCargandoTurno(false);
+        }
+    };
+
     const handleReservaClick = (hoja) => {
         setHojaSeleccionada(hoja);
         setSelectedSeats([]);
@@ -148,6 +176,149 @@ function PizarraPublica() {
                     </div>
                 </div>
 
+                {destino.toLowerCase() === 'la paz' && (
+                    <div style={{
+                        background: 'linear-gradient(135deg, #1a3a2a 0%, #2d6a4f 50%, #1a3a2a 100%)',
+                        border: '2px solid #40916c',
+                        borderRadius: '16px',
+                        padding: '1.2rem 1.5rem',
+                        marginBottom: '1.5rem',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '1rem',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+                        position: 'relative',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            position: 'absolute', top: 0, right: 0, width: '120px', height: '120px',
+                            background: 'rgba(64,145,108,0.15)', borderRadius: '50%',
+                            transform: 'translate(30px, -30px)'
+                        }} />
+                        <div style={{
+                            position: 'absolute', bottom: 0, left: '200px', width: '80px', height: '80px',
+                            background: 'rgba(64,145,108,0.1)', borderRadius: '50%',
+                            transform: 'translate(0, 30px)'
+                        }} />
+
+                        <div style={{
+                            fontSize: '2.5rem',
+                            background: 'rgba(64,145,108,0.3)',
+                            borderRadius: '12px',
+                            padding: '0.5rem 0.8rem',
+                            flexShrink: 0
+                        }}>🚌</div>
+
+                        <div style={{ flex: 1, zIndex: 1, overflowX: 'auto' }}>
+                            <div style={{
+                                color: '#74c69d',
+                                fontSize: '0.78rem',
+                                fontWeight: '700',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.1em',
+                                marginBottom: '0.8rem'
+                            }}>
+                                📍 SOCIOS ASIGNADOS HOY — La Paz | Para reservar su pasaje contacte a:
+                            </div>
+
+                            {cargandoTurno ? (
+                                <div style={{ color: '#b7e4c7', fontSize: '1rem' }}>Buscando socios asignados...</div>
+                            ) : movilidadesLaPaz.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    {movilidadesLaPaz.map((movilidad, index) => (
+                                        <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', flexWrap: 'wrap', background: 'rgba(0,0,0,0.2)', padding: '0.8rem', borderRadius: '12px', border: movilidad.habilitada ? '1px solid #74c69d' : '1px solid rgba(255,255,255,0.1)' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                <span style={{
+                                                    color: '#ffffff',
+                                                    fontSize: '1.2rem',
+                                                    fontWeight: '800',
+                                                    textShadow: '0 1px 4px rgba(0,0,0,0.4)'
+                                                }}>
+                                                    👤 {movilidad.nombre_completo}
+                                                </span>
+                                                {movilidad.habilitada ? (
+                                                    <span style={{ color: '#74c69d', fontSize: '0.85rem', fontWeight: 'bold' }}>🟢 EN TURNO</span>
+                                                ) : (
+                                                    <span style={{ color: '#fbbf24', fontSize: '0.85rem' }}>⏳ PRÓXIMO</span>
+                                                )}
+                                            </div>
+
+                                            {movilidad.placa && (
+                                                <span style={{
+                                                    background: 'rgba(255,255,255,0.15)',
+                                                    color: '#d8f3dc',
+                                                    padding: '0.3rem 0.9rem',
+                                                    borderRadius: '8px',
+                                                    fontWeight: '700',
+                                                    fontSize: '1rem',
+                                                    letterSpacing: '0.08em',
+                                                    border: '1px solid rgba(255,255,255,0.2)'
+                                                }}>
+                                                    🚗 {movilidad.placa}
+                                                    {movilidad.tipo && (
+                                                        <span style={{ fontWeight: '400', marginLeft: '6px', fontSize: '0.85rem', opacity: 0.8, textTransform: 'uppercase' }}>
+                                                            ({movilidad.tipo})
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            )}
+                                            
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginLeft: 'auto' }}>
+                                                <span style={{
+                                                    color: movilidad.llena ? '#f87171' : '#bbf7d0',
+                                                    fontSize: '0.9rem',
+                                                    fontWeight: '600',
+                                                    background: 'rgba(255,255,255,0.1)',
+                                                    padding: '0.3rem 0.6rem',
+                                                    borderRadius: '6px'
+                                                }}>
+                                                    {movilidad.llena ? '🚫 Lleno' : `🎫 ${movilidad.cupos_disponibles} libres`}
+                                                </span>
+
+                                                {movilidad.telefono && (
+                                                    <a
+                                                        href={`tel:${movilidad.telefono}`}
+                                                        style={{
+                                                            display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                            background: '#40916c', color: 'white',
+                                                            padding: '0.4rem 0.9rem', borderRadius: '50px',
+                                                            textDecoration: 'none', fontWeight: '700', fontSize: '0.95rem',
+                                                            boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+                                                            whiteSpace: 'nowrap'
+                                                        }}
+                                                    >
+                                                        📱 Llamar
+                                                    </a>
+                                                )}
+                                                {movilidad.telefono && (
+                                                    <a
+                                                        href={`https://wa.me/591${movilidad.telefono}?text=Hola%2C%20quiero%20reservar%20un%20pasaje%20a%20La%20Paz.`}
+                                                        target="_blank" rel="noopener noreferrer"
+                                                        style={{
+                                                            display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                                            background: '#25D366', color: 'white',
+                                                            padding: '0.4rem 0.9rem', borderRadius: '50px',
+                                                            textDecoration: 'none', fontWeight: '700', fontSize: '0.95rem',
+                                                            boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+                                                            whiteSpace: 'nowrap'
+                                                        }}
+                                                    >
+                                                        💬 WhatsApp
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div style={{ color: '#b7e4c7', fontSize: '1rem', fontStyle: 'italic' }}>
+                                    No hay socios asignados programados para hoy a La Paz. Comuníquese con la oficina.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {loading ? (
                     <div className="pizarra-status">Cargando salidas en tiempo real...</div>
                 ) : hojas.length === 0 ? (
@@ -161,7 +332,10 @@ function PizarraPublica() {
                                 <div className="card-top">
                                     <div className="route-info">
                                         <span className="route-path">{hoja.ruta.origen} ➔ {hoja.ruta.destino}</span>
-                                        <span className="route-time">Salida: {new Date(hoja.fecha_salida).toLocaleDateString()}</span>
+                                        <span className="route-time">
+                                            Salida: {new Date(hoja.fecha_salida).toLocaleDateString()}
+                                            {hoja.hora_salida ? ` — ${hoja.hora_salida}` : ''}
+                                        </span>
                                     </div>
                                     <div className="price-tag">
                                         Bs. {parseFloat(hoja.precio).toFixed(0)}

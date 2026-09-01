@@ -30,6 +30,10 @@ function Reservas() {
     const [datosPasajeros, setDatosPasajeros] = useState([]);
     const [cargandoPasajerosModulo, setCargandoPasajerosModulo] = useState(false);
 
+    // Estado para el Afiliado de Turno
+    const [afiliadoTurno, setAfiliadoTurno] = useState(null);
+    const [cargandoTurno, setCargandoTurno] = useState(true);
+
     const isSeatOccupied = (seatNum) => {
         return hojaSeleccionada?.asientos_ocupados?.includes(seatNum);
     };
@@ -92,7 +96,25 @@ function Reservas() {
 
     useEffect(() => {
         loadHojasDisponibles();
+        loadAfiliadoTurno();
     }, []);
+
+    const loadAfiliadoTurno = async () => {
+        try {
+            setCargandoTurno(true);
+            const res = await api.getTurnoLaPazHoy();
+            if (res.data?.found && res.data?.afiliado) {
+                setAfiliadoTurno(res.data.afiliado);
+            } else {
+                setAfiliadoTurno(null);
+            }
+        } catch (err) {
+            console.error('Error al obtener afiliado de turno La Paz:', err);
+            setAfiliadoTurno(null);
+        } finally {
+            setCargandoTurno(false);
+        }
+    };
 
     const loadHojasDisponibles = async () => {
         try {
@@ -316,6 +338,128 @@ function Reservas() {
                 </Link>
             </div>
 
+                {/* Banner: Afiliado de Turno La Paz del Día */}
+            <div style={{
+                background: 'linear-gradient(135deg, #1a3a2a 0%, #2d6a4f 50%, #1a3a2a 100%)',
+                border: '2px solid #40916c',
+                borderRadius: '16px',
+                padding: '1.2rem 1.5rem',
+                marginBottom: '1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+                position: 'relative',
+                overflow: 'hidden'
+            }}>
+                {/* Decoración de fondo */}
+                <div style={{
+                    position: 'absolute', top: 0, right: 0, width: '120px', height: '120px',
+                    background: 'rgba(64,145,108,0.15)', borderRadius: '50%',
+                    transform: 'translate(30px, -30px)'
+                }} />
+                <div style={{
+                    position: 'absolute', bottom: 0, left: '200px', width: '80px', height: '80px',
+                    background: 'rgba(64,145,108,0.1)', borderRadius: '50%',
+                    transform: 'translate(0, 30px)'
+                }} />
+
+                {/* Ícono bus */}
+                <div style={{
+                    fontSize: '2.5rem',
+                    background: 'rgba(64,145,108,0.3)',
+                    borderRadius: '12px',
+                    padding: '0.5rem 0.8rem',
+                    flexShrink: 0
+                }}>🚌</div>
+
+                {/* Contenido */}
+                <div style={{ flex: 1, zIndex: 1 }}>
+                    <div style={{
+                        color: '#74c69d',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.1em',
+                        marginBottom: '0.3rem'
+                    }}>
+                        📍 SOCIO DE TURNO — La Paz — Hoy | Para reservar su pasaje contacte a:
+                    </div>
+
+                    {cargandoTurno ? (
+                        <div style={{ color: '#b7e4c7', fontSize: '1rem' }}>Buscando socio de turno...</div>
+                    ) : afiliadoTurno ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem', flexWrap: 'wrap' }}>
+                            {/* Nombre */}
+                            <span style={{
+                                color: '#ffffff',
+                                fontSize: '1.3rem',
+                                fontWeight: '800',
+                                textShadow: '0 1px 4px rgba(0,0,0,0.4)'
+                            }}>
+                                👤 {afiliadoTurno.nombre_completo}
+                            </span>
+
+                            {/* Placa */}
+                            {afiliadoTurno.vehiculo_placa && (
+                                <span style={{
+                                    background: 'rgba(255,255,255,0.15)',
+                                    color: '#d8f3dc',
+                                    padding: '0.3rem 0.9rem',
+                                    borderRadius: '8px',
+                                    fontWeight: '700',
+                                    fontSize: '1rem',
+                                    letterSpacing: '0.08em',
+                                    border: '1px solid rgba(255,255,255,0.2)'
+                                }}>
+                                    🚗 {afiliadoTurno.vehiculo_placa}
+                                    {afiliadoTurno.vehiculo_tipo && (
+                                        <span style={{ fontWeight: '400', marginLeft: '6px', fontSize: '0.85rem', opacity: 0.8 }}>
+                                            ({afiliadoTurno.vehiculo_tipo})
+                                        </span>
+                                    )}
+                                </span>
+                            )}
+
+                            {/* Botones de contacto */}
+                            {afiliadoTurno.telefono && (
+                                <a
+                                    href={`tel:${afiliadoTurno.telefono}`}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                        background: '#40916c', color: 'white',
+                                        padding: '0.5rem 1.1rem', borderRadius: '50px',
+                                        textDecoration: 'none', fontWeight: '700', fontSize: '1.05rem',
+                                        boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+                                    }}
+                                >
+                                    📱 {afiliadoTurno.telefono}
+                                </a>
+                            )}
+                            {afiliadoTurno.telefono && (
+                                <a
+                                    href={`https://wa.me/591${afiliadoTurno.telefono}?text=Hola%2C%20quiero%20reservar%20un%20pasaje%20a%20La%20Paz.`}
+                                    target="_blank" rel="noopener noreferrer"
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                        background: '#25D366', color: 'white',
+                                        padding: '0.5rem 1rem', borderRadius: '50px',
+                                        textDecoration: 'none', fontWeight: '700', fontSize: '0.95rem',
+                                        boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+                                    }}
+                                >
+                                    💬 WhatsApp
+                                </a>
+                            )}
+                        </div>
+                    ) : (
+                        <div style={{ color: '#b7e4c7', fontSize: '1rem', fontStyle: 'italic' }}>
+                            No hay socio de turno programado para hoy a La Paz. Comuníquese con la oficina.
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {verPasajerosModulo && (
                 <div className="modal-overlay">
                     <div className="modal-content" style={{ maxWidth: '600px' }}>
@@ -412,6 +556,11 @@ function Reservas() {
                                             <span className="fecha-salida">{hoja.fecha_salida}</span>
                                         </div>
 
+                                        <div className="info-row">
+                                            <span className="info-label">Hora salida:</span>
+                                            <span className="info-value">{hoja.hora_salida || 'Por confirmar'}</span>
+                                        </div>
+
                                         {/* Indicador de cupos */}
                                         <div className="cupos-info">
                                             <div className="cupos-text">
@@ -500,6 +649,7 @@ function Reservas() {
                                             <p style={{ margin: '15px 0' }}><strong>Origen:</strong> {hojaSeleccionada.ruta?.origen} → <strong>Destino:</strong> {hojaSeleccionada.ruta?.destino}</p>
                                             <p style={{ margin: '10px 0' }}><strong>Conductor:</strong> {hojaSeleccionada.afiliado?.nombre_completo || 'Sin asignar'}</p>
                                             <p style={{ margin: '10px 0' }}><strong>Fecha: salida</strong> {hojaSeleccionada.fecha_salida}</p>
+                                            <p style={{ margin: '10px 0' }}><strong>Hora de salida:</strong> {hojaSeleccionada.hora_salida || 'Por confirmar'}</p>
                                             <p style={{ margin: '10px 0' }}><strong>Tarifa:</strong> Bs. {parseFloat(hojaSeleccionada.ruta?.tarifa_base || hojaSeleccionada.precio).toFixed(2)}</p>
                                             <p style={{ margin: '10px 0' }}><strong>Vehículo:</strong> {hojaSeleccionada.vehiculo?.tipo || 'Minibús'}</p>
                                             <p style={{ margin: '10px 0' }}><strong>Capacidad:</strong> {totalPasajeros} Pasajeros</p>
@@ -513,6 +663,66 @@ function Reservas() {
                                                     🖨️ Imprimir Planilla de Ruta
                                                 </button>
                                             </div>
+
+                                            {/* Socio de Turno La Paz en formulario */}
+                                            {afiliadoTurno && (
+                                                <div style={{
+                                                    marginTop: '18px',
+                                                    background: 'linear-gradient(135deg, #1a3a2a, #2d6a4f)',
+                                                    border: '2px solid #40916c',
+                                                    borderRadius: '12px',
+                                                    padding: '14px',
+                                                    color: 'white'
+                                                }}>
+                                                    <div style={{
+                                                        fontSize: '0.72rem',
+                                                        color: '#74c69d',
+                                                        fontWeight: '700',
+                                                        textTransform: 'uppercase',
+                                                        letterSpacing: '0.08em',
+                                                        marginBottom: '8px'
+                                                    }}>
+                                                        🚌 Socio de turno La Paz — Contacto
+                                                    </div>
+                                                    <div style={{ fontWeight: '800', fontSize: '1rem', marginBottom: '4px' }}>
+                                                        {afiliadoTurno.nombre_completo}
+                                                    </div>
+                                                    {afiliadoTurno.vehiculo_placa && (
+                                                        <div style={{
+                                                            fontSize: '0.88rem', color: '#b7e4c7',
+                                                            marginBottom: '8px', fontWeight: '600'
+                                                        }}>
+                                                            🚗 Placa: <strong style={{ color: '#d8f3dc' }}>{afiliadoTurno.vehiculo_placa}</strong>
+                                                            {afiliadoTurno.vehiculo_tipo && (
+                                                                <span style={{ opacity: 0.8, marginLeft: '6px' }}>({afiliadoTurno.vehiculo_tipo})</span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {afiliadoTurno.telefono && (
+                                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                            <a href={`tel:${afiliadoTurno.telefono}`}
+                                                                style={{
+                                                                    background: '#40916c', color: 'white',
+                                                                    padding: '5px 12px', borderRadius: '20px',
+                                                                    textDecoration: 'none', fontWeight: '700',
+                                                                    fontSize: '0.9rem'
+                                                                }}>
+                                                                📱 {afiliadoTurno.telefono}
+                                                            </a>
+                                                            <a href={`https://wa.me/591${afiliadoTurno.telefono}?text=Hola%2C%20quiero%20reservar%20un%20pasaje%20a%20La%20Paz.`}
+                                                                target="_blank" rel="noopener noreferrer"
+                                                                style={{
+                                                                    background: '#25D366', color: 'white',
+                                                                    padding: '5px 12px', borderRadius: '20px',
+                                                                    textDecoration: 'none', fontWeight: '700',
+                                                                    fontSize: '0.9rem'
+                                                                }}>
+                                                                💬 WhatsApp
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })()}

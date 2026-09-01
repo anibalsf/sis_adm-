@@ -348,11 +348,12 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
             
         return Response({'detail': f'Se generaron {len(turnos_creados)} turnos nuevos.', 'muestra': turnos_creados[:5]})
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
     def turno_del_dia(self, request):
         """
         Retorna el Agente de Parada asignado para una fecha específica.
         Query param: ?fecha=YYYY-MM-DD
+        Público: accesible sin autenticación (para la página de reservas con QR).
         """
         from .models import TurnoAgente
         fecha_str = request.query_params.get('fecha')

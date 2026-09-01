@@ -94,15 +94,17 @@ function PagosYEgresos() {
         // No forzar monto si el usuario ya eligió uno manualmente o si podemos calcular uno mejor
         if (form.monto && parseFloat(form.monto) > 0 && !form._autoSet) return;
 
-        let targetMonto = '20'; // Default Caranavi
+        let targetMonto = '0.00'; // Valor inicial: el usuario ingresa el monto
         const rutaSelected = rutas.find(r => String(r.id) === String(form.ruta_id));
         const vehiculoSelected = vehiculos.find(v => String(v.id) === String(form.vehiculo_id));
+        
+        const nom = (rutaSelected?.nombre || rutaSelected?.destino || '').toLowerCase();
+        const tipo = (vehiculoSelected?.tipo || '').toLowerCase();
+        const esHojaRutaCaranavi = /caranavi/i.test(tp?.nombre || '');
 
         if (rutaSelected) {
-            const nom = (rutaSelected.nombre || rutaSelected.destino || '').toLowerCase();
             if (nom.includes('la paz')) {
                 if (vehiculoSelected) {
-                    const tipo = (vehiculoSelected.tipo || '').toLowerCase();
                     if (tipo.includes('ipsum')) targetMonto = '0.00';
                     else if (tipo.includes('minibus') || tipo.includes('minibús')) targetMonto = '0.00';
                     else targetMonto = '0.00';
@@ -114,7 +116,7 @@ function PagosYEgresos() {
             }
         }
 
-        if (aplicarMulta && multaInfo && multaInfo.monto_total) {
+        if (esHojaRutaCaranavi && aplicarMulta && multaInfo && multaInfo.tiene_multa && typeof multaInfo.monto_total !== 'undefined') {
             targetMonto = String(multaInfo.monto_total);
         }
 
@@ -226,9 +228,9 @@ function PagosYEgresos() {
 
     const handleToggleMulta = async (checked) => {
         setAplicarMulta(checked);
-        if (form.tipo_pago && (form.monto || 20)) {
+        if (form.tipo_pago && form.monto && parseFloat(form.monto) > 0) {
             try {
-                const res = await api.calcularMontoConMulta(form.tipo_pago, parseFloat(form.monto || 20), checked);
+                const res = await api.calcularMontoConMulta(form.tipo_pago, parseFloat(form.monto), checked);
                 setMultaInfo(res.data);
             } catch (err) {
                 console.error(err);
@@ -257,20 +259,11 @@ function PagosYEgresos() {
 
             const tpSel = tiposPago.find(t => String(t.id) === String(form.tipo_pago));
             const isHoja = activeTab === 'ingresos' && tpSel && /hoja/i.test(tpSel?.nombre || '') && /ruta/i.test(tpSel?.nombre || '');
+            const esHojaRutaCaranavi = /caranavi/i.test(tpSel?.nombre || '');
+
             let montoCalculado = parseFloat(form.monto || '0');
-            if (isHoja) {
-                if (multaInfo && typeof multaInfo.monto_total !== 'undefined') {
-                    montoCalculado = parseFloat(multaInfo.monto_total);
-                } else {
-                    try {
-                        const resCalc = await api.calcularMontoConMulta(form.tipo_pago, montoCalculado || 20, aplicarMulta);
-                        montoCalculado = parseFloat(resCalc.data?.monto_total ?? 20);
-                    } catch {
-                        montoCalculado = 20;
-                    }
-                }
-                if (!montoCalculado || (montoCalculado < 20 && aplicarMulta)) montoCalculado = 20;
-                if (!aplicarMulta) montoCalculado = 20;
+            if (isHoja && esHojaRutaCaranavi && aplicarMulta && multaInfo && multaInfo.tiene_multa && typeof multaInfo.monto_total !== 'undefined') {
+                montoCalculado = parseFloat(multaInfo.monto_total);
             }
 
             // Limpiar y preparar payload de forma segura
@@ -453,13 +446,14 @@ function PagosYEgresos() {
         }
     };
 
-    const handleDescargarRecibo = async (id) => {
+    const handleDescargarRecibo = async (id, item) => {
         try {
             const response = await api.generarReciboPago(id);
             const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `recibo_NRO-${String(id).padStart(6, '0')}.pdf`);
+            const numeroRecibo = item?.nro_recibo ?? id;
+            link.setAttribute('download', `recibo_NRO-${String(numeroRecibo).padStart(6, '0')}.pdf`);
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -570,7 +564,7 @@ function PagosYEgresos() {
                                                 <td className="actions" style={{textDecoration: 'none'}}>
                                                     {pago.estado !== 'anulado' && (
                                                         <>
-                                                            <button className="btn-icon btn-print" onClick={() => handleDescargarRecibo(pago.id)} title="Descargar Recibo"><IconPrinter /></button>
+                                                            <button className="btn-icon btn-print" onClick={() => handleDescargarRecibo(pago.id, pago)} title="Descargar Recibo"><IconPrinter /></button>
                                                             <button className="btn-icon btn-edit" onClick={() => openEdit(pago)} title="Editar"><IconPencil /></button>
                                                             <button className="btn-icon btn-delete" onClick={() => handleAnularPago(pago.id)} title="Anular"><IconBan /></button>
                                                         </>
@@ -676,37 +670,44 @@ function PagosYEgresos() {
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>{modalMode === 'create' ? (activeTab === 'ingresos' ? 'Nuevo Ingreso' : 'Nuevo Egreso') : (activeTab === 'ingresos' ? 'Editar Ingreso' : 'Editar Egreso')}</h2>
+                            <h2>
+                                {modalMode === 'create' 
+                                    ? (activeTab === 'ingresos' ? '➕ Registrar Pago' : '➕ Registrar Egreso') 
+                                    : (activeTab === 'ingresos' ? '📝 Editar Pago' : '📝 Editar Egreso')}
+                            </h2>
                             <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
                         </div>
                         {submitError && <div className="error" style={{ marginBottom: '10px' }}>{submitError}</div>}
                         <form onSubmit={save} className="modal-form">
                             {activeTab === 'ingresos' ? (
                                 <>
-                                    <div className="form-group">
-                                        <label htmlFor="fecha_pago">Fecha de Pago *</label>
-                                        <input id="fecha_pago" name="fecha_pago" type="date" value={form.fecha_pago} onChange={onChange} required />
-                                        {fieldErrors.fecha_pago && <div className="error">{fieldErrors.fecha_pago}</div>}
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label htmlFor="fecha_pago">Fecha *</label>
+                                            <input id="fecha_pago" name="fecha_pago" type="date" value={form.fecha_pago} onChange={onChange} required />
+                                            {fieldErrors.fecha_pago && <div className="error">{fieldErrors.fecha_pago}</div>}
+                                        </div>
+                                        <div className="form-group">
+                                            <label htmlFor="tipo_pago">Categoría *</label>
+                                            <select id="tipo_pago" name="tipo_pago" value={form.tipo_pago} onChange={onChange} required>
+                                                <option value="">Seleccionar...</option>
+                                                {tiposPagoFiltrados.map(tp => (
+                                                    <option key={tp.id} value={tp.id}>{tp.nombre}</option>
+                                                ))}
+                                            </select>
+                                            {fieldErrors.tipo_pago && <div className="error">{fieldErrors.tipo_pago}</div>}
+                                        </div>
                                     </div>
+
                                     <div className="form-group">
                                         <label htmlFor="afiliado">Afiliado *</label>
                                         <select id="afiliado" name="afiliado" value={form.afiliado} onChange={onChange} required>
-                                            <option value="">Selecciona un afiliado...</option>
+                                            <option value="">Busca un afiliado...</option>
                                             {Array.isArray(afiliados) && afiliados.map(a => (
                                                 <option key={a.id} value={a.id}>{a.apellidos} {a.nombres}</option>
                                             ))}
                                         </select>
                                         {fieldErrors.afiliado && <div className="error">{fieldErrors.afiliado}</div>}
-                                    </div>
-                                    <div className="form-group">
-                                        <label htmlFor="tipo_pago">Tipo de Pago *</label>
-                                        <select id="tipo_pago" name="tipo_pago" value={form.tipo_pago} onChange={onChange} required>
-                                            <option value="">Selecciona tipo de pago...</option>
-                                            {tiposPagoFiltrados.map(tp => (
-                                                <option key={tp.id} value={tp.id}>{tp.nombre}</option>
-                                            ))}
-                                        </select>
-                                        {fieldErrors.tipo_pago && <div className="error">{fieldErrors.tipo_pago}</div>}
                                     </div>
 
                                     {(() => {
@@ -734,31 +735,40 @@ function PagosYEgresos() {
                                                         ))}
                                                     </select>
                                                 </div>
-                                                <div className="form-group" style={{ background: 'rgba(99, 102, 241, 0.05)', padding: '15px', borderRadius: '12px', border: '1px dashed #6366f1', marginBottom: '15px' }}>
-                                                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
-                                                    <span>🚨 ¿Aplicar multa de 50 Bs?</span>
-                                                    <div className="toggle-switch" style={{ position: 'relative', width: '50px', height: '26px' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={aplicarMulta}
-                                                            onChange={(e) => handleToggleMulta(e.target.checked)}
-                                                            style={{ opacity: 0, width: 0, height: 0 }}
-                                                        />
-                                                        <span className="slider" style={{
-                                                            position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-                                                            backgroundColor: aplicarMulta ? '#6366f1' : '#ccc', transition: '.4s', borderRadius: '34px'
-                                                        }}>
-                                                            <span style={{
-                                                                position: 'absolute', height: '18px', width: '18px', left: aplicarMulta ? '28px' : '4px', bottom: '4px',
-                                                                backgroundColor: 'white', transition: '.4s', borderRadius: '50%'
-                                                            }}></span>
-                                                        </span>
-                                                    </div>
-                                                </label>
-                                                <small style={{ marginTop: '8px', display: 'block', opacity: 0.7 }}>
-                                                    {aplicarMulta ? 'La multa se sumará al monto base del pasaje.' : 'Se cobrará solo el monto base (20 Bs).'}
-                                                </small>
-                                            </div>
+                                                {(() => {
+                                                    const tpSel = tiposPago.find(t => String(t.id) === String(form.tipo_pago));
+                                                    const esHojaRutaCaranavi = /caranavi/i.test(tpSel?.nombre || '');
+                                                    
+                                                    if (!esHojaRutaCaranavi) return null;
+                                                    
+                                                    return (
+                                                        <div className="form-group" style={{ background: 'rgba(99, 102, 241, 0.05)', padding: '15px', borderRadius: '12px', border: '1px dashed #6366f1', marginBottom: '15px' }}>
+                                                            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+                                                                <span>🚨 ¿Aplicar multa de 50 Bs?</span>
+                                                                <div className="toggle-switch" style={{ position: 'relative', width: '50px', height: '26px' }}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={aplicarMulta}
+                                                                        onChange={(e) => handleToggleMulta(e.target.checked)}
+                                                                        style={{ opacity: 0, width: 0, height: 0 }}
+                                                                    />
+                                                                    <span className="slider" style={{
+                                                                        position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                                                                        backgroundColor: aplicarMulta ? '#6366f1' : '#ccc', transition: '.4s', borderRadius: '34px'
+                                                                    }}>
+                                                                        <span style={{
+                                                                            position: 'absolute', height: '18px', width: '18px', left: aplicarMulta ? '28px' : '4px', bottom: '4px',
+                                                                            backgroundColor: 'white', transition: '.4s', borderRadius: '50%'
+                                                                        }}></span>
+                                                                    </span>
+                                                                </div>
+                                                            </label>
+                                                            <small style={{ marginTop: '8px', display: 'block', opacity: 0.7 }}>
+                                                                {aplicarMulta ? 'La multa se sumará al monto ingresado.' : 'Se cobrará solo el monto ingresado, sin multa.'}
+                                                            </small>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </>
                                         );
                                     })()}
@@ -786,89 +796,99 @@ function PagosYEgresos() {
 
                                     {activeTab === 'ingresos' && modalMode === 'create' && (
                                         <div className="form-group">
-                                            <label>Método de Pago *</label>
-                                            <div style={{ display: 'flex', gap: '20px', marginTop: '10px' }}>
-                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                                    <input
-                                                        type="radio"
-                                                        name="metodoPago"
-                                                        value="efectivo"
-                                                        checked={metodoPago === 'efectivo'}
-                                                        onChange={() => setMetodoPago('efectivo')}
-                                                    />
-                                                    💵 Efectivo
-                                                </label>
-                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                                    <input
-                                                        type="radio"
-                                                        name="metodoPago"
-                                                        value="qr"
-                                                        checked={metodoPago === 'qr'}
-                                                        onChange={() => setMetodoPago('qr')}
-                                                    />
-                                                    📱 Yape (QR)
-                                                </label>
-                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                                    <input
-                                                        type="radio"
-                                                        name="metodoPago"
-                                                        value="transferencia"
-                                                        checked={metodoPago === 'transferencia'}
-                                                        onChange={() => setMetodoPago('transferencia')}
-                                                    />
-                                                    🏦 Transferencia
-                                                </label>
+                                            <label>Método de Pago</label>
+                                            <div className="metodo-pago-container">
+                                                <div 
+                                                    className={`metodo-pago-card ${metodoPago === 'efectivo' ? 'active' : ''}`}
+                                                    onClick={() => setMetodoPago('efectivo')}
+                                                >
+                                                    <span className="icon">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: metodoPago === 'efectivo' ? '#10b981' : '#64748b' }}>
+                                                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                                                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                                        </svg>
+                                                    </span>
+                                                    <span>Efectivo</span>
+                                                </div>
+                                                <div 
+                                                    className={`metodo-pago-card ${metodoPago === 'qr' ? 'active' : ''}`}
+                                                    onClick={() => setMetodoPago('qr')}
+                                                >
+                                                    <span className="icon">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: metodoPago === 'qr' ? '#10b981' : '#64748b' }}>
+                                                            <rect x="3" y="3" width="7" height="7"></rect>
+                                                            <rect x="14" y="3" width="7" height="7"></rect>
+                                                            <rect x="14" y="14" width="7" height="7"></rect>
+                                                            <rect x="3" y="14" width="7" height="7"></rect>
+                                                        </svg>
+                                                    </span>
+                                                    <span>QR</span>
+                                                </div>
+                                                <div 
+                                                    className={`metodo-pago-card ${metodoPago === 'transferencia' ? 'active' : ''}`}
+                                                    onClick={() => setMetodoPago('transferencia')}
+                                                >
+                                                    <span className="icon">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: metodoPago === 'transferencia' ? '#10b981' : '#64748b' }}>
+                                                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                                                            <line x1="1" y1="10" x2="23" y2="10"></line>
+                                                        </svg>
+                                                    </span>
+                                                    <span>Banco</span>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="form-group">
-                                        <label htmlFor="monto">Monto (Bs.) *</label>
-                                        {(() => {
-                                            const tpSel = tiposPago.find(tp => String(tp.id) === String(form.tipo_pago));
-                                            const isHojaRuta = tpSel && /hoja/i.test(tpSel?.nombre || '') && /ruta/i.test(tpSel?.nombre || '');
-                                            return (
-                                                <input
-                                                    id="monto"
-                                                    name="monto"
-                                                    type="text"
-                                                    inputMode="decimal"
-                                                    placeholder="0.00"
-                                                    value={form.monto}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                            onChange(e);
-                                                        }
-                                                    }}
-                                                    onFocus={(e) => { if(e.target.value === '0' || e.target.value === '0.00') setForm(prev => ({...prev, monto: ''})) }}
-                                                    onBlur={(e) => { if(e.target.value === '') setForm(prev => ({...prev, monto: '0.00'})) }}
-                                                    required
-                                                    title={isHojaRuta ? 'Ingrese el monto manualmente' : undefined}
-                                                />
-                                            );
-                                        })()}
-                                        {fieldErrors.monto && <div className="error">{fieldErrors.monto}</div>}
-                                    </div>
-                                    <div className="form-group">
-                                        <label htmlFor="saldo_anterior_gestion">Saldo Anterior Gestión (Bs.)</label>
-                                        <input
-                                            id="saldo_anterior_gestion"
-                                            name="saldo_anterior_gestion"
-                                            type="text"
-                                            inputMode="decimal"
-                                            placeholder="0.00"
-                                            value={form.saldo_anterior_gestion}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                    onChange(e);
-                                                }
-                                            }}
-                                            onFocus={(e) => { if(e.target.value === '0' || e.target.value === '0.00') setForm(prev => ({...prev, saldo_anterior_gestion: ''})) }}
-                                            onBlur={(e) => { if(e.target.value === '') setForm(prev => ({...prev, saldo_anterior_gestion: '0.00'})) }}
-                                        />
-                                        {fieldErrors.saldo_anterior_gestion && <div className="error">{fieldErrors.saldo_anterior_gestion}</div>}
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label htmlFor="monto">Monto Base (Bs) *</label>
+                                            {(() => {
+                                                const tpSel = tiposPago.find(tp => String(tp.id) === String(form.tipo_pago));
+                                                const isHojaRuta = tpSel && /hoja/i.test(tpSel?.nombre || '') && /ruta/i.test(tpSel?.nombre || '');
+                                                return (
+                                                    <input
+                                                        id="monto"
+                                                        name="monto"
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        placeholder="0.00"
+                                                        value={form.monto}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                                onChange(e);
+                                                            }
+                                                        }}
+                                                        onFocus={(e) => { if(e.target.value === '0' || e.target.value === '0.00') setForm(prev => ({...prev, monto: ''})) }}
+                                                        onBlur={(e) => { if(e.target.value === '') setForm(prev => ({...prev, monto: '0.00'})) }}
+                                                        required
+                                                        title={isHojaRuta ? 'Ingrese el monto manualmente' : undefined}
+                                                    />
+                                                );
+                                            })()}
+                                            {fieldErrors.monto && <div className="error">{fieldErrors.monto}</div>}
+                                        </div>
+                                        <div className="form-group">
+                                            <label htmlFor="saldo_anterior_gestion">Saldos Ant. (Bs)</label>
+                                            <input
+                                                id="saldo_anterior_gestion"
+                                                name="saldo_anterior_gestion"
+                                                type="text"
+                                                inputMode="decimal"
+                                                placeholder="0.00"
+                                                value={form.saldo_anterior_gestion}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                        onChange(e);
+                                                    }
+                                                }}
+                                                onFocus={(e) => { if(e.target.value === '0' || e.target.value === '0.00') setForm(prev => ({...prev, saldo_anterior_gestion: ''})) }}
+                                                onBlur={(e) => { if(e.target.value === '') setForm(prev => ({...prev, saldo_anterior_gestion: '0.00'})) }}
+                                            />
+                                            {fieldErrors.saldo_anterior_gestion && <div className="error">{fieldErrors.saldo_anterior_gestion}</div>}
+                                        </div>
                                     </div>
                                     
                                     {metodoPago === 'transferencia' && (
@@ -885,7 +905,7 @@ function PagosYEgresos() {
                                     )}
 
                                     <div className="form-group">
-                                        <label htmlFor="observaciones">Observaciones</label>
+                                        <label htmlFor="observaciones">... Observaciones Adicionales</label>
                                         <textarea id="observaciones" name="observaciones" value={form.observaciones} onChange={onChange} rows="3"></textarea>
                                         {fieldErrors.observaciones && <div className="error">{fieldErrors.observaciones}</div>}
                                     </div>

@@ -38,14 +38,14 @@ RAILWAY_DOMAIN = config('RAILWAY_PUBLIC_DOMAIN', default='')
 if RAILWAY_DOMAIN and RAILWAY_DOMAIN not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RAILWAY_DOMAIN)
 
-CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173,http://192.168.1.10:5173', cast=Csv())
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173,http://192.168.1.10:5173,https://administracion.sindicatointegracion.com', cast=Csv())
 if RAILWAY_DOMAIN:
     CSRF_TRUSTED_ORIGINS.append(f"https://{RAILWAY_DOMAIN}")
 
 # Configuración necesaria para HTTPS detrás de un proxy (Railway)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
+FRONTEND_URL = config('FRONTEND_URL', default='https://administracion.sindicatointegracion.com')
 
 
 # Application definition
@@ -162,6 +162,10 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
+            # Evitar errores 'database is locked' con múltiples peticiones/escrituras
+            'OPTIONS': {
+                'timeout': 30,
+            },
         }
     }
 

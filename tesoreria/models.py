@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+import uuid
 from afiliados.models import Afiliado
 from hojasruta.models import HojaRuta
 
@@ -49,6 +50,14 @@ class Pago(models.Model):
 
     observaciones = models.TextField(blank=True, null=True)
     hoja_ruta = models.ForeignKey(HojaRuta, on_delete=models.SET_NULL, null=True, blank=True, related_name='pagos_tesoreria')
+    auditado_en = models.ForeignKey('ArqueoCaja', on_delete=models.SET_NULL, null=True, blank=True, related_name='pagos_auditados')
+    nro_recibo = models.PositiveIntegerField(null=True, blank=True, help_text="Número correlativo de recibo de ingreso (reinicia secuencia)")
+    uuid = models.CharField(max_length=32, unique=True, help_text="Identificador único del pago")
+
+    def save(self, *args, **kwargs):
+        if not self.uuid:
+            self.uuid = uuid.uuid4().hex
+        super().save(*args, **kwargs)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -82,6 +91,7 @@ class Egreso(models.Model):
     estado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default='aprobado')
     motivo_anulacion = models.TextField(blank=True, null=True, help_text="Justificación si el egreso es anulado")
     aprobado_por = models.ForeignKey(User, related_name='egresos_aprobados', on_delete=models.SET_NULL, null=True, blank=True)
+    auditado_en = models.ForeignKey('ArqueoCaja', on_delete=models.SET_NULL, null=True, blank=True, related_name='egresos_auditados')
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -107,6 +117,8 @@ class ArqueoCaja(models.Model):
     
     observaciones = models.TextField(blank=True, null=True)
     detalle_efectivo = models.JSONField(null=True, blank=True, help_text="Desglose de billetes y monedas")
+    justificacion_diferencia = models.TextField(blank=True, null=True, help_text="Justificación de la diferencia de caja")
+    seguimiento_diferencia = models.TextField(blank=True, null=True, help_text="Seguimiento / acción tomada sobre la diferencia")
     
     estado = models.CharField(max_length=20, choices=[('abierto', 'Abierto'), ('cerrado', 'Cerrado')], default='cerrado')
     

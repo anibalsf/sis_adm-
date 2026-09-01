@@ -1,0 +1,581 @@
+/* ============================================================
+   MovilidadesLaPaz.css — Página pública de movilidades de turno
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+
+:root {
+    --mlp-bg: #0a0f1e;
+    --mlp-surface: #111827;
+    --mlp-surface2: #1a2235;
+    --mlp-border: rgba(255,255,255,0.08);
+    --mlp-text: #f1f5f9;
+    --mlp-muted: #94a3b8;
+    --mlp-green: #10b981;
+    --mlp-green-dark: #059669;
+    --mlp-whatsapp: #25D366;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+.mlp-root {
+    min-height: 100vh;
+    background: var(--mlp-bg);
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--mlp-text);
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── HEADER ─────────────────────────────────────── */
+.mlp-header {
+    background: linear-gradient(135deg, #0d1b2a 0%, #1a2f4e 100%);
+    border-bottom: 1px solid rgba(16,185,129,0.3);
+    padding: 1rem 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+}
+
+.mlp-header-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.mlp-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.mlp-logo-icon {
+    font-size: 2.2rem;
+    filter: drop-shadow(0 0 8px rgba(16,185,129,0.5));
+}
+
+.mlp-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #e2e8f0;
+    line-height: 1.2;
+}
+
+.mlp-subtitle {
+    font-size: 0.8rem;
+    color: var(--mlp-green);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+/* ── RELOJ ─────────────────────────────────────── */
+.mlp-clock {
+    text-align: right;
+}
+
+.mlp-clock-time {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: var(--mlp-green);
+    letter-spacing: 0.05em;
+    font-variant-numeric: tabular-nums;
+}
+
+.mlp-clock-date {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--mlp-muted);
+    text-transform: capitalize;
+}
+
+/* ── HERO ─────────────────────────────────────── */
+.mlp-hero {
+    background: linear-gradient(135deg, #0d2137 0%, #1a3a5c 50%, #0d2137 100%);
+    padding: 2rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(16,185,129,0.2);
+    flex-wrap: wrap;
+}
+
+.mlp-hero-icon {
+    font-size: 3.5rem;
+    animation: mlp-float 3s ease-in-out infinite;
+}
+
+@keyframes mlp-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.mlp-hero-text h2 {
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: #e2e8f0;
+}
+
+.mlp-hero-highlight {
+    color: var(--mlp-green);
+    text-shadow: 0 0 20px rgba(16,185,129,0.4);
+}
+
+.mlp-hero-text p {
+    font-size: 0.95rem;
+    color: var(--mlp-muted);
+    margin-top: 0.3rem;
+}
+
+/* ── MAIN ─────────────────────────────────────── */
+.mlp-main {
+    flex: 1;
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+/* ── LOADING ─────────────────────────────────── */
+.mlp-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 3rem;
+    color: var(--mlp-muted);
+}
+
+.mlp-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(16,185,129,0.2);
+    border-top-color: var(--mlp-green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── ERROR ─────────────────────────────────────── */
+.mlp-error {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 16px;
+    padding: 2rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.mlp-error span { font-size: 2rem; }
+.mlp-error p { color: #fca5a5; }
+
+.mlp-btn-retry {
+    background: rgba(239,68,68,0.2);
+    border: 1px solid rgba(239,68,68,0.4);
+    color: #fca5a5;
+    padding: 0.6rem 1.4rem;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.mlp-btn-retry:hover {
+    background: rgba(239,68,68,0.3);
+}
+
+/* ── NO TURNO ─────────────────────────────────── */
+.mlp-no-turno {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.mlp-no-turno-icon { font-size: 3rem; }
+.mlp-no-turno h3 { font-size: 1.3rem; font-weight: 700; color: #e2e8f0; }
+.mlp-no-turno p { color: var(--mlp-muted); }
+
+.mlp-btn-oficina {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--mlp-whatsapp);
+    color: white;
+    padding: 0.8rem 1.8rem;
+    border-radius: 50px;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-top: 0.5rem;
+    box-shadow: 0 4px 20px rgba(37,211,102,0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.mlp-btn-oficina:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(37,211,102,0.4);
+}
+
+/* ── FECHA BADGE ─────────────────────────────── */
+.mlp-fecha-badge {
+    background: rgba(16,185,129,0.1);
+    border: 1px solid rgba(16,185,129,0.25);
+    border-radius: 50px;
+    padding: 0.5rem 1.2rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--mlp-green);
+    text-align: center;
+    margin-bottom: 1.5rem;
+    text-transform: capitalize;
+}
+
+/* ── CARDS GRID ──────────────────────────────── */
+.mlp-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 1.5rem;
+}
+
+/* ── CARD ────────────────────────────────────── */
+.mlp-card {
+    background: var(--mlp-surface);
+    border: 1px solid var(--card-border, rgba(255,255,255,0.12));
+    border-radius: 20px;
+    padding: 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.25s, box-shadow 0.25s;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.mlp-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--card-bg, rgba(255,255,255,0.03));
+    pointer-events: none;
+}
+
+.mlp-card::after {
+    content: '';
+    position: absolute;
+    top: -60px;
+    right: -60px;
+    width: 160px;
+    height: 160px;
+    background: var(--card-bg, rgba(255,255,255,0.03));
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.mlp-card-next {
+    border-style: dashed;
+    opacity: 0.92;
+}
+
+.mlp-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+}
+
+/* ── CARD TURNO (movilidad habilitada) ─────────── */
+.mlp-card-turno {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mlp-green);
+    background: rgba(16,185,129,0.12);
+    border: 1px solid rgba(16,185,129,0.4);
+    border-radius: 50px;
+    padding: 0.35rem 0.8rem;
+    width: fit-content;
+}
+
+.mlp-card-turno.next {
+    color: #93c5fd;
+    background: rgba(99,102,241,0.12);
+    border: 1px solid rgba(99,102,241,0.4);
+}
+
+.mlp-card-turno-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--mlp-green);
+    box-shadow: 0 0 0 0 rgba(16,185,129,0.7);
+    animation: mlp-pulse 1.6s infinite;
+}
+
+.mlp-card-turno-dot.next {
+    background: #93c5fd;
+    box-shadow: none;
+    animation: none;
+}
+
+@keyframes mlp-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.6); }
+    70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); }
+    100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}
+
+.mlp-card-asientos {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fbbf24;
+    background: rgba(251,191,36,0.1);
+    border: 1px dashed rgba(251,191,36,0.4);
+    border-radius: 10px;
+    padding: 0.4rem 0.8rem;
+    width: fit-content;
+}
+
+/* ── CARD TYPE ───────────────────────────────── */
+.mlp-card-type {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.mlp-card-type-emoji {
+    font-size: 1.5rem;
+}
+
+.mlp-card-type-label {
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--card-color, #10b981);
+    background: var(--card-bg, rgba(16,185,129,0.15));
+    border: 1px solid var(--card-border, rgba(16,185,129,0.3));
+    padding: 0.2rem 0.7rem;
+    border-radius: 50px;
+}
+
+.mlp-card-cap {
+    font-size: 0.72rem;
+    color: var(--mlp-muted);
+    background: rgba(255,255,255,0.06);
+    padding: 0.2rem 0.6rem;
+    border-radius: 50px;
+    margin-left: auto;
+}
+
+/* ── CARD NOMBRE ─────────────────────────────── */
+.mlp-card-nombre {
+    border-top: 1px solid rgba(255,255,255,0.07);
+    padding-top: 0.8rem;
+}
+
+.mlp-card-icon-label {
+    font-size: 0.72rem;
+    color: var(--mlp-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 0.3rem;
+}
+
+.mlp-card-nombre h3 {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #f1f5f9;
+    line-height: 1.2;
+}
+
+/* ── CARD PLACA ──────────────────────────────── */
+.mlp-card-placa {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    background: rgba(0,0,0,0.3);
+    border: 2px solid var(--card-border, rgba(255,255,255,0.15));
+    border-radius: 10px;
+    padding: 0.5rem 1rem;
+    width: fit-content;
+}
+
+.mlp-placa-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: var(--mlp-muted);
+    text-transform: uppercase;
+}
+
+.mlp-placa-value {
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: #f1f5f9;
+    letter-spacing: 0.12em;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── CARD HORA DE SALIDA ───────────────────────── */
+.mlp-card-hora {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.7rem 0.85rem;
+    border-radius: 10px;
+    background: rgba(16,185,129,0.1);
+    border: 1px solid rgba(16,185,129,0.3);
+}
+
+.mlp-hora-label {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--mlp-muted);
+}
+
+.mlp-card-hora strong {
+    color: var(--mlp-green);
+    font-size: 1.2rem;
+    white-space: nowrap;
+}
+
+/* ── CARD ACTIONS ────────────────────────────── */
+.mlp-card-actions {
+    display: flex;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    margin-top: auto;
+}
+
+.mlp-btn-call,
+.mlp-btn-whatsapp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.65rem 1.1rem;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
+    flex: 1;
+    justify-content: center;
+}
+
+.mlp-btn-call {
+    background: var(--card-color, #10b981);
+    color: white;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.mlp-btn-call:hover {
+    filter: brightness(1.15);
+    transform: translateY(-2px);
+}
+
+.mlp-btn-whatsapp {
+    background: var(--mlp-whatsapp);
+    color: white;
+    box-shadow: 0 4px 15px rgba(37,211,102,0.3);
+}
+
+.mlp-btn-whatsapp:hover {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(37,211,102,0.4);
+}
+
+.mlp-no-phone {
+    font-size: 0.85rem;
+    color: var(--mlp-muted);
+    font-style: italic;
+    margin-top: auto;
+}
+
+/* ── NOTA ────────────────────────────────────── */
+.mlp-nota {
+    background: rgba(16,185,129,0.07);
+    border: 1px solid rgba(16,185,129,0.2);
+    border-radius: 14px;
+    padding: 1rem 1.2rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    font-size: 0.87rem;
+    color: #94a3b8;
+    line-height: 1.5;
+}
+
+.mlp-nota span { font-size: 1.1rem; flex-shrink: 0; }
+
+/* ── FOOTER ──────────────────────────────────── */
+.mlp-footer {
+    background: var(--mlp-surface);
+    border-top: 1px solid var(--mlp-border);
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.mlp-footer p {
+    font-size: 0.78rem;
+    color: var(--mlp-muted);
+}
+
+.mlp-btn-refresh {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--mlp-muted);
+    padding: 0.4rem 1rem;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.mlp-btn-refresh:hover {
+    background: rgba(16,185,129,0.1);
+    border-color: rgba(16,185,129,0.3);
+    color: var(--mlp-green);
+}
+
+/* ── RESPONSIVE ──────────────────────────────── */
+@media (max-width: 600px) {
+    .mlp-header-inner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .mlp-clock { text-align: left; }
+    .mlp-hero { flex-direction: column; text-align: center; }
+    .mlp-hero-text h2 { font-size: 1.3rem; }
+    .mlp-cards-grid { grid-template-columns: 1fr; }
+    .mlp-card-actions { flex-direction: column; }
+    .mlp-footer { flex-direction: column; text-align: center; }
+}

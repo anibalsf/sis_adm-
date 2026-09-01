@@ -59,12 +59,13 @@ class EgresoViewSet(viewsets.ModelViewSet):
         elements = []
         styles = getSampleStyleSheet()
 
-        title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#B71C1C'), spaceAfter=6, alignment=TA_CENTER, fontName='Helvetica-Bold')
-        right_style = ParagraphStyle('Right', parent=styles['Normal'], fontSize=10, alignment=TA_RIGHT)
+        title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#B71C1C'), spaceAfter=2, alignment=TA_CENTER, fontName='Helvetica-Bold')
+        right_style = ParagraphStyle('Right', parent=styles['Normal'], fontSize=10, alignment=TA_RIGHT, spaceAfter=2)
 
         elements.append(Paragraph("SINDICATO MIXTO \"INTEGRACIÓN TAIPIPLAYA\"", title_style))
+        elements.append(Spacer(1, 4))
         elements.append(Paragraph("COMPROBANTE DE EGRESO", title_style))
-        elements.append(Spacer(1, 12))
+        elements.append(Spacer(1, 6))
 
         comprobante_nro = f"EGR-{egreso.id:04d}"
         fecha_str = egreso.fecha.strftime("%d/%m/%Y") if egreso.fecha else datetime.now().strftime("%d/%m/%Y")
@@ -78,7 +79,7 @@ class EgresoViewSet(viewsets.ModelViewSet):
         elif egreso.estado == 'pendiente_aprobacion':
             status_text = " (PENDIENTE DE APROBACIÓN)"
         elements.append(Paragraph(f"<b>Estado:</b> {egreso.get_estado_display()}{status_text}", right_style))
-        elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 10))
 
         data = [
             ['<b>Detalle</b>', '<b>Información</b>'],
@@ -105,10 +106,10 @@ class EgresoViewSet(viewsets.ModelViewSet):
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('LEFTPADDING', (0, 0), (-1, -1), 8),
             ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ]))
         elements.append(table)
-        elements.append(Spacer(1, 60))
+        elements.append(Spacer(1, 40))
 
         # Firmas
         firmas_data = [
@@ -125,6 +126,35 @@ class EgresoViewSet(viewsets.ModelViewSet):
             ('TEXTCOLOR', (0, 2), (-1, -1), colors.grey),
         ]))
         elements.append(firmas_table)
+        
+        elements.append(Spacer(1, 20))
+        
+        # Nota al pie
+        nota_style = ParagraphStyle(
+            'Nota',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#424242'),
+            alignment=TA_CENTER,
+            spaceAfter=4
+        )
+        
+        hora_impresion = datetime.now().strftime('%d de %B de %Y a las %H:%M')
+        elements.append(Paragraph(
+            f"<b>Impreso el:</b> {hora_impresion}",
+            nota_style
+        ))
+        
+        nota_sub_style = ParagraphStyle(
+            'NotaSub',
+            parent=nota_style,
+            fontSize=8,
+            textColor=colors.grey
+        )
+        elements.append(Paragraph(
+            "Documento generado por el Sistema de Administración",
+            nota_sub_style
+        ))
 
         doc.build(elements)
         buffer.seek(0)
@@ -170,8 +200,10 @@ class PagoViewSet(viewsets.ModelViewSet):
         # Si es QR, el estado inicial es pendiente hasta que se verifique
         metodo = self.request.data.get('metodo_pago', 'efectivo')
         estado_inicial = 'pendiente' if metodo == 'qr' else 'completado'
-        
-        obj = serializer.save(estado=estado_inicial)
+
+        from django.db.models import Max
+        ultimo = Pago.objects.filter(nro_recibo__isnull=False).aggregate(m=Max('nro_recibo'))['m'] or 0
+        obj = serializer.save(estado=estado_inicial, nro_recibo=ultimo + 1)
         
         # Actualizar estado de la hoja de ruta si existe el vínculo
         if obj.hoja_ruta:
@@ -214,9 +246,9 @@ class PagoViewSet(viewsets.ModelViewSet):
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=18,
+            fontSize=16,
             textColor=colors.HexColor('#2E7D32'),
-            spaceAfter=6,
+            spaceAfter=2,
             alignment=TA_CENTER,
             fontName='Helvetica-Bold'
         )
@@ -225,17 +257,11 @@ class PagoViewSet(viewsets.ModelViewSet):
             'Right',
             parent=styles['Normal'],
             fontSize=10,
-            alignment=TA_RIGHT
+            alignment=TA_RIGHT,
+            spaceAfter=2
         )
         
-        # Encabezado con Logo
-        logo_path = BASE_DIR / 'frontend' / 'public' / 'logo-taipiplaya.png'
-        if logo_path.exists():
-            logo = Image(str(logo_path), width=1.4*inch, height=1.4*inch)
-            logo.hAlign = 'CENTER'
-            elements.append(logo)
-            elements.append(Spacer(1, 6))
-
+        # Encabezado sin logo
         elements.append(Paragraph("SINDICATO MIXTO \"INTEGRACIÓN TAIPIPLAYA\"", title_style))
         
         info_sub_style = ParagraphStyle(
@@ -243,20 +269,22 @@ class PagoViewSet(viewsets.ModelViewSet):
             parent=styles['Normal'],
             fontSize=8,
             alignment=TA_CENTER,
-            spaceAfter=12
+            spaceAfter=4
         )
         info_text = "FUNDADO EL 22 DE SEPTIEMBRE DEL 2011 CON PERSONERÍA JURÍDICA R.S. NRO. 20095<br/>TAIPIPLAYA – CARANAVI LA PAZ BOLIVIA"
         elements.append(Paragraph(info_text, info_sub_style))
+        
+        elements.append(Spacer(1, 6))
         elements.append(Paragraph("RECIBO DE PAGO", title_style))
-        elements.append(Spacer(1, 12))
+        elements.append(Spacer(1, 6))
         
         # Número de recibo y fecha
-        recibo_nro = f"NRO-{pago.id:03d}"
+        recibo_nro = f"NRO-{pago.nro_recibo or pago.id:03d}"
         fecha_str = pago.fecha_pago.strftime("%d/%m/%Y") if hasattr(pago, 'fecha_pago') and pago.fecha_pago else datetime.now().strftime("%d/%m/%Y")
         
         elements.append(Paragraph(f"<b>Recibo Nº:</b> {recibo_nro}", right_style))
         elements.append(Paragraph(f"<b>Fecha:</b> {fecha_str}", right_style))
-        elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 10))
         
         # Datos del pago
         afiliado_nombre = pago.afiliado.nombre_completo if pago.afiliado else 'N/A'
@@ -302,11 +330,11 @@ class PagoViewSet(viewsets.ModelViewSet):
             ('LEFTPADDING', (0, 0), (-1, -1), 8),
             ('RIGHTPADDING', (0, 0), (-1, -1), 8),
             ('TOPPADDING', (0, 1), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
         ]))
         
         elements.append(table)
-        elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 10))
 
         # Generar QR para el recibo
         qr_data = f"RECIBO:{recibo_nro}|FECHA:{fecha_str}|MONTO:{pago.monto}|AFILIADO:{afiliado_nombre}"
@@ -326,27 +354,37 @@ class PagoViewSet(viewsets.ModelViewSet):
         
         # Añadir QR al PDF (centrado)
         from reportlab.lib.utils import ImageReader
-        qr_flowable = Image(qr_img_buffer, width=1.5*inch, height=1.5*inch)
+        qr_flowable = Image(qr_img_buffer, width=1.2*inch, height=1.2*inch)
         qr_flowable.hAlign = 'CENTER'
         elements.append(qr_flowable)
         
-        elements.append(Spacer(1, 10))
+        elements.append(Spacer(1, 6))
         
         # Nota al pie
         nota_style = ParagraphStyle(
             'Nota',
             parent=styles['Normal'],
-            fontSize=8,
-            textColor=colors.grey,
-            alignment=TA_CENTER
+            fontSize=9,
+            textColor=colors.HexColor('#424242'),
+            alignment=TA_CENTER,
+            spaceAfter=4
         )
+        
+        hora_impresion = datetime.now().strftime('%d de %B de %Y a las %H:%M')
         elements.append(Paragraph(
-            f"Este recibo fue generado automáticamente el {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+            f"<b>Impreso el:</b> {hora_impresion}",
             nota_style
         ))
+        
+        nota_sub_style = ParagraphStyle(
+            'NotaSub',
+            parent=nota_style,
+            fontSize=8,
+            textColor=colors.grey
+        )
         elements.append(Paragraph(
-            "Para cualquier aclaración, comunicarse con la administración del sindicato.",
-            nota_style
+            "Documento generado por el Sistema de Administración",
+            nota_sub_style
         ))
         
         # Construir PDF
@@ -427,9 +465,11 @@ class TipoPagoViewSet(viewsets.ModelViewSet):
         tipo_pago = self.get_object()
         nombre = (tipo_pago.nombre or '').lower()
         monto_base = float(request.data.get('monto_base', 0))
-        
-        if 'hoja' in nombre and 'ruta' in nombre:
-            monto_base = 20.0
+
+        if monto_base <= 0:
+            return Response({'detail': 'El monto base debe ser mayor a 0'}, status=400)
+
+        if 'hoja' in nombre and 'ruta' in nombre and 'caranavi' in nombre:
             ahora = datetime.now()
             dia_actual = ahora.weekday()
             hora_actual = ahora.time()
@@ -444,7 +484,7 @@ class TipoPagoViewSet(viewsets.ModelViewSet):
                     'tiene_multa': False,
                     'multa': 0,
                     'monto_base': monto_base,
-                    'mensaje': '🎉 Pago sin multa. Costo: 20 Bs' if forzar_sin_multa else '🎉 Pago a tiempo. Costo: 20 Bs'
+                    'mensaje': f'🎉 Pago sin multa. Costo: {monto_base} Bs' if forzar_sin_multa else f'🎉 Pago a tiempo. Costo: {monto_base} Bs'
                 })
             
             multa = 50.0
@@ -548,7 +588,7 @@ class ReciboView(APIView):
             c.drawString(SAFE_MARGIN_X, start_y - 50, "RECIBO DE INGRESO")
             
             c.setFont("Helvetica-Bold", 11)
-            c.drawRightString(width - SAFE_MARGIN_X, start_y - 50, f"N° {pago.id:06d}")
+            c.drawRightString(width - SAFE_MARGIN_X, start_y - 50, f"N° {(pago.nro_recibo or pago.id):06d}")
             
             # --- Cuerpo ---
             current_y = start_y - 75
@@ -594,7 +634,7 @@ class ReciboView(APIView):
 
             # --- QR y Firmas ---
             # QR
-            qr_data = f"RECIBO:{pago.id}|{pago.fecha_pago}|{pago.monto}"
+            qr_data = f"RECIBO:{(pago.nro_recibo or pago.id):06d}|{pago.fecha_pago}|{pago.monto}"
             qr = qrcode.QRCode(box_size=10, border=1)
             qr.add_data(qr_data)
             qr.make(fit=True)
@@ -655,7 +695,7 @@ class ReciboView(APIView):
 
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="recibo_{pago.id}.pdf"'
+        response['Content-Disposition'] = f'attachment; filename="recibo_{(pago.nro_recibo or pago.id):06d}.pdf"'
         return response
 
 class ArqueoCajaViewSet(viewsets.ModelViewSet):

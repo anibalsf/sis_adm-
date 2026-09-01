@@ -106,7 +106,11 @@ class ReservaViewSet(viewsets.ModelViewSet):
         # Enviar confirmación automática por WhatsApp
         try:
             from comunicacion.services import WhatsAppService
-            WhatsAppService().send_reserva_confirmation(instance)
+            ws = WhatsAppService()
+            # Notificar al cliente
+            ws.send_reserva_confirmation(instance)
+            # Notificar al conductor asignado
+            ws.send_notificacion_nueva_reserva_afiliado(instance)
         except Exception as e:
             print(f"Error enviando confirmación WhatsApp: {e}")
 
@@ -127,33 +131,65 @@ class ReservaViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def generar_qr(self, request, pk=None):
-        """Genera código QR para la reserva"""
+        """Genera código QR para la reserva con datos completos del afiliado conductor"""
         reserva = self.get_object()
-        
-        # Datos del QR
-        qr_data = {
-            'tipo': 'reserva',
-            'id': reserva.id,
-            'cliente': reserva.cliente,
-            'ruta': reserva.ruta.nombre if reserva.ruta else '',
-            'fecha_viaje': str(reserva.fecha_viaje),
-            'cantidad': reserva.cantidad,
-            'asiento': reserva.asiento,
-            'estado': reserva.estado
-        }
-        
-        # Generar QR
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(json.dumps(qr_data))
+
+        DOMAIN = "https://administracion.sindicatointegracion.com"
+
+        # Obtener datos del vehículo desde la hoja de ruta
+        from hojasruta.models import HojaRuta
+        hoja = HojaRuta.objects.filter(
+            ruta=reserva.ruta,
+            fecha_salida=reserva.fecha_viaje,
+            estado='emitida'
+        ).select_related('vehiculo').first()
+        vehiculo_placa = hoja.vehiculo.placa if hoja and hoja.vehiculo else 'N/A'
+        vehiculo_tipo = hoja.vehiculo.tipo if hoja and hoja.vehiculo else 'N/A'
+
+        # Datos del afiliado conductor
+        afiliado_nombre = str(reserva.afiliado) if reserva.afiliado else 'N/A'
+        afiliado_telefono = reserva.afiliado.telefono if reserva.afiliado else 'N/A'
+        afiliado_direccion = reserva.afiliado.direccion if reserva.afiliado else 'N/A'
+
+        # URL de verificación pública
+        url_verificacion = f"{DOMAIN}/voucher/{reserva.id}"
+
+        # Construir contenido del QR: URL primero (para escaneo rápido) + datos legibles
+        qr_content = (
+            f"{url_verificacion}\n"
+            f"---\n"
+            f"RESERVA: RES-{str(reserva.id).zfill(6)}\n"
+            f"PASAJERO: {reserva.cliente}\n"
+            f"RUTA: {reserva.ruta.nombre if reserva.ruta else 'N/A'}\n"
+            f"FECHA: {str(reserva.fecha_viaje)}\n"
+            f"ASIENTO: {reserva.asiento or 'S/A'} | CANT: {reserva.cantidad}\n"
+            f"ESTADO: {reserva.estado.upper()}\n"
+            f"---\n"
+            f"CONDUCTOR: {afiliado_nombre}\n"
+            f"CELULAR: {afiliado_telefono}\n"
+            f"DIRECCION: {afiliado_direccion}\n"
+            f"PLACA: {vehiculo_placa} ({vehiculo_tipo})\n"
+            f"---\n"
+            f"SINDICATO MIXTO INTEGRACION TAIPIPLAYA\n"
+            f"{DOMAIN}"
+        )
+
+        # Generar QR con corrección de errores alta para más datos
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4
+        )
+        qr.add_data(qr_content)
         qr.make(fit=True)
-        
+
         img = qr.make_image(fill_color="black", back_color="white")
-        
-        # Convertir a bytes
+
         buffer = BytesIO()
         img.save(buffer, format='PNG')
         buffer.seek(0)
-        
+
         return HttpResponse(buffer.getvalue(), content_type='image/png')
     
     @action(detail=True, methods=['get'])

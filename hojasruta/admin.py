@@ -4,7 +4,7 @@ from .models import HojaRuta, TurnoSalida
 
 @admin.register(HojaRuta)
 class HojaRutaAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nro', 'fecha_emision', 'afiliado', 'estado', 'precio')
+    list_display = ('id', 'nro', 'fecha_emision', 'fecha_salida', 'hora_salida', 'afiliado', 'estado', 'precio')
     search_fields = ('nro', 'afiliado__ci')
     list_filter = ('estado',)
 

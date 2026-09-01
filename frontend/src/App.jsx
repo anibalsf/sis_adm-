@@ -42,6 +42,7 @@ const LibroActas = lazy(() => import('./pages/LibroActas'));
 const Kiosco = lazy(() => import('./pages/Kiosco'));
 const Encomiendas = lazy(() => import('./pages/Encomiendas'));
 const WhatsAppAdmin = lazy(() => import('./pages/WhatsAppAdmin'));
+const MovilidadesLaPaz = lazy(() => import('./pages/MovilidadesLaPaz'));
 
 const PageLoader = () => (
     <div style={{ padding: '2rem' }}>
@@ -113,6 +114,33 @@ function MainLayout() {
     );
 }
 
+function ReservasEntry() {
+    const { isAuthenticated, loading } = useAuth();
+
+    if (loading) {
+        return <PageLoader />;
+    }
+
+    // El QR debe abrir /reservas sin exigir una cuenta. El personal autenticado
+    // conserva el módulo interno de gestión en la misma dirección.
+    return isAuthenticated ? <MainLayout /> : <MovilidadesLaPaz />;
+}
+
+function Home() {
+    const { isAuthenticated, loading } = useAuth();
+
+    if (loading) {
+        return <div className="loading-screen">Cargando sistema...</div>;
+    }
+
+    // Sin iniciar sesión: redirigir al login
+    if (!isAuthenticated) {
+        return <Navigate to="/login" replace />;
+    }
+
+    return <MainLayout />;
+}
+
 function App() {
     return (
         <BrowserRouter>
@@ -120,6 +148,7 @@ function App() {
                 <AuthProvider>
                     <Suspense fallback={<PageLoader />}>
                         <Routes>
+                            <Route path="/" element={<Home />} />
                             <Route path="/login" element={<Login />} />
                             <Route path="/register" element={<Register />} />
                             <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -127,7 +156,9 @@ function App() {
                             <Route path="/verificar-hoja/:id" element={<VerificarHoja />} />
                             <Route path="/pizarra" element={<PizarraPublica />} />
                             <Route path="/kiosco" element={<Kiosco />} />
+                            <Route path="/reservas" element={<ReservasEntry />} />
                             <Route path="/voucher/:id" element={<VoucherReserva />} />
+                            <Route path="/movilidades-lapaz" element={<MovilidadesLaPaz />} />
                             <Route path="/*" element={<MainLayout />} />
                         </Routes>
                     </Suspense>

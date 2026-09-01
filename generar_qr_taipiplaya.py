@@ -3,10 +3,10 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 
 def generate_taipiplaya_qr():
-    # URL de la pizarra filtrada por destino La Paz (desde Taipiplaya)
-    url_pizarra = "https://sindicato-taipiplaya.com/pizarra?destino=La Paz"
+    # Página pública de reservas y asignaciones a La Paz.
+    url_reservas = "https://administracion.sindicatointegracion.com/reservas"
     
-    print(f"Generando QR para la oficina de TAIPIPLAYA: {url_pizarra}")
+    print(f"Generando QR para la oficina de TAIPIPLAYA: {url_reservas}")
     
     # Configurar el QR con alta corrección de errores para poder poner el logo
     qr = qrcode.QRCode(
@@ -15,7 +15,7 @@ def generate_taipiplaya_qr():
         box_size=15,
         border=4,
     )
-    qr.add_data(url_pizarra)
+    qr.add_data(url_reservas)
     qr.make(fit=True)
 
     # Crear la imagen del QR (Verde Estético del Sindicato)
@@ -45,7 +45,7 @@ def generate_taipiplaya_qr():
     # Guardar el archivo final
     filename = "QR_RESERVAS_TAIPIPLAYA.png"
     qr_img.save(filename)
-    print(f"\n✅ ¡ÉXITO! Se ha generado el archivo: {filename}")
+    print(f"\n[OK] ¡EXITO! Se ha generado el archivo: {filename}")
     print("--------------------------------------------------")
     print("Instrucciones para la oficina:")
     print("1. Imprime este código en tamaño grande.")

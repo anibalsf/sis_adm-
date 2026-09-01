@@ -197,8 +197,8 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
             qr_path = os.path.join(folder, qr_filename)
             
             # URL de validación
-            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
-            data = f"{frontend_url}/verificar-hoja/{obj.id}"
+            domain = "https://administracion.sindicatointegracion.com"
+            data = f"{domain}/verificar-hoja/{obj.id}"
             
             img = qrcode.make(data)
             img.save(qr_path)
@@ -349,9 +349,16 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
         hojas = HojaRuta.objects.select_related(
             'afiliado', 'vehiculo', 'ruta'
         ).filter(
-            ruta__nombre__iexact=destino,
-            vehiculo__tipo__in=['minibus', 'ipsum'],
-            estado='emitida',
+            Q(ruta__nombre__iexact=destino) |
+            Q(ruta__destino__iexact=destino) |
+            Q(ruta__nombre__icontains=destino),
+            Q(vehiculo__tipo__iexact='minibus') |
+            Q(vehiculo__tipo__iexact='ipsum'),
+            estado__in=['emitida', 'notificada', 'pagada'],
+            afiliado__estado='activo',
+            afiliado__is_active=True,
+            vehiculo__estado='activo',
+            vehiculo__indocumentado=False,
             fecha_salida__gte=hoy,
             fecha_salida__lte=hasta
         ).order_by('ruta__nombre', 'fecha_salida')
@@ -401,6 +408,7 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
                 'id': hoja.id,
                 'nro': hoja.nro,
                 'fecha_salida': hoja.fecha_salida,
+                'hora_salida': hoja.hora_salida.strftime('%H:%M') if hoja.hora_salida else None,
                 'ruta': {
                     'id': hoja.ruta.id if hoja.ruta else None,
                     'nombre': hoja.ruta.nombre if hoja.ruta else None,
@@ -618,7 +626,7 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
             w_dest = full_w - w_fecha - w_hora - 10
             
             destino = obj.ruta.nombre if obj.ruta else ""
-            hora = obj.fecha_emision.strftime('%H:%M') if obj.fecha_emision else ""
+            hora = obj.hora_salida.strftime('%H:%M') if obj.hora_salida else "Por confirmar"
             fecha = str(obj.fecha_salida) if obj.fecha_salida else ""
             
             draw_field_box(50, row2_y, w_dest, 25, "DESTINO", destino)
@@ -776,12 +784,263 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
             qs = qs.filter(ruta_id=ruta_id)
         return qs
 
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    def turno_la_paz_hoy(self, request):
+        """
+        Retorna el afiliado con turno de salida a La Paz hoy (o en la fecha indicada).
+        Público: accesible sin autenticación para la página de reservas con QR.
+        Query param opcional: ?fecha=YYYY-MM-DD  (por defecto usa hoy)
+        """
+        from django.utils import timezone
+        from rutas.models import Ruta
+
+        fecha_str = request.query_params.get('fecha')
+        if fecha_str:
+            try:
+                from datetime import datetime
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({'detail': 'Formato de fecha inválido. Use YYYY-MM-DD'}, status=400)
+        else:
+            fecha = timezone.localdate()
+
+        # Buscar la ruta La Paz
+        ruta_la_paz = Ruta.objects.filter(destino__iexact='la paz').first()
+        if not ruta_la_paz:
+            return Response({'found': False, 'detail': 'No existe la ruta a La Paz configurada'})
+
+        # Buscar el turno del día
+        turno = TurnoSalida.objects.select_related(
+            'afiliado', 'ruta'
+        ).filter(fecha=fecha, ruta=ruta_la_paz).order_by('orden').first()
+
+        if not turno:
+            return Response({'found': False, 'detail': f'No hay turno programado a La Paz para el {fecha}'})
+
+        # Obtener vehículo del afiliado
+        vehiculo = turno.afiliado.vehiculos.filter(
+            tipo__in=['minibus', 'ipsum'],
+            indocumentado=False,
+            estado='activo'
+        ).first()
+
+        return Response({
+            'found': True,
+            'fecha': str(fecha),
+            'orden': turno.orden,
+            'afiliado': {
+                'id': turno.afiliado.id,
+                'nombre_completo': turno.afiliado.nombre_completo,
+                'telefono': turno.afiliado.telefono,
+                'vehiculo_placa': vehiculo.placa if vehiculo else None,
+                'vehiculo_tipo': vehiculo.tipo if vehiculo else None,
+            }
+        })
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    def movilidades_lapaz_hoy(self, request):
+        """
+        Devuelve todas las movilidades asignadas (ipsum y minibus) a La Paz
+        para hoy (o la fecha indicada). Público: accesible sin autenticación.
+        Query param opcional: ?fecha=YYYY-MM-DD
+        """
+        from django.utils import timezone
+        from rutas.models import Ruta
+        from django.db.models import Q, Sum
+
+        fecha_str = request.query_params.get('fecha')
+        if fecha_str:
+            try:
+                from datetime import datetime
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({'detail': 'Formato de fecha inválido. Use YYYY-MM-DD'}, status=400)
+        else:
+            fecha = timezone.localdate()
+
+        # La asignación publicada debe salir de las hojas de ruta emitidas.
+        ruta_la_paz = Ruta.objects.filter(
+            Q(destino__iexact='la paz') |
+            Q(nombre__iexact='la paz') |
+            Q(nombre__icontains='la paz')
+        ).order_by('id').first()
+        if not ruta_la_paz:
+            return Response({'found': False, 'detail': 'No existe la ruta a La Paz configurada'})
+
+        hojas = list(HojaRuta.objects.select_related(
+            'afiliado', 'vehiculo', 'ruta'
+        ).filter(
+            ruta=ruta_la_paz,
+            fecha_salida=fecha,
+            estado__in=['emitida', 'notificada', 'pagada'],
+            afiliado__estado='activo',
+            afiliado__is_active=True,
+            vehiculo__estado='activo',
+            vehiculo__indocumentado=False,
+        ).filter(
+            Q(vehiculo__tipo__iexact='ipsum') |
+            Q(vehiculo__tipo__iexact='minibus')
+        ).order_by('hora_salida', 'id'))
+
+        # Mantener compatibilidad con la programación anterior cuando aún no
+        # existe una hoja de ruta para la fecha consultada.
+        turnos = []
+        if not hojas:
+            turnos = list(TurnoSalida.objects.select_related(
+                'afiliado', 'ruta'
+            ).filter(
+                fecha=fecha,
+                ruta=ruta_la_paz,
+                afiliado__estado='activo',
+                afiliado__is_active=True,
+            ).order_by('orden'))
+
+        if not hojas and not turnos:
+            return Response({
+                'found': False,
+                'fecha': str(fecha),
+                'detail': f'No hay asignaciones programadas a La Paz para el {fecha}',
+                'movilidades': [],
+            })
+
+        movilidades = []
+        if hojas:
+            for orden, hoja in enumerate(hojas, start=1):
+                movilidades.append({
+                    'afiliado_id': hoja.afiliado_id,
+                    'nombre_completo': hoja.afiliado.nombre_completo,
+                    'telefono': hoja.afiliado.telefono,
+                    'placa': hoja.vehiculo.placa,
+                    'tipo': str(hoja.vehiculo.tipo or '').lower(),
+                    'capacidad': hoja.vehiculo.capacidad,
+                    'hora_salida': hoja.hora_salida.strftime('%H:%M') if hoja.hora_salida else None,
+                    'orden': orden,
+                })
+        else:
+            for turno in turnos:
+                vehiculos = turno.afiliado.vehiculos.filter(
+                    Q(tipo__iexact='minibus') | Q(tipo__iexact='ipsum'),
+                    indocumentado=False,
+                    estado='activo'
+                ).order_by('id')
+                for veh in vehiculos:
+                    movilidades.append({
+                        'afiliado_id': turno.afiliado.id,
+                        'nombre_completo': turno.afiliado.nombre_completo,
+                        'telefono': turno.afiliado.telefono,
+                        'placa': veh.placa,
+                        'tipo': str(veh.tipo or '').lower(),
+                        'capacidad': veh.capacidad,
+                        'hora_salida': turno.hora_salida.strftime('%H:%M') if turno.hora_salida else None,
+                        'orden': turno.orden,
+                    })
+
+        # Ordenar por hora y luego por tipo para mostrar una salida estable.
+        tipo_orden = {'ipsum': 0, 'minibus': 1}
+        movilidades.sort(key=lambda m: (
+            m['hora_salida'] is None,
+            m['hora_salida'] or '',
+            m['orden'],
+            tipo_orden.get(m['tipo'], 99),
+        ))
+
+        # =========================================================================
+        # Lógica de habilitación secuencial por turno:
+        # solo está habilitada la movilidad en turno (primera con cupos libres).
+        # Cuando se llena de pasajeros, se habilita automáticamente la siguiente,
+        # siempre en orden. Aplica para ipsum y minibus.
+        # =========================================================================
+        from reservas.models import Reserva
+
+        total_reservados = Reserva.objects.filter(
+            ruta=ruta_la_paz,
+            fecha_viaje=fecha,
+            estado__in=['pendiente', 'confirmada']
+        ).aggregate(total=Sum('cantidad'))['total'] or 0
+
+        restante = total_reservados
+        activo_asignado = False
+        for m in movilidades:
+            capacidad = m['capacidad'] or 0
+            if capacidad > 0 and not activo_asignado:
+                if restante > 0 and restante >= capacidad:
+                    # Esta movilidad ya se llenó con la reservas acumuladas
+                    m['cupos_reservados'] = capacidad
+                    m['cupos_disponibles'] = 0
+                    m['llena'] = True
+                    m['habilitada'] = False
+                    restante -= capacidad
+                else:
+                    # Movilidad en turno: es la primera con cupos libres
+                    m['cupos_reservados'] = restante
+                    m['cupos_disponibles'] = capacidad - restante
+                    m['llena'] = False
+                    m['habilitada'] = True
+                    activo_asignado = True
+                    restante = 0
+            else:
+                # Movilidades posteriores (aún sin turno habilitado) o sin capacidad registrada
+                m['cupos_reservados'] = 0
+                m['cupos_disponibles'] = capacidad if capacidad > 0 else 0
+                m['llena'] = False
+                m['habilitada'] = False
+
+        return Response({
+            'found': True,
+            'fecha': str(fecha),
+            'total': len(movilidades),
+            'total_reservados': total_reservados,
+            'movilidades': movilidades,
+        })
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    def qr_lapaz(self, request):
+        """
+        Genera un QR público para pasajeros.
+        Al escanearlo abre /reservas con el listado de afiliados asignados
+        a La Paz (ipsum y minibus): nombre, placa, celular y hora de salida.
+        """
+        import qrcode
+        from io import BytesIO
+        from django.http import HttpResponse
+
+        DOMAIN = "https://administracion.sindicatointegracion.com"
+        url = f"{DOMAIN}/pizarra"
+
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+
+        return HttpResponse(
+            buffer.getvalue(),
+            content_type='image/png',
+            headers={'Content-Disposition': 'inline; filename="qr_reservas_lapaz.png"'}
+        )
+
     @action(detail=False, methods=['post'])
     def generar_programacion(self, request):
         """
         Genera turnos de salida (puntero) automáticos para la ruta La Paz.
         """
         import datetime
+
+        hora_salida_str = request.data.get('hora_salida')
+        if not hora_salida_str:
+            return Response({'detail': 'Debe indicar la hora de salida'}, status=400)
+        try:
+            hora_salida = datetime.datetime.strptime(hora_salida_str, '%H:%M').time()
+        except (TypeError, ValueError):
+            return Response({'detail': 'La hora de salida debe tener el formato HH:MM'}, status=400)
         
         # 1. Obtener Ruta La Paz
         ruta_la_paz = Ruta.objects.filter(destino__iexact='la paz').first()
@@ -829,6 +1088,7 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
             
             ts = TurnoSalida.objects.create(
                 fecha=fecha,
+                hora_salida=hora_salida,
                 afiliado=af,
                 ruta=ruta_la_paz,
                 orden=1

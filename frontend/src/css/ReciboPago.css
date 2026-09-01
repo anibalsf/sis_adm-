@@ -19,34 +19,36 @@
 .ticket-cut-line {
     width: 80mm;
     text-align: center;
-    margin: 10px 0;
+    margin: 40px 0;
     color: #666;
     font-size: 8pt;
     border-top: 1px dashed #ccc;
-    padding-top: 5px;
+    padding-top: 4px;
+    box-sizing: border-box;
 }
 
 /* Ajustes de impresión para múltiples copias */
 @media print {
     .ticket-cut-line {
         border-top: 1px dashed #000;
-        margin: 15px 0;
-        /* Reducido un poco */
+        margin: 2mm auto;
         color: transparent;
+        width: 80mm;
+        height: 1px;
+        padding-top: 0;
     }
 
     .ticket-thermal {
         page-break-inside: avoid;
-        margin-bottom: 5mm !important;
-        /* Espacio entre tickets */
+        page-break-after: auto;
+        margin: 0 auto;
     }
 
-    /* Asegurar que el último ticket no se corte */
+    /* Asegurar que ambos tickets quepan en una sola hoja */
     .tickets-wrapper {
         height: auto !important;
         overflow: visible !important;
-        padding-bottom: 20mm !important;
-        /* Espacio extra al final para la impresora */
+        padding-bottom: 0 !important;
         display: block !important;
     }
 
@@ -104,12 +106,12 @@
     /* Reducido de 10mm */
     font-family: 'Courier New', Courier, monospace;
     font-size: 10pt;
-    /* Reducido de 11pt */
-    line-height: 1.2;
-    /* Reducido de 1.4 */
+    line-height: 1.25;
     color: #000;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
     margin: 0 auto;
+    border: 1.5px solid #000;
+    box-sizing: border-box;
 }
 
 /* Header del ticket */
@@ -140,34 +142,32 @@
 
 .ticket-title {
     font-weight: bold;
-    font-size: 9pt;
-    /* Reducido de 10pt */
-    line-height: 1.1;
+    font-size: 10pt;
+    line-height: 1.15;
 }
 
 .ticket-doc-type {
     font-weight: bold;
-    font-size: 11pt;
-    /* Reducido de 12pt */
+    font-size: 12pt;
     margin-top: 5px;
 }
 
 .ticket-doc-number {
-    font-size: 10pt;
+    font-size: 11pt;
+    font-weight: bold;
     margin-top: 1px;
 }
 
+/* Separadores con bordes reales (siempre alineados, no dependen del ancho de fuente) */
 .ticket-separator {
-    margin: 4px 0;
-    font-size: 8pt;
+    margin: 5px 0;
+    border-top: 1px solid #000;
 }
 
 .ticket-separator-dots {
-    margin: 4px 0;
+    margin: 5px 0;
     text-align: center;
-    font-size: 8pt;
-    color: #000;
-    /* Negro para mejor impresión */
+    border-top: 1px dotted #000;
 }
 
 /* Meta información */
@@ -178,8 +178,10 @@
 .ticket-row {
     display: flex;
     justify-content: space-between;
-    margin: 2px 0;
-    font-size: 9pt;
+    margin: 3px 0;
+    font-size: 9.5pt;
+    gap: 8px;
+    width: 100%;
 }
 
 /* Cuerpo del ticket */
@@ -188,19 +190,20 @@
 }
 
 .ticket-item {
-    margin: 5px 0;
+    margin: 6px 0;
 }
 
 .ticket-label {
     font-weight: bold;
-    font-size: 9pt;
+    font-size: 9.5pt;
     margin-bottom: 1px;
 }
 
 .ticket-value {
-    font-size: 9pt;
-    /* Reducido de 10pt */
+    font-size: 10pt;
+    font-weight: bold;
     word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 /* Detalle de hoja de ruta */
@@ -210,7 +213,7 @@
 
 .ticket-detalle-title {
     font-weight: bold;
-    font-size: 9pt;
+    font-size: 9.5pt;
     margin-bottom: 2px;
 }
 
@@ -223,9 +226,8 @@
     display: flex;
     justify-content: space-between;
     font-weight: bold;
-    font-size: 12pt;
-    /* Reducido de 14pt */
-    padding: 2px 0;
+    font-size: 13pt;
+    padding: 4px 0;
 }
 
 /* QR Code */
@@ -245,27 +247,29 @@
 }
 
 .ticket-firma {
-    margin: 8px 0;
+    margin: 10px 0;
 }
 
 .firma-line {
-    margin: 5px 0;
-    font-size: 9pt;
+    border-top: 1.5px solid #000;
+    width: 65%;
+    margin: 0 auto 5px auto;
 }
 
 .firma-text {
-    font-size: 8pt;
+    font-size: 9pt;
+    font-weight: bold;
     margin-top: 2px;
 }
 
 .ticket-thanks {
     font-weight: bold;
-    font-size: 9pt;
-    margin: 5px 0;
+    font-size: 9.5pt;
+    margin: 6px 0;
 }
 
 .ticket-info {
-    font-size: 7pt;
+    font-size: 8pt;
     color: #000;
     margin-top: 2px;
 }
@@ -311,6 +315,8 @@
         margin: 0 !important;
         padding: 0 !important;
         height: auto !important;
+        width: 80mm !important;
+        max-width: 80mm !important;
     }
 
     .recibo-container {
@@ -325,17 +331,145 @@
         box-shadow: none !important;
         border: none !important;
         width: 100% !important;
-        /* Permitir que use el ancho del papel si es thermal */
-        max-width: 80mm;
-        margin: 0 auto;
-        padding: 5mm !important;
+        max-width: 80mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
         page-break-inside: avoid;
+        page-break-after: always;
     }
 
-    /* Eliminar cualquier margen forzado por @page */
+    /* Página para impresora térmica Epson T20IV-L - papel 80mm */
     @page {
+        size: 80mm auto;
         margin: 0;
-        size: auto;
+    }
+}
+
+/* Ajustes de impresión para impresora térmica Epson T20IV-L - papel 80mm */
+@media print {
+    .ticket-thermal {
+        padding: 0 !important;
+        font-size: 9pt !important;
+        line-height: 1.2 !important;
+        width: 100% !important;
+        max-width: 80mm !important;
+        margin: 0 !important;
+        display: block !important;
+        overflow: hidden !important;
+    }
+
+    .ticket-copy-label {
+        font-size: 8pt;
+        margin-bottom: 2px;
+        padding: 1px;
+    }
+
+    .ticket-header {
+        margin-bottom: 2px;
+    }
+
+    .ticket-title {
+        font-size: 9pt;
+        line-height: 1.1;
+    }
+
+    .ticket-doc-type {
+        font-size: 10pt;
+        margin-top: 2px;
+    }
+
+    .ticket-doc-number {
+        font-size: 9.5pt;
+    }
+
+    .ticket-separator {
+        margin: 2px 0;
+    }
+
+    .ticket-separator-dots {
+        margin: 2px 0;
+    }
+
+    .ticket-meta {
+        margin: 3px 0;
+    }
+
+    .ticket-row {
+        margin: 1px 0;
+        font-size: 8.5pt;
+    }
+
+    .ticket-item {
+        margin: 3px 0;
+    }
+
+    .ticket-label {
+        font-size: 8.5pt;
+    }
+
+    .ticket-value {
+        font-size: 9pt;
+    }
+
+    .ticket-detalle {
+        margin: 3px 0;
+    }
+
+    .ticket-detalle-title {
+        font-size: 8.5pt;
+    }
+
+    .ticket-total-section {
+        margin-top: 4px;
+    }
+
+    .ticket-total {
+        font-size: 11pt;
+        padding: 2px 0;
+    }
+
+    .ticket-qr {
+        margin: 4px 0;
+        padding: 0;
+    }
+
+    .ticket-qr svg {
+        width: 64px !important;
+        height: 64px !important;
+    }
+
+    .ticket-footer {
+        margin-top: 4px;
+    }
+
+    .ticket-firma {
+        margin: 5px 0;
+    }
+
+    .firma-line {
+        border-top-width: 1px;
+        margin-bottom: 2px;
+    }
+
+    .firma-text {
+        font-size: 8pt;
+    }
+
+    .ticket-thanks {
+        font-size: 8.5pt;
+        margin: 3px 0;
+    }
+
+    .ticket-info {
+        font-size: 7.5pt;
+        margin-top: 1px;
+    }
+
+    .ticket-cut-line {
+        margin: 4mm auto;
+        width: 100%;
+        border-top: 1px dashed #000;
     }
 }
 

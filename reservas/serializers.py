@@ -12,6 +12,8 @@ class ReservaSerializer(serializers.ModelSerializer):
     # Campos relacionados de Afiliado
     afiliado_nombre = serializers.SerializerMethodField()
     afiliado_telefono = serializers.CharField(source='afiliado.telefono', read_only=True)
+    afiliado_direccion = serializers.CharField(source='afiliado.direccion', read_only=True)
+    hora_salida = serializers.SerializerMethodField()
     
     # Campos relacionados de Vehículo
     vehiculo_tipo = serializers.SerializerMethodField()
@@ -22,8 +24,9 @@ class ReservaSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'afiliado', 'cliente', 'telefono', 'ruta', 'fecha_viaje', 'cantidad', 'asiento', 'estado',
             'ruta_nombre', 'ruta_origen', 'ruta_destino', 'ruta_tarifa',
-            'afiliado_nombre', 'afiliado_telefono',
+            'afiliado_nombre', 'afiliado_telefono', 'afiliado_direccion',
             'vehiculo_tipo', 'vehiculo_placa',
+            'hora_salida',
             'created_at', 'updated_at'
         ]
     
@@ -34,10 +37,27 @@ class ReservaSerializer(serializers.ModelSerializer):
 
     def get_vehiculo_tipo(self, obj):
         from hojasruta.models import HojaRuta
-        hoja = HojaRuta.objects.filter(ruta=obj.ruta, fecha_salida=obj.fecha_viaje, estado='emitida').first()
+        hoja = HojaRuta.objects.filter(
+            ruta=obj.ruta,
+            fecha_salida=obj.fecha_viaje,
+            estado__in=['emitida', 'notificada', 'pagada']
+        ).first()
         return hoja.vehiculo.tipo if hoja and hoja.vehiculo else "No asignado"
 
     def get_vehiculo_placa(self, obj):
         from hojasruta.models import HojaRuta
-        hoja = HojaRuta.objects.filter(ruta=obj.ruta, fecha_salida=obj.fecha_viaje, estado='emitida').first()
+        hoja = HojaRuta.objects.filter(
+            ruta=obj.ruta,
+            fecha_salida=obj.fecha_viaje,
+            estado__in=['emitida', 'notificada', 'pagada']
+        ).first()
         return hoja.vehiculo.placa if hoja and hoja.vehiculo else None
+
+    def get_hora_salida(self, obj):
+        from hojasruta.models import HojaRuta
+        hoja = HojaRuta.objects.filter(
+            ruta=obj.ruta,
+            fecha_salida=obj.fecha_viaje,
+            estado__in=['emitida', 'notificada', 'pagada']
+        ).first()
+        return hoja.hora_salida.strftime('%H:%M') if hoja and hoja.hora_salida else None

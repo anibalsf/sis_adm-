@@ -52,28 +52,30 @@ function ReciboPago() {
 
     const isIngreso = type === 'ingreso';
     const titulo = isIngreso ? 'RECIBO DE INGRESO' : 'COMPROBANTE DE EGRESO';
-    const numero = String(data.id).padStart(6, '0');
+    const numero = String(data.nro_recibo ?? data.id).padStart(6, '0');
     const esHojaRuta = isIngreso && /hoja/i.test(data.tipo_pago_nombre || '') && /ruta/i.test(data.tipo_pago_nombre || '');
     const total = parseFloat(data.monto || 0);
-    const baseHoja = 20;
-    const multaHoja = 50;
 
-    const renderTicket = (copiaLabel) => (
+    const renderTicket = (copiaLabel) => {
+        const horaImpresion = new Date().toLocaleString('es-BO', { 
+            day: 'numeric', month: 'long', year: 'numeric', 
+            hour: '2-digit', minute: '2-digit' 
+        });
+        
+        return (
         <div className="ticket-thermal" key={copiaLabel}>
             {/* Etiqueta de Copia */}
             <div className="ticket-copy-label">*** {copiaLabel} ***</div>
 
             {/* Header */}
+            {/* Header sin logo */}
             <div className="ticket-header">
-                <div className="ticket-logo">
-                    <img src="/logo-taipiplaya.png" alt="Logo Taipiplaya" className="logo-img" />
-                </div>
                 <div className="ticket-title">SINDICATO MIXTO</div>
                 <div className="ticket-title">INTEGRACIÓN TAIPIPLAYA</div>
-                <div className="ticket-separator">================================</div>
+                <div className="ticket-separator"></div>
                 <div className="ticket-doc-type">{titulo}</div>
                 <div className="ticket-doc-number">Nº {numero}</div>
-                <div className="ticket-separator">================================</div>
+                <div className="ticket-separator"></div>
             </div>
 
             {/* Meta Info */}
@@ -88,7 +90,7 @@ function ReciboPago() {
                 </div>
             </div>
 
-            <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
+            <div className="ticket-separator-dots"></div>
 
             {/* Body */}
             <div className="ticket-body">
@@ -106,19 +108,13 @@ function ReciboPago() {
 
                         {esHojaRuta && (
                             <div className="ticket-detalle">
-                                <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
+                                <div className="ticket-separator-dots"></div>
                                 <div className="ticket-detalle-title">DETALLE:</div>
                                 <div className="ticket-row">
                                     <span>Hoja de Ruta</span>
-                                    <span>{baseHoja.toFixed(2)} Bs</span>
+                                    <span>{total.toFixed(2)} Bs</span>
                                 </div>
-                                {total > baseHoja && (
-                                    <div className="ticket-row">
-                                        <span>Multa</span>
-                                        <span>{multaHoja.toFixed(2)} Bs</span>
-                                    </div>
-                                )}
-                                <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
+                                <div className="ticket-separator-dots"></div>
                             </div>
                         )}
 
@@ -171,12 +167,12 @@ function ReciboPago() {
 
             {/* Total */}
             <div className="ticket-total-section">
-                <div className="ticket-separator">================================</div>
+                <div className="ticket-separator"></div>
                 <div className="ticket-total">
                     <span>TOTAL:</span>
                     <span>Bs. {parseFloat(data.monto).toFixed(2)}</span>
                 </div>
-                <div className="ticket-separator">================================</div>
+                <div className="ticket-separator"></div>
             </div>
 
             {/* QR Code */}
@@ -190,23 +186,30 @@ function ReciboPago() {
 
             {/* Footer */}
             <div className="ticket-footer">
-                <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
+                <div className="ticket-separator-dots"></div>
                 <div className="ticket-firma">
-                    <div className="firma-line">_____________________</div>
+                    <div className="firma-line"></div>
                     <div className="firma-text">Firma Autorizada</div>
                 </div>
-                <div className="ticket-separator-dots">- - - - - - - - - - - - - - - -</div>
+                <div className="ticket-separator-dots"></div>
                 <div className="ticket-thanks">{isIngreso ? '¡Gracias por su pago!' : 'Comprobante emitido correctamente'}</div>
-                <div className="ticket-info">Sistema de Gestión v1.0</div>
+                <div className="ticket-info">Impreso el {horaImpresion}</div>
+                <div className="ticket-info">Documento generado por el Sistema de Administración</div>
             </div>
         </div>
-    );
+        );
+    };
 
-    const renderStandardReceipt = (copiaLabel) => (
+    const renderStandardReceipt = (copiaLabel) => {
+        const horaImpresion = new Date().toLocaleString('es-BO', { 
+            day: 'numeric', month: 'long', year: 'numeric', 
+            hour: '2-digit', minute: '2-digit' 
+        });
+
+        return (
         <div className="receipt-standard" key={copiaLabel}>
             <div className="standard-header">
                 <div className="standard-logo-section">
-                    <img src="/logo-taipiplaya.png" alt="Logo Taipiplaya" className="standard-logo" />
                     <div className="standard-header-text">
                         <h3>S.M.I.T. "INTEGRACIÓN TAIPIPLAYA"</h3>
                         <p>FUNDADO EL 22 DE SEPTIEMBRE DEL 2011 CON PERSONERÍA JURÍDICA R.S. NRO. 20095</p>
@@ -249,7 +252,7 @@ function ReciboPago() {
                             <thead>
                                 <tr>
                                     <th>Descripción</th>
-                                    <th>Monto Base</th>
+                                    <th>Monto</th>
                                     <th>Multas/Recargos</th>
                                     <th>Total</th>
                                 </tr>
@@ -257,8 +260,8 @@ function ReciboPago() {
                             <tbody>
                                 <tr>
                                     <td>Hoja de Ruta</td>
-                                    <td>20.00 Bs.</td>
-                                    <td>{(total > 20) ? (total - 20).toFixed(2) : '0.00'} Bs.</td>
+                                    <td>{total.toFixed(2)} Bs.</td>
+                                    <td>0.00 Bs.</td>
                                     <td>{total.toFixed(2)} Bs.</td>
                                 </tr>
                             </tbody>
@@ -297,8 +300,14 @@ function ReciboPago() {
                     </div>
                 </div>
             </div>
+            
+            <div className="standard-print-info" style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.8rem', color: '#666' }}>
+                <strong>Impreso el:</strong> {horaImpresion} <br/>
+                <span style={{ fontSize: '0.7rem' }}>Documento generado por el Sistema de Administración</span>
+            </div>
         </div>
-    );
+        );
+    };
 
     return (
         <div className="recibo-container">

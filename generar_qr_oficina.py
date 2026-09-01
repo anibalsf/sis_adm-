@@ -3,8 +3,8 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 
 def generate_office_qr():
-    # URL de la pizarra (El usuario debe cambiar esto por su dominio real)
-    url_pizarra = "https://sindicato-taipiplaya.com/pizarra" # Placeholder
+    # URL de la pizarra
+    url_pizarra = "https://administracion.sindicatointegracion.com/pizarra"
     
     print(f"Generando QR para: {url_pizarra}")
     

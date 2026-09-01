@@ -14,6 +14,7 @@ from tesoreria.models import TipoPago
 tipos_ingreso = [
     {'nombre': 'Cuota Mensual', 'descripcion': 'Pago mensual de afiliación', 'tipo': 'ingreso'},
     {'nombre': 'Cuota Anual', 'descripcion': 'Pago anual de afiliación', 'tipo': 'ingreso'},
+    {'nombre': 'Afiliación', 'descripcion': 'Pago por derecho de afiliación nueva', 'tipo': 'ingreso'},
     {'nombre': 'Sanción', 'descripcion': 'Pago de sanciones', 'tipo': 'ingreso'},
     {'nombre': 'Aporte Navidad', 'descripcion': 'Aporte especial de Navidad', 'tipo': 'ingreso'},
     {'nombre': 'Aporte Carnaval', 'descripcion': 'Aporte especial de Carnaval', 'tipo': 'ingreso'},
@@ -21,6 +22,8 @@ tipos_ingreso = [
     {'nombre': 'Hoja de Ruta Caranavi', 'descripcion': 'Pago por hoja de ruta a Caranavi', 'tipo': 'ingreso'},
     {'nombre': 'Hoja de Ruta La Paz (Ipsum)', 'descripcion': 'Pago por hoja de ruta a La Paz (Ipsum)', 'tipo': 'ingreso'},
     {'nombre': 'Hoja de Ruta La Paz (Minibus)', 'descripcion': 'Pago por hoja de ruta a La Paz (Minibus)', 'tipo': 'ingreso'},
+    {'nombre': 'Encomienda', 'descripcion': 'Pago por encomienda', 'tipo': 'ingreso'},
+    {'nombre': 'Otros ingresos', 'descripcion': 'Otros tipos de ingresos', 'tipo': 'ingreso'},
 ]
 
 # Tipos de Pago para Egresos
@@ -40,7 +43,7 @@ for tipo_data in tipos_ingreso + tipos_egreso:
         defaults={'descripcion': tipo_data['descripcion'], 'tipo': tipo_data['tipo']}
     )
     if created:
-        print(f"✓ Creado: {tipo.nombre} ({tipo.tipo})")
+        print(f"[+] Creado: {tipo.nombre} ({tipo.tipo})")
     else:
         print(f"  Ya existe: {tipo.nombre}")
 

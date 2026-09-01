@@ -1,15 +1,15 @@
 import qrcode
-import os
+from pathlib import Path
 
 # CONFIGURACIÓN
-# Cambia esta URL por la URL real de tu sistema en producción
-BASE_URL = "http://taipiplaya.com"
-TARGET_URL = f"{BASE_URL}/pizarra"
+BASE_URL = "https://administracion.sindicatointegracion.com"
+TARGET_URL = f"{BASE_URL}/reservas"
 
 def generate_reservation_qr():
-    # Asegurar directorio
-    output_dir = r"c:\Users\Once\Documents\trae_projects\sistema_administracion\frontend\public"
-    output_path = os.path.join(output_dir, "QR_RESERVAS_TAIPIPLAYA.png")
+    # Resolver la salida desde el repositorio para que funcione en cualquier equipo.
+    output_dir = Path(__file__).resolve().parents[1] / 'frontend' / 'public'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / 'QR_RESERVAS_TAIPIPLAYA.png'
     
     print(f"Generando QR para: {TARGET_URL}")
     

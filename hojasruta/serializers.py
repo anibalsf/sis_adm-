@@ -5,7 +5,7 @@ from .models import HojaRuta, TurnoSalida
 class HojaRutaSerializer(serializers.ModelSerializer):
     class Meta:
         model = HojaRuta
-        fields = ['id', 'nro', 'fecha_emision', 'fecha_salida', 'afiliado', 'vehiculo', 'ruta', 'agente_parada', 'estado', 'precio', 'archivo_url', 'created_at', 'updated_at']
+        fields = ['id', 'nro', 'fecha_emision', 'fecha_salida', 'hora_salida', 'afiliado', 'vehiculo', 'ruta', 'agente_parada', 'estado', 'precio', 'archivo_url', 'created_at', 'updated_at']
         extra_kwargs = {
             'nro': {'required': False, 'allow_blank': True},
             'agente_parada': {'required': False, 'allow_blank': True}
@@ -71,7 +71,11 @@ class HojaRutaSerializer(serializers.ModelSerializer):
                            f'No puede realizar servicio a "{ruta.nombre}".'
                 })
         
-        if ruta and ruta.nombre.strip().lower() == 'la paz':
+        es_la_paz = ruta and (
+            'la paz' in (ruta.nombre or '').strip().lower() or
+            (ruta.destino or '').strip().lower() == 'la paz'
+        )
+        if es_la_paz:
             if vehiculo and (getattr(vehiculo, 'tipo', '') or '').strip().lower() not in {'minibus', 'ipsum'}:
                 raise serializers.ValidationError({'vehiculo': 'El vehículo no es apto para la ruta La Paz (solo Minibus/Ipsum)'})
         
@@ -97,8 +101,28 @@ class HojaRutaSerializer(serializers.ModelSerializer):
 
 class TurnoSalidaSerializer(serializers.ModelSerializer):
     afiliado_nombre = serializers.ReadOnlyField(source='afiliado.nombre_completo')
+    afiliado_telefono = serializers.ReadOnlyField(source='afiliado.telefono')
     ruta_nombre = serializers.ReadOnlyField(source='ruta.nombre')
+    vehiculo_placa = serializers.SerializerMethodField()
+    vehiculo_tipo = serializers.SerializerMethodField()
 
     class Meta:
         model = TurnoSalida
         fields = '__all__'
+
+    def get_vehiculo_placa(self, obj):
+        """Placa del vehículo activo del afiliado apto para La Paz"""
+        vehiculo = obj.afiliado.vehiculos.filter(
+            tipo__in=['minibus', 'ipsum'],
+            indocumentado=False,
+            estado='activo'
+        ).first()
+        return vehiculo.placa if vehiculo else None
+
+    def get_vehiculo_tipo(self, obj):
+        vehiculo = obj.afiliado.vehiculos.filter(
+            tipo__in=['minibus', 'ipsum'],
+            indocumentado=False,
+            estado='activo'
+        ).first()
+        return vehiculo.tipo if vehiculo else None

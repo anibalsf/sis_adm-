@@ -105,3 +105,26 @@ class WhatsAppService:
         )
         return self.send_message(pago.afiliado.telefono, msg)
 
+    def send_notificacion_nueva_reserva_afiliado(self, reserva):
+        """Notificar al conductor o a la secretaria sobre una nueva reserva"""
+        # Buscamos a quién notificar (prioridad: conductor asignado, si no, un número por defecto de la secretaria)
+        telefono_destino = None
+        if reserva.afiliado and reserva.afiliado.telefono:
+            telefono_destino = reserva.afiliado.telefono
+            
+        if not telefono_destino:
+            # Puedes configurar el número de la secretaria en settings o .env
+            telefono_destino = getattr(settings, 'TELEFONO_SECRETARIA', '70000000') # Placeholder
+
+        msg = (
+            f"🔔 *NUEVA RESERVA (Pizarra Pública)*\n\n"
+            f"👤 Cliente: {reserva.cliente}\n"
+            f"📱 Celular: {reserva.telefono}\n"
+            f"🛣️ Ruta: {reserva.ruta}\n"
+            f"📅 Fecha: {reserva.fecha_viaje}\n"
+            f"💺 Asiento: {reserva.asiento}\n"
+            f"🎟️ Código: {reserva.id}\n\n"
+            f"_Notificación automática del Sistema_"
+        )
+        return self.send_message(telefono_destino, msg)
+

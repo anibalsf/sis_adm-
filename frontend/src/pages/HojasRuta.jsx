@@ -27,7 +27,7 @@ function HojasRuta() {
   const [modalMode, setModalMode] = useState('create')
   const [submitError, setSubmitError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-  const [form, setForm] = useState({ nro: '', fecha_emision: '', fecha_salida: '', afiliado: '', vehiculo: '', ruta: '', agente_parada: '', precio: '' })
+  const [form, setForm] = useState({ nro: '', fecha_emision: '', fecha_salida: '', hora_salida: '', afiliado: '', vehiculo: '', ruta: '', agente_parada: '', precio: '' })
   const [editingId, setEditingId] = useState(null)
 
   // Estados para Listado de Agentes (Afiliados)
@@ -46,6 +46,8 @@ function HojasRuta() {
   const [loadingTurno, setLoadingTurno] = useState(false)
   const [turnosSalida, setTurnosSalida] = useState([])
   const [loadingTurnosSalida, setLoadingTurnosSalida] = useState(false)
+  const [horaProgramacion, setHoraProgramacion] = useState('')
+  const [horasTurno, setHorasTurno] = useState({})
 
   useEffect(() => {
     if (activeTab === 'designaciones') {
@@ -96,9 +98,13 @@ function HojasRuta() {
 
   const handleGenerarProgramacion = async () => {
     if (!window.confirm('¿Desea generar automáticamente la programación de los próximos 30 días para La Paz?')) return
+    if (!horaProgramacion) {
+      alert('Indique la hora de salida antes de generar la programación')
+      return
+    }
     try {
       setLoadingTurnosSalida(true)
-      await api.generarProgramacionSalida()
+      await api.generarProgramacionSalida({ hora_salida: horaProgramacion })
       alert('✅ Programación generada exitosamente')
       loadTurnosSalida()
     } catch (err) {
@@ -117,6 +123,23 @@ function HojasRuta() {
     } catch (err) {
        console.error(err)
        alert('Error al eliminar turno')
+    }
+  }
+
+  const handleUpdateTurnoHora = async (turno) => {
+    const hora = horasTurno[turno.id] ?? turno.hora_salida ?? ''
+    if (hora === (turno.hora_salida || '')) return
+    try {
+      await api.updateTurnoSalida(turno.id, { hora_salida: hora || null })
+      setHorasTurno(prev => {
+        const next = { ...prev }
+        delete next[turno.id]
+        return next
+      })
+      loadTurnosSalida()
+    } catch (err) {
+      console.error(err)
+      alert(err.response?.data?.detail || 'Error al actualizar la hora de salida')
     }
   }
 
@@ -222,7 +245,7 @@ function HojasRuta() {
     setModalMode('create')
 
     // Pre-seleccionar ruta según el tab activo
-    let initialForm = { nro: '', fecha_emision: '', fecha_salida: '', afiliado: '', vehiculo: '', ruta: '', agente_parada: '', precio: '0.00' }
+    let initialForm = { nro: '', fecha_emision: '', fecha_salida: '', hora_salida: '', afiliado: '', vehiculo: '', ruta: '', agente_parada: '', precio: '0.00' }
 
     if (activeTab === 'asignacion-la-paz') {
       const rutaLaPaz = rutas.find(r => (r.nombre || '').toLowerCase().includes('la paz') || (r.destino || '').toLowerCase() === 'la paz')
@@ -246,7 +269,7 @@ function HojasRuta() {
 
   const openEdit = (it) => {
     setModalMode('edit')
-    setForm({ nro: it.nro || '', fecha_emision: it.fecha_emision || '', fecha_salida: it.fecha_salida || '', afiliado: it.afiliado || '', vehiculo: it.vehiculo || '', ruta: it.ruta || '', agente_parada: it.agente_parada || '', precio: String(it.precio || '') })
+    setForm({ nro: it.nro || '', fecha_emision: it.fecha_emision || '', fecha_salida: it.fecha_salida || '', hora_salida: it.hora_salida || '', afiliado: it.afiliado || '', vehiculo: it.vehiculo || '', ruta: it.ruta || '', agente_parada: it.agente_parada || '', precio: String(it.precio || '') })
     setSubmitError('')
     setFieldErrors({})
     setShowModal(true)
@@ -299,6 +322,7 @@ function HojasRuta() {
     const errs = {}
     if (!form.fecha_emision) errs.fecha_emision = 'Requerido'
     if (activeTab !== 'designaciones' && !form.fecha_salida) errs.fecha_salida = 'Requerido'
+    if (activeTab === 'asignacion-la-paz' && !form.hora_salida) errs.hora_salida = 'Requerido'
     if (!form.afiliado) errs.afiliado = 'Requerido'
     if (!form.ruta) errs.ruta = 'Requerido'
     if (activeTab !== 'designaciones' && !form.vehiculo) errs.vehiculo = 'Requerido'
@@ -307,7 +331,10 @@ function HojasRuta() {
     if (form.fecha_emision && form.fecha_salida && form.fecha_salida < form.fecha_emision) errs.fecha_salida = 'Debe ser igual o posterior a emisión'
     const r = rutas.find(rr => String(rr.id) === String(form.ruta))
     const v = vehiculos.find(vv => String(vv.id) === String(form.vehiculo))
-    if (r && (r.nombre || '').toLowerCase() === 'la paz') {
+    if (r && (
+      (r.nombre || '').toLowerCase().includes('la paz') ||
+      (r.destino || '').toLowerCase() === 'la paz'
+    )) {
       const tipo = (v?.tipo || '').toLowerCase()
       if (tipo && !['minibus', 'ipsum'].includes(tipo)) errs.vehiculo = 'Solo Minibus/Ipsum para La Paz'
     }
@@ -326,6 +353,7 @@ function HojasRuta() {
         nro: form.nro,
         fecha_emision: form.fecha_emision,
         fecha_salida: form.fecha_salida || null,
+        hora_salida: form.hora_salida || null,
         afiliado: form.afiliado || null,
         vehiculo: form.vehiculo || null,
         ruta: form.ruta || null,
@@ -857,6 +885,7 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
                     <th>PLACA</th>
                     <th>COLOR</th>
                     <th>FECHA SALIDA</th>
+                    <th>HORA SALIDA</th>
                     <th>PRECIO (BS.)</th>
                     <th>ESTADO</th>
                     <th>ACCIONES</th>
@@ -864,7 +893,7 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
                 </thead>
                 <tbody>
                   {items.length === 0 ? (
-                    <tr><td colSpan="9" style={{ textAlign: 'center', color: '#999', padding: '20px' }}>No hay asignaciones para La Paz</td></tr>
+                     <tr><td colSpan="10" style={{ textAlign: 'center', color: '#999', padding: '20px' }}>No hay asignaciones para La Paz</td></tr>
                   ) : (
                     items.map(item => {
                       const ve = vehiculos.find(v => v.id === item.vehiculo)
@@ -892,6 +921,7 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
                             ) : <span style={{ color: '#aaa' }}>—</span>}
                           </td>
                           <td data-label="Fecha Salida">{item.fecha_salida || item.fecha_emision}</td>
+                          <td data-label="Hora Salida">{item.hora_salida || 'Por confirmar'}</td>
                           <td data-label="Precio">{item.precio}</td>
                           <td data-label="Estado"><span className={`badge badge-${item.estado}`}>{item.estado}</span></td>
                           <td className="actions" data-label="Acciones">
@@ -1048,6 +1078,16 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
                       {fieldErrors.fecha_salida && <div className="error">{Array.isArray(fieldErrors.fecha_salida) ? fieldErrors.fecha_salida[0] : String(fieldErrors.fecha_salida)}</div>}
                     </div>
                   </div>
+
+                  {activeTab === 'asignacion-la-paz' && (
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label htmlFor="hora_salida">Hora de salida *</label>
+                        <input id="hora_salida" name="hora_salida" type="time" value={form.hora_salida} onChange={onChange} required />
+                        {fieldErrors.hora_salida && <div className="error">{Array.isArray(fieldErrors.hora_salida) ? fieldErrors.hora_salida[0] : String(fieldErrors.hora_salida)}</div>}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="form-row">
                     <div className="form-group">
@@ -1255,6 +1295,10 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
                 <h3 style={{ margin: 0, color: '#1a3a5f' }}>📅 Programación de Salidas - Ruta La Paz (Puntero)</h3>
                 <p style={{ color: '#666', fontSize: '0.9rem', margin: '5px 0 0' }}>Días de salida: Lunes, Miércoles, Viernes, Sábado y Domingo (Martes y Jueves excluidos por convenio).</p>
              </div>
+             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1a3a5f', fontWeight: '600' }}>
+                Hora de salida
+                <input type="time" value={horaProgramacion} onChange={e => setHoraProgramacion(e.target.value)} required />
+             </label>
              <button className="btn btn-primary" onClick={handleGenerarProgramacion} disabled={loadingTurnosSalida}>
                 {loadingTurnosSalida ? 'Generando...' : '🔄 Generar Programación 30 días'}
              </button>
@@ -1267,20 +1311,30 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
                           <thead>
                               <tr style={{ backgroundColor: '#e2e8f0' }}>
                                   <th>Fecha</th>
-                                  <th>Socio / Afiliado</th>
-                                  <th>Orden</th>
-                                  <th>Ruta</th>
-                                  <th>Acciones</th>
+                                   <th>Socio / Afiliado</th>
+                                   <th>Hora</th>
+                                   <th>Orden</th>
+                                   <th>Ruta</th>
+                                   <th>Acciones</th>
                               </tr>
                           </thead>
                           <tbody>
                               {turnosSalida.length === 0 ? (
-                                  <tr><td colSpan="5" className="no-data">No hay programación generada para los próximos días</td></tr>
+                                   <tr><td colSpan="6" className="no-data">No hay programación generada para los próximos días</td></tr>
                               ) : turnosSalida.map(turno => (
                                   <tr key={turno.id}>
                                       <td><span style={{ fontWeight: 'bold' }}>{turno.fecha}</span></td>
-                                      <td>{turno.afiliado_nombre}</td>
-                                      <td><span className="badge badge-info">{turno.orden}º Salida</span></td>
+                                       <td>{turno.afiliado_nombre}</td>
+                                       <td>
+                                           <input
+                                               type="time"
+                                               value={horasTurno[turno.id] ?? turno.hora_salida ?? ''}
+                                               onChange={e => setHorasTurno(prev => ({ ...prev, [turno.id]: e.target.value }))}
+                                               onBlur={() => handleUpdateTurnoHora(turno)}
+                                               aria-label={`Hora de salida de ${turno.afiliado_nombre}`}
+                                           />
+                                       </td>
+                                       <td><span className="badge badge-info">{turno.orden}º Salida</span></td>
                                       <td>{turno.ruta_nombre}</td>
                                       <td>
                                           <button className="btn btn-danger btn-sm" onClick={() => handleDeleteTurno(turno.id)}>

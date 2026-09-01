@@ -8,6 +8,7 @@ class HojaRuta(models.Model):
     nro = models.CharField(max_length=30)
     fecha_emision = models.DateField()
     fecha_salida = models.DateField(null=True, blank=True, db_index=True)
+    hora_salida = models.TimeField(null=True, blank=True)
     afiliado = models.ForeignKey(Afiliado, on_delete=models.PROTECT, related_name='hojas_ruta')
     estado = models.CharField(max_length=20, default='emitida', db_index=True)
     precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -82,6 +83,7 @@ class HojaRuta(models.Model):
 
 class TurnoSalida(models.Model):
     fecha = models.DateField(db_index=True)
+    hora_salida = models.TimeField(null=True, blank=True)
     afiliado = models.ForeignKey(Afiliado, on_delete=models.CASCADE, related_name='turnos_salida')
     ruta = models.ForeignKey(Ruta, on_delete=models.CASCADE, related_name='turnos_programados')
     orden = models.PositiveIntegerField(default=1) # Posición en la salida del día (1º, 2º, etc.)

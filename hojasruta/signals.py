@@ -19,6 +19,7 @@ def notificar_asignacion_hoja(sender, instance, created, **kwargs):
             if not telefono:
                 return
             
+            hora_salida = instance.hora_salida.strftime('%H:%M') if instance.hora_salida else 'Por confirmar'
             mensaje = f"""
 🚌 *Nueva Hoja de Ruta Asignada*
 
@@ -29,7 +30,7 @@ Se le ha asignado una nueva hoja de ruta:
 📋 *Hoja #:* {instance.id}
 🗺️ *Ruta:* {instance.ruta.origen} - {instance.ruta.destino}
 📅 *Fecha:* {instance.fecha_emision.strftime('%d/%m/%Y')}
-🕐 *Hora Salida:* {instance.hora_salida.strftime('%H:%M')}
+🕐 *Hora Salida:* {hora_salida}
 🚗 *Vehículo:* {instance.vehiculo.placa if instance.vehiculo else 'Por asignar'}
 
 Por favor, confirme su disponibilidad.

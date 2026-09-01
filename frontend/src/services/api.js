@@ -144,8 +144,13 @@ export const api = {
     
     // Turnos Salida (Puntero La Paz)
     getTurnosSalida: (params) => axios.get('/turnos-salida/', { params }),
-    generarProgramacionSalida: () => axios.post('/turnos-salida/generar_programacion/'),
-    deleteTurnoSalida: (id) => axios.delete(`/turnos-salida/${id}/`),
+    getTurnoLaPazHoy: (fecha) => axios.get(`/turnos-salida/turno_la_paz_hoy/${fecha ? `?fecha=${fecha}` : ''}`),
+    getMovilidadesLaPazHoy: (fecha) => axios.get(`/turnos-salida/movilidades_lapaz_hoy/${fecha ? `?fecha=${fecha}` : ''}`),
+    getQrReservasLaPaz: () => axios.get('/turnos-salida/qr_lapaz/', { responseType: 'blob' }),
+     generarProgramacionSalida: (data) => axios.post('/turnos-salida/generar_programacion/', data),
+     updateTurnoSalida: (id, data) => axios.patch(`/turnos-salida/${id}/`, data),
+     deleteTurnoSalida: (id) => axios.delete(`/turnos-salida/${id}/`),
+
 
 
     // Asistencias
