@@ -31,20 +31,20 @@
 @media print {
     .ticket-cut-line {
         border-top: 1px dashed #000;
-        margin: 2mm auto;
+        margin: 3mm auto;
         color: transparent;
-        width: 80mm;
+        width: 100%;
         height: 1px;
         padding-top: 0;
     }
 
     .ticket-thermal {
         page-break-inside: avoid;
-        page-break-after: auto;
+        page-break-after: always;
         margin: 0 auto;
     }
 
-    /* Asegurar que ambos tickets quepan en una sola hoja */
+    /* Asegurar que ambos tickets quepan en la hoja */
     .tickets-wrapper {
         height: auto !important;
         overflow: visible !important;
@@ -286,7 +286,10 @@
     color: #ef4444;
 }
 
-/* Estilos de impresión */
+/* ============================================================
+   ESTILOS DE IMPRESIÓN - Impresora Térmica Epson TM-T20IV-L
+   Papel 80mm - Ancho imprimible ~72mm
+   ============================================================ */
 @media print {
 
     /* Ocultar elementos que no deben imprimirse */
@@ -308,168 +311,218 @@
         opacity: 0 !important;
     }
 
-    /* Resetear layout principal para impresión */
-    body,
-    html {
+    /* ---- Configuración de página para papel térmico 80mm ---- */
+
+    /* ---- Reset del layout del navegador ---- */
+    html, body {
         background: white !important;
         margin: 0 !important;
         padding: 0 !important;
-        height: auto !important;
         width: 80mm !important;
         max-width: 80mm !important;
+        height: auto !important;
+        font-size: 10pt !important;
     }
 
+    /* ---- Contenedor principal ---- */
     .recibo-container {
         background: white !important;
         padding: 0 !important;
         margin: 0 !important;
+        width: 100% !important;
         min-height: auto !important;
         display: block !important;
+        overflow: visible !important;
     }
 
+    /* ---- Wrapper de tickets ---- */
+    .tickets-wrapper {
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* ---- Ticket térmico principal ---- */
     .ticket-thermal {
-        box-shadow: none !important;
-        border: none !important;
         width: 100% !important;
         max-width: 80mm !important;
-        margin: 0 !important;
-        padding: 0 !important;
         box-sizing: border-box !important;
+        padding: 2mm 2mm !important;    /* Padding lateral para no pegar al borde */
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        font-family: 'Courier New', Courier, monospace !important;
+        font-size: 10pt !important;
+        line-height: 1.35 !important;
+        color: #000 !important;
+        display: block !important;
+        overflow: visible !important;
         page-break-inside: avoid;
         page-break-after: always;
     }
 
-    /* Página para impresora térmica Epson T20IV-L - papel 80mm */
-    @page {
-        size: 80mm auto;
-        margin: 0;
-    }
-}
-
-/* Ajustes de impresión para impresora térmica Epson T20IV-L - papel 80mm */
-@media print {
-    .ticket-thermal {
-        padding: 0 !important;
-        font-size: 9pt !important;
-        line-height: 1.2 !important;
-        width: 100% !important;
-        max-width: 80mm !important;
-        margin: 0 !important;
-        display: block !important;
-        overflow: hidden !important;
-    }
-
+    /* ---- Etiqueta Original/Copia ---- */
     .ticket-copy-label {
-        font-size: 8pt;
-        margin-bottom: 2px;
-        padding: 1px;
+        font-size: 9pt !important;
+        font-weight: bold !important;
+        text-align: center !important;
+        margin-bottom: 3px !important;
+        padding: 2px !important;
+        border: 1px dashed #000 !important;
     }
 
+    /* ---- Encabezado ---- */
     .ticket-header {
-        margin-bottom: 2px;
+        text-align: center !important;
+        margin-bottom: 4px !important;
     }
 
     .ticket-title {
-        font-size: 9pt;
-        line-height: 1.1;
+        font-size: 10pt !important;
+        font-weight: bold !important;
+        line-height: 1.2 !important;
     }
 
     .ticket-doc-type {
-        font-size: 10pt;
-        margin-top: 2px;
+        font-size: 12pt !important;
+        font-weight: bold !important;
+        margin-top: 3px !important;
     }
 
     .ticket-doc-number {
-        font-size: 9.5pt;
+        font-size: 11pt !important;
+        font-weight: bold !important;
     }
 
+    /* ---- Separadores ---- */
     .ticket-separator {
-        margin: 2px 0;
+        margin: 3px 0 !important;
+        border-top: 1px solid #000 !important;
     }
 
     .ticket-separator-dots {
-        margin: 2px 0;
+        margin: 3px 0 !important;
+        border-top: 1px dotted #000 !important;
     }
 
+    /* ---- Metadatos (Fecha, Lugar) ---- */
     .ticket-meta {
-        margin: 3px 0;
+        margin: 4px 0 !important;
     }
 
     .ticket-row {
-        margin: 1px 0;
-        font-size: 8.5pt;
+        display: flex !important;
+        justify-content: space-between !important;
+        margin: 2px 0 !important;
+        font-size: 9.5pt !important;
+        gap: 4px !important;
+        width: 100% !important;
+    }
+
+    /* ---- Cuerpo ---- */
+    .ticket-body {
+        margin: 4px 0 !important;
     }
 
     .ticket-item {
-        margin: 3px 0;
+        margin: 4px 0 !important;
     }
 
     .ticket-label {
-        font-size: 8.5pt;
+        font-size: 9pt !important;
+        font-weight: bold !important;
+        margin-bottom: 1px !important;
     }
 
     .ticket-value {
-        font-size: 9pt;
+        font-size: 10pt !important;
+        font-weight: bold !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
     }
 
+    /* ---- Detalle hoja de ruta ---- */
     .ticket-detalle {
-        margin: 3px 0;
+        margin: 4px 0 !important;
     }
 
     .ticket-detalle-title {
-        font-size: 8.5pt;
+        font-size: 9pt !important;
+        font-weight: bold !important;
+        margin-bottom: 2px !important;
     }
 
+    /* ---- Total ---- */
     .ticket-total-section {
-        margin-top: 4px;
+        margin-top: 5px !important;
     }
 
     .ticket-total {
-        font-size: 11pt;
-        padding: 2px 0;
+        display: flex !important;
+        justify-content: space-between !important;
+        font-size: 13pt !important;
+        font-weight: bold !important;
+        padding: 3px 0 !important;
     }
 
+    /* ---- Código QR ---- */
     .ticket-qr {
-        margin: 4px 0;
-        padding: 0;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        margin: 6px 0 !important;
+        padding: 2px 0 !important;
     }
 
     .ticket-qr svg {
-        width: 64px !important;
-        height: 64px !important;
+        width: 90px !important;
+        height: 90px !important;
     }
 
+    /* ---- Footer ---- */
     .ticket-footer {
-        margin-top: 4px;
+        margin-top: 5px !important;
+        text-align: center !important;
     }
 
     .ticket-firma {
-        margin: 5px 0;
+        margin: 6px 0 !important;
+        text-align: center !important;
     }
 
     .firma-line {
-        border-top-width: 1px;
-        margin-bottom: 2px;
+        border-top: 1px solid #000 !important;
+        width: 65% !important;
+        margin: 0 auto 3px auto !important;
     }
 
     .firma-text {
-        font-size: 8pt;
+        font-size: 9pt !important;
+        font-weight: bold !important;
     }
 
     .ticket-thanks {
-        font-size: 8.5pt;
-        margin: 3px 0;
+        font-size: 9.5pt !important;
+        font-weight: bold !important;
+        margin: 4px 0 !important;
     }
 
     .ticket-info {
-        font-size: 7.5pt;
-        margin-top: 1px;
+        font-size: 8pt !important;
+        margin-top: 2px !important;
     }
 
+    /* ---- Línea de corte entre copias ---- */
     .ticket-cut-line {
-        margin: 4mm auto;
-        width: 100%;
-        border-top: 1px dashed #000;
+        margin: 3mm 0 !important;
+        width: 100% !important;
+        border-top: 1px dashed #000 !important;
+        color: transparent !important;
+        height: 1px !important;
+        display: block !important;
     }
 }
 
@@ -742,6 +795,17 @@
         size: letter;
         margin: 5mm 0mm;
         /* Quitamos márgenes laterales forzados para que el margin:auto del recibo funcione */
+    }
+}
+
+/* @page por defecto para impresora térmica Epson TM-T20IV-L 80mm.
+   NOTA: Si va a imprimir en Formato Carta/A4, cambie la configuración
+   de la impresora desde el diálogo de impresión del navegador.
+   Para ticket térmico: seleccione la impresora Epson TM-T20IV-L con papel 80mm */
+@media print {
+    @page {
+        size: 80mm auto;
+        margin: 2mm 1mm;
     }
 }
 

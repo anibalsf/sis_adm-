@@ -39,7 +39,14 @@ function ReciboPago() {
     }, [id, type]);
 
     const handlePrint = () => {
+        // Agregar clase al body para controlar @page según el layout activo
+        document.body.classList.remove('print-thermal', 'print-standard');
+        document.body.classList.add(layout === 'thermal' ? 'print-thermal' : 'print-standard');
         window.print();
+        // Limpiar clase después de imprimir
+        setTimeout(() => {
+            document.body.classList.remove('print-thermal', 'print-standard');
+        }, 1000);
     };
 
     const handleBack = () => {
@@ -179,7 +186,7 @@ function ReciboPago() {
             <div className="ticket-qr">
                 <QRCodeSVG
                     value={`${isIngreso ? 'INGRESO' : 'EGRESO'}:${id}|FECHA:${data.fecha_pago || data.fecha}|MONTO:${data.monto}|TIPO:${data.tipo_pago_nombre || ''}`}
-                    size={100}
+                    size={120}
                     level="M"
                 />
             </div>
