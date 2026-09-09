@@ -6,6 +6,8 @@
 # Python
 # ------------------------------------------------------------------------------
 *.py[cod]
+db.sqlite3-shm
+db.sqlite3-wal
 *$py.class
 *.so
 .Python

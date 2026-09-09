@@ -564,7 +564,7 @@ function PagosYEgresos() {
                                                 <td className="actions" style={{textDecoration: 'none'}}>
                                                     {pago.estado !== 'anulado' && (
                                                         <>
-                                                            <button className="btn-icon btn-print" onClick={() => handleDescargarRecibo(pago.id, pago)} title="Descargar Recibo"><IconPrinter /></button>
+                                                            <button className="btn-icon btn-print" onClick={() => navigate(`/recibo/ingreso/${pago.id}`)} title="Ver / Imprimir Recibo"><IconPrinter /></button>
                                                             <button className="btn-icon btn-edit" onClick={() => openEdit(pago)} title="Editar"><IconPencil /></button>
                                                             <button className="btn-icon btn-delete" onClick={() => handleAnularPago(pago.id)} title="Anular"><IconBan /></button>
                                                         </>
@@ -611,7 +611,7 @@ function PagosYEgresos() {
                                                 <td className="actions" style={{textDecoration: 'none'}}>
                                                     {egreso.estado !== 'anulado' && (
                                                         <>
-                                                            <button className="btn-icon btn-print" onClick={() => handleDescargarComprobanteEgreso(egreso.id)} title="Imprimir Comprobante"><IconPrinter /></button>
+                                                            <button className="btn-icon btn-print" onClick={() => navigate(`/recibo/egreso/${egreso.id}`)} title="Ver / Imprimir Comprobante"><IconPrinter /></button>
                                                             {egreso.estado === 'pendiente_aprobacion' && ['Directiva', 'Secretaria', 'Sistemas'].includes(user?.role) && (
                                                                 <button className="btn-icon btn-success" onClick={() => handleAprobarEgreso(egreso.id)} title="Aprobar Egreso" style={{color: 'green'}}><IconCheck /></button>
                                                             )}
