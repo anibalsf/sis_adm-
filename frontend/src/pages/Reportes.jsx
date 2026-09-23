@@ -3,6 +3,7 @@ import ReportesFinancieros from './ReportesFinancieros';
 import ReportesOperativos from './ReportesOperativos';
 import ReporteDeudas from './ReporteDeudas';
 import ReportesAvanzados from './ReportesAvanzados';
+import ReportePorCategoria from './ReportePorCategoria';
 import './ReportesFinancieros.css';
 
 function Reportes() {
@@ -35,6 +36,12 @@ function Reportes() {
                 >
                     🚀 Reportes Avanzados
                 </button>
+                <button
+                    className={`tab-button ${tabActiva === 'categoria' ? 'active' : ''}`}
+                    onClick={() => setTabActiva('categoria')}
+                >
+                    🎯 Por Categoría
+                </button>
             </div>
 
             <div className="tab-content">
@@ -42,6 +49,7 @@ function Reportes() {
                 {tabActiva === 'operativos' && <ReportesOperativos />}
                 {tabActiva === 'deudas' && <ReporteDeudas />}
                 {tabActiva === 'avanzados' && <ReportesAvanzados />}
+                {tabActiva === 'categoria' && <ReportePorCategoria />}
             </div>
         </div>
     );

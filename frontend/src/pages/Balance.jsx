@@ -111,20 +111,63 @@ function Balance() {
                         </div>
                     </div>
 
-                    {/* Desglose de Egresos por Categoría */}
-                    {balance.egresos_por_tipo && balance.egresos_por_tipo.length > 0 && (
+                    {/* Desglose de Ingresos por Categoría */}
+                    {balance.ingresos_por_tipo && balance.ingresos_por_tipo.length > 0 && (
                         <div className="card categories-card" style={{ marginTop: '2rem' }}>
-                            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                📊 Desglose de Gastos por Categoría
+                            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px', color: '#2e7d32' }}>
+                                💰 Desglose de Ingresos por Categoría / Tipo de Pago
                             </h2>
                             <div className="table-container">
                                 <table className="data-table">
                                     <thead>
                                         <tr>
-                                            <th>Categoría</th>
-                                            <th>Cantidad Serv.</th>
+                                            <th>Categoría / Tipo de Ingreso</th>
+                                            <th>Cantidad Pagos</th>
                                             <th style={{ textAlign: 'right' }}>Total (Bs.)</th>
-                                            <th style={{ textAlign: 'right' }}>%</th>
+                                            <th style={{ textAlign: 'right' }}>% del Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {balance.ingresos_por_tipo.map((item, idx) => (
+                                            <tr key={idx}>
+                                                <td><strong>{item.tipo}</strong></td>
+                                                <td>{item.count}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#2e7d32' }}>
+                                                    {item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </td>
+                                                <td style={{ textAlign: 'right' }}>
+                                                    {((item.total / (balance.total_ingresos || 1)) * 100).toFixed(1)}%
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr style={{ background: 'rgba(46, 125, 50, 0.08)', fontWeight: 'bold' }}>
+                                            <td>TOTAL INGRESOS</td>
+                                            <td>{balance.count_ingresos}</td>
+                                            <td style={{ textAlign: 'right', color: '#2e7d32' }}>Bs. {balance.total_ingresos.toFixed(2)}</td>
+                                            <td style={{ textAlign: 'right' }}>100%</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Desglose de Egresos por Categoría */}
+                    {balance.egresos_por_tipo && balance.egresos_por_tipo.length > 0 && (
+                        <div className="card categories-card" style={{ marginTop: '2rem' }}>
+                            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px', color: '#c62828' }}>
+                                📤 Desglose de Gastos (Egresos) por Categoría
+                            </h2>
+                            <div className="table-container">
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Categoría / Tipo de Egreso</th>
+                                            <th>Cantidad Gastos</th>
+                                            <th style={{ textAlign: 'right' }}>Total (Bs.)</th>
+                                            <th style={{ textAlign: 'right' }}>% del Total</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -132,7 +175,7 @@ function Balance() {
                                             <tr key={idx}>
                                                 <td><strong>{item.tipo}</strong></td>
                                                 <td>{item.count}</td>
-                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                                <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#c62828' }}>
                                                     {item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
@@ -142,10 +185,10 @@ function Balance() {
                                         ))}
                                     </tbody>
                                     <tfoot>
-                                        <tr style={{ background: 'rgba(0,0,0,0.05)', fontWeight: 'bold' }}>
-                                            <td>TOTAL</td>
+                                        <tr style={{ background: 'rgba(198, 40, 40, 0.08)', fontWeight: 'bold' }}>
+                                            <td>TOTAL EGRESOS</td>
                                             <td>{balance.count_egresos}</td>
-                                            <td style={{ textAlign: 'right' }}>Bs. {balance.total_egresos.toFixed(2)}</td>
+                                            <td style={{ textAlign: 'right', color: '#c62828' }}>Bs. {balance.total_egresos.toFixed(2)}</td>
                                             <td style={{ textAlign: 'right' }}>100%</td>
                                         </tr>
                                     </tfoot>

@@ -16,6 +16,68 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 
 
+def _get_decimal_param(request, name):
+    value = request.GET.get(name)
+    if value in [None, '']:
+        return None
+    try:
+        from decimal import Decimal
+        value = Decimal(str(value))
+    except Exception:
+        return None
+    return value if value >= 0 else None
+
+
+def _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio=None, fecha_fin=None, estados=None):
+    pagos = Pago.objects.filter(tipo_pago=tipo_pago).select_related('afiliado', 'tipo_pago')
+    if estados:
+        pagos = pagos.filter(estado__in=estados)
+    if fecha_inicio:
+        pagos = pagos.filter(fecha_pago__gte=fecha_inicio)
+    if fecha_fin:
+        pagos = pagos.filter(fecha_pago__lte=fecha_fin)
+    return pagos
+
+
+def _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio=None, fecha_fin=None, monto_esperado=None):
+    pagos_completados = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado'])
+    pagos_pendientes = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['pendiente'])
+    pagos_no_validos = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['anulado', 'cancelado'])
+
+    afiliados_pagaron_ids = set(pagos_completados.values_list('afiliado_id', flat=True))
+    afiliados_pagaron_ids.discard(None)
+    total_recaudado = pagos_completados.aggregate(total=Sum('monto'))['total'] or 0
+    total_pendiente_revision = pagos_pendientes.aggregate(total=Sum('monto'))['total'] or 0
+    total_no_valido = pagos_no_validos.aggregate(total=Sum('monto'))['total'] or 0
+
+    duplicados = pagos_completados.values('afiliado_id').annotate(cantidad=Count('id')).filter(cantidad__gt=1)
+    count_pagaron = len(afiliados_pagaron_ids)
+    count_pendientes = max(total_activos - count_pagaron, 0)
+    total_esperado = monto_esperado * total_activos if monto_esperado is not None else None
+    monto_faltante = max(total_esperado - total_recaudado, 0) if total_esperado is not None else None
+
+    return {
+        'categoria': {
+            'id': tipo_pago.id,
+            'nombre': tipo_pago.nombre,
+        },
+        'total_recaudado': float(total_recaudado),
+        'monto_esperado_por_afiliado': float(monto_esperado) if monto_esperado is not None else None,
+        'total_esperado': float(total_esperado) if total_esperado is not None else None,
+        'monto_faltante': float(monto_faltante) if monto_faltante is not None else None,
+        'total_afiliados_activos': total_activos,
+        'count_pagaron': count_pagaron,
+        'count_pendientes': count_pendientes,
+        'count_pagos_completados': pagos_completados.count(),
+        'count_pagos_pendientes_revision': pagos_pendientes.count(),
+        'total_pagos_pendientes_revision': float(total_pendiente_revision),
+        'count_pagos_anulados_cancelados': pagos_no_validos.count(),
+        'total_pagos_anulados_cancelados': float(total_no_valido),
+        'count_afiliados_con_pago_duplicado': duplicados.count(),
+        'porcentaje_cobertura': round((count_pagaron / total_activos * 100), 1) if total_activos > 0 else 0,
+    }
+
+
 class AfiliadosMorososView(APIView):
     """
     Reporte de afiliados con pagos pendientes.
@@ -406,6 +468,14 @@ class BalanceView(APIView):
         
         saldo = total_ingresos - total_egresos
         
+        # Calcular ingresos por tipo para el desglose
+        ingresos_por_tipo = pagos_query.values(
+            'tipo_pago__nombre'
+        ).annotate(
+            total=Sum('monto'),
+            count=Count('id')
+        ).order_by('-total')
+
         # Calcular gastos por tipo para el desglose
         egresos_por_tipo = egresos_query.values(
             'tipo_pago__nombre'
@@ -420,9 +490,16 @@ class BalanceView(APIView):
             'total_egresos': float(total_egresos),
             'count_egresos': count_egresos,
             'saldo': float(saldo),
+            'ingresos_por_tipo': [
+                {
+                    'tipo': item['tipo_pago__nombre'] or 'Otros Ingresos',
+                    'total': float(item['total']),
+                    'count': item['count']
+                } for item in ingresos_por_tipo
+            ],
             'egresos_por_tipo': [
                 {
-                    'tipo': item['tipo_pago__nombre'] or 'Otros',
+                    'tipo': item['tipo_pago__nombre'] or 'Otros Gastos',
                     'total': float(item['total']),
                     'count': item['count']
                 } for item in egresos_por_tipo
@@ -596,7 +673,7 @@ class TransaccionesView(APIView):
             pagos_query = pagos_query.filter(fecha_pago__lte=fecha_fin)
         
         # Obtener egresos
-        egresos_query = Egreso.objects.all()
+        egresos_query = Egreso.objects.select_related('tipo_pago').all()
         if fecha_inicio:
             egresos_query = egresos_query.filter(fecha__gte=fecha_inicio)
         if fecha_fin:
@@ -620,7 +697,7 @@ class TransaccionesView(APIView):
                 'fecha': str(egreso.fecha) if egreso.fecha else 'N/A',
                 'tipo': 'EGRESO',
                 'afiliado': None,
-                'tipo_pago': None,
+                'tipo_pago': egreso.tipo_pago.nombre if egreso.tipo_pago else 'General',
                 'descripcion': egreso.descripcion or 'Egreso',
                 'monto': float(egreso.monto or 0)
             })
@@ -834,7 +911,7 @@ class TransaccionesCSVView(APIView):
         fecha_fin = request.GET.get('fecha_fin')
         
         pagos = Pago.objects.select_related('afiliado', 'tipo_pago').all()
-        egresos = Egreso.objects.all()
+        egresos = Egreso.objects.select_related('tipo_pago').all()
         
         if fecha_inicio:
             pagos = pagos.filter(fecha_pago__gte=fecha_inicio)
@@ -866,7 +943,7 @@ class TransaccionesCSVView(APIView):
                 e.fecha.strftime('%Y-%m-%d') if e.fecha else '',
                 'EGRESO',
                 'N/A',
-                'N/A',
+                e.tipo_pago.nombre if e.tipo_pago else 'General',
                 e.descripcion or 'Egreso',
                 float(e.monto)
             ])
@@ -897,7 +974,7 @@ class TransaccionesPDFView(APIView):
         fecha_fin = request.GET.get('fecha_fin')
         
         pagos = Pago.objects.select_related('afiliado', 'tipo_pago').all()
-        egresos = Egreso.objects.all()
+        egresos = Egreso.objects.select_related('tipo_pago').all()
         
         if fecha_inicio:
             pagos = pagos.filter(fecha_pago__gte=fecha_inicio)
@@ -942,7 +1019,7 @@ class TransaccionesPDFView(APIView):
                 e.fecha.strftime('%Y-%m-%d') if e.fecha else '',
                 'EGRESO',
                 'N/A',
-                'N/A',
+                e.tipo_pago.nombre if e.tipo_pago else 'General',
                 e.descripcion or 'Egreso',
                 float(e.monto)
             ])
@@ -1064,3 +1141,755 @@ class ReportesOperativosPDFView(APIView):
         doc.build(elements)
         buffer.seek(0)
         return HttpResponse(buffer, content_type='application/pdf')
+
+
+class ReporteCategoriaView(APIView):
+    """
+    Reporte de cobertura por categoría de ingreso.
+    Muestra qué afiliados pagaron y cuáles faltan en un tipo de pago dado.
+    URL: GET /api/reportes/por-categoria/?tipo_pago_id=6&fecha_inicio=2026-01-01&fecha_fin=2026-12-31
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from tesoreria.models import Pago, TipoPago
+        from afiliados.models import Afiliado
+
+        tipo_pago_id = request.GET.get('tipo_pago_id')
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+        todas = request.GET.get('todas') in ['1', 'true', 'True', 'si', 'todos']
+        monto_esperado = _get_decimal_param(request, 'monto_esperado')
+
+        afiliados_activos_query = Afiliado.objects.filter(estado='activo', is_active=True)
+        total_afiliados_activos = afiliados_activos_query.count()
+
+        if todas:
+            categorias = []
+            total_general_recaudado = 0
+            total_general_esperado = 0
+            total_general_faltante = 0
+            total_pagos_pendientes_revision = 0
+            total_afiliados_con_pago_duplicado = 0
+            for tipo_pago in TipoPago.objects.filter(tipo='ingreso').order_by('nombre'):
+                resumen = _resumen_categoria(Pago, tipo_pago, total_afiliados_activos, fecha_inicio, fecha_fin, monto_esperado)
+                total_general_recaudado += resumen['total_recaudado']
+                total_pagos_pendientes_revision += resumen['count_pagos_pendientes_revision']
+                total_afiliados_con_pago_duplicado += resumen['count_afiliados_con_pago_duplicado']
+                if resumen['total_esperado'] is not None:
+                    total_general_esperado += resumen['total_esperado']
+                    total_general_faltante += resumen['monto_faltante']
+                categorias.append(resumen)
+
+            return Response({
+                'modo': 'todas',
+                'filtros': {
+                    'fecha_inicio': fecha_inicio,
+                    'fecha_fin': fecha_fin,
+                },
+                'resumen': {
+                    'total_recaudado': float(total_general_recaudado),
+                    'monto_esperado_por_afiliado': float(monto_esperado) if monto_esperado is not None else None,
+                    'total_esperado': float(total_general_esperado) if monto_esperado is not None else None,
+                    'monto_faltante': float(total_general_faltante) if monto_esperado is not None else None,
+                    'total_categorias': len(categorias),
+                    'total_afiliados_activos': total_afiliados_activos,
+                    'total_pagos_pendientes_revision': total_pagos_pendientes_revision,
+                    'total_afiliados_con_pago_duplicado': total_afiliados_con_pago_duplicado,
+                },
+                'categorias': categorias,
+            })
+
+        if not tipo_pago_id:
+            # Sin filtro: listar todos los tipos de ingreso disponibles
+            tipos = TipoPago.objects.filter(tipo='ingreso').values('id', 'nombre').order_by('nombre')
+            return Response({'tipos_pago': list(tipos)})
+
+        try:
+            tipo_pago = TipoPago.objects.get(id=tipo_pago_id, tipo='ingreso')
+        except TipoPago.DoesNotExist:
+            return Response({'error': 'Categoría de ingreso no encontrada'}, status=404)
+
+        # Filtrar pagos completados del tipo seleccionado
+        pagos_query = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado'])
+
+        # Afiliados que pagaron (puede haber más de un pago por afiliado)
+        afiliados_pagaron_ids = set(pagos_query.values_list('afiliado_id', flat=True))
+
+        resumen = _resumen_categoria(Pago, tipo_pago, total_afiliados_activos, fecha_inicio, fecha_fin, monto_esperado)
+
+        # Detalle de pagos realizados
+        pagos_detalle = []
+        for pago in pagos_query.order_by('afiliado__apellidos', 'afiliado__nombres', 'fecha_pago'):
+            pagos_detalle.append({
+                'afiliado_id': pago.afiliado_id,
+                'nombre': pago.afiliado.nombre_completo if pago.afiliado else 'N/A',
+                'ci': pago.afiliado.ci if pago.afiliado else '',
+                'telefono': pago.afiliado.telefono if pago.afiliado else '',
+                'fecha_pago': str(pago.fecha_pago),
+                'monto': float(pago.monto),
+                'estado': pago.estado,
+                'nro_recibo': pago.nro_recibo,
+            })
+
+        pagos_revision_detalle = []
+        pagos_revision_query = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['pendiente', 'anulado', 'cancelado'])
+        for pago in pagos_revision_query.order_by('estado', 'afiliado__apellidos', 'afiliado__nombres', 'fecha_pago'):
+            pagos_revision_detalle.append({
+                'afiliado_id': pago.afiliado_id,
+                'nombre': pago.afiliado.nombre_completo if pago.afiliado else 'N/A',
+                'ci': pago.afiliado.ci if pago.afiliado else '',
+                'telefono': pago.afiliado.telefono if pago.afiliado else '',
+                'fecha_pago': str(pago.fecha_pago),
+                'monto': float(pago.monto),
+                'estado': pago.estado,
+                'nro_recibo': pago.nro_recibo,
+            })
+
+        duplicados_detalle = []
+        duplicados = pagos_query.values('afiliado_id').annotate(cantidad=Count('id'), total=Sum('monto')).filter(cantidad__gt=1)
+        for item in duplicados:
+            afiliado = Afiliado.objects.filter(id=item['afiliado_id']).first()
+            duplicados_detalle.append({
+                'afiliado_id': item['afiliado_id'],
+                'nombre': afiliado.nombre_completo if afiliado else 'N/A',
+                'ci': afiliado.ci if afiliado else '',
+                'cantidad_pagos': item['cantidad'],
+                'total_pagado': float(item['total'] or 0),
+            })
+
+        # Afiliados activos que NO pagaron
+        afiliados_pendientes = afiliados_activos_query.exclude(id__in=afiliados_pagaron_ids).order_by('apellidos', 'nombres')
+
+        pendientes_detalle = []
+        for af in afiliados_pendientes:
+            pendientes_detalle.append({
+                'afiliado_id': af.id,
+                'nombre': af.nombre_completo,
+                'ci': af.ci,
+                'telefono': af.telefono,
+            })
+
+        return Response({
+            'categoria': {
+                'id': tipo_pago.id,
+                'nombre': tipo_pago.nombre,
+            },
+            'filtros': {
+                'fecha_inicio': fecha_inicio,
+                'fecha_fin': fecha_fin,
+            },
+            'resumen': resumen,
+            'pagaron': pagos_detalle,
+            'pendientes': pendientes_detalle,
+            'pagos_revision': pagos_revision_detalle,
+            'duplicados': duplicados_detalle,
+        })
+
+
+class ReporteCategoriaPDFView(APIView):
+    """
+    Exporta el reporte de cobertura por categoría a PDF.
+    URL: GET /api/reportes/por-categoria/pdf/?tipo_pago_id=6&fecha_inicio=...&fecha_fin=...
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from tesoreria.models import Pago, TipoPago
+        from afiliados.models import Afiliado
+        from reportlab.lib.units import cm
+
+        tipo_pago_id = request.GET.get('tipo_pago_id')
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+        todas = request.GET.get('todas') in ['1', 'true', 'True', 'si', 'todos']
+        monto_esperado = _get_decimal_param(request, 'monto_esperado')
+
+        afiliados_activos = Afiliado.objects.filter(estado='activo', is_active=True)
+        total_activos = afiliados_activos.count()
+
+        if todas:
+            rows = []
+            total_general = 0
+            total_esperado_general = 0
+            total_faltante_general = 0
+            for tipo_pago in TipoPago.objects.filter(tipo='ingreso').order_by('nombre'):
+                resumen = _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio, fecha_fin, monto_esperado)
+                total_general += resumen['total_recaudado']
+                if resumen['total_esperado'] is not None:
+                    total_esperado_general += resumen['total_esperado']
+                    total_faltante_general += resumen['monto_faltante']
+                rows.append(resumen)
+
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), topMargin=1.5*cm, bottomMargin=1.5*cm,
+                                    leftMargin=1.5*cm, rightMargin=1.5*cm)
+            elements = []
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle('TitleAll', parent=styles['Title'], fontSize=16, alignment=TA_CENTER,
+                                         textColor=colors.HexColor('#1a237e'), spaceAfter=8)
+            subtitle_style = ParagraphStyle('SubAll', parent=styles['Normal'], fontSize=10,
+                                            alignment=TA_CENTER, textColor=colors.HexColor('#555'), spaceAfter=10)
+
+            elements.append(Paragraph("SINDICATO MIXTO \"INTEGRACIÓN TAIPIPLAYA\"", title_style))
+            elements.append(Paragraph("Reporte General por Categorías de Ingreso", subtitle_style))
+            periodo = f"Período: {fecha_inicio or 'inicio'} al {fecha_fin or 'hoy'}"
+            elements.append(Paragraph(periodo, subtitle_style))
+            elements.append(Paragraph(f"Total recaudado: Bs. {float(total_general):,.2f}", subtitle_style))
+            if monto_esperado is not None:
+                elements.append(Paragraph(f"Total esperado: Bs. {float(total_esperado_general):,.2f} | Faltante estimado: Bs. {float(total_faltante_general):,.2f}", subtitle_style))
+            elements.append(Spacer(1, 8))
+
+            data = [['Categoría', 'Ya cancelaron', 'Faltan pagar', 'Cobertura', 'Recaudado', 'Esperado', 'Faltante', 'Revisión']]
+            for r in rows:
+                data.append([
+                    r['categoria']['nombre'],
+                    str(r['count_pagaron']),
+                    str(r['count_pendientes']),
+                    f"{r['porcentaje_cobertura']}%",
+                    f"{r['total_recaudado']:,.2f}",
+                    f"{r['total_esperado']:,.2f}" if r['total_esperado'] is not None else '-',
+                    f"{r['monto_faltante']:,.2f}" if r['monto_faltante'] is not None else '-',
+                    str(r['count_pagos_pendientes_revision'] + r['count_pagos_anulados_cancelados'] + r['count_afiliados_con_pago_duplicado']),
+                ])
+            data.append(['TOTAL', '', '', '', f"Bs. {float(total_general):,.2f}", f"Bs. {float(total_esperado_general):,.2f}" if monto_esperado is not None else '-', f"Bs. {float(total_faltante_general):,.2f}" if monto_esperado is not None else '-', ''])
+
+            table = Table(data, repeatRows=1, colWidths=[5.7*cm, 2.5*cm, 2.5*cm, 2.1*cm, 2.7*cm, 2.7*cm, 2.7*cm, 2.1*cm])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (-1, 1), (-1, -1), 'RIGHT'),
+                ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f5f7ff')]),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e8f5e9')),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            elements.append(table)
+            doc.build(elements)
+            buffer.seek(0)
+            response = HttpResponse(buffer, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename=reporte_categorias_{datetime.now().strftime("%Y%m%d")}.pdf'
+            return response
+
+        if not tipo_pago_id:
+            return Response({'error': 'Se requiere tipo_pago_id'}, status=400)
+
+        try:
+            tipo_pago = TipoPago.objects.get(id=tipo_pago_id, tipo='ingreso')
+        except TipoPago.DoesNotExist:
+            return Response({'error': 'Categoría no encontrada'}, status=404)
+
+        pagos_query = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado'])
+
+        afiliados_pagaron_ids = set(pagos_query.values_list('afiliado_id', flat=True))
+        afiliados_pagaron_ids.discard(None)
+        total_recaudado = pagos_query.aggregate(total=Sum('monto'))['total'] or 0
+        resumen = _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio, fecha_fin, monto_esperado)
+
+        afiliados_pendientes = afiliados_activos.exclude(id__in=afiliados_pagaron_ids).order_by('apellidos', 'nombres')
+
+        count_pagaron = len(afiliados_pagaron_ids)
+        count_pendientes = afiliados_pendientes.count()
+        cobertura = round(count_pagaron / total_activos * 100, 1) if total_activos > 0 else 0
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm,
+                                leftMargin=1.5*cm, rightMargin=1.5*cm)
+        elements = []
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=16, alignment=TA_CENTER,
+                                     textColor=colors.HexColor('#1a237e'), spaceAfter=6)
+        subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10,
+                                        alignment=TA_CENTER, textColor=colors.HexColor('#555'), spaceAfter=12)
+        heading_style = ParagraphStyle('Head', parent=styles['Heading2'], fontSize=12,
+                                       textColor=colors.HexColor('#1a237e'), spaceBefore=16, spaceAfter=6)
+
+        elements.append(Paragraph("SINDICATO MIXTO \"INTEGRACIÓN TAIPIPLAYA\"", title_style))
+        elements.append(Paragraph(f"Reporte de Cobertura — {tipo_pago.nombre}", subtitle_style))
+
+        periodo = ""
+        if fecha_inicio or fecha_fin:
+            periodo = f"Período: {fecha_inicio or '...'} al {fecha_fin or '...'}"
+        else:
+            periodo = "Período: Todo el historial"
+        elements.append(Paragraph(periodo, subtitle_style))
+        elements.append(Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", subtitle_style))
+        elements.append(Spacer(1, 8))
+
+        # Resumen tarjetas
+        resumen_data = [
+            ['Total Recaudado', 'Total Esperado', 'Monto Faltante', 'Ya Pagaron', 'Faltan Pagar', 'Cobertura'],
+            [
+                f"Bs. {float(total_recaudado):,.2f}",
+                f"Bs. {resumen['total_esperado']:,.2f}" if resumen['total_esperado'] is not None else '-',
+                f"Bs. {resumen['monto_faltante']:,.2f}" if resumen['monto_faltante'] is not None else '-',
+                str(count_pagaron),
+                str(count_pendientes),
+                f"{cobertura}%"
+            ]
+        ]
+        resumen_table = Table(resumen_data, colWidths=[2.8*cm, 2.8*cm, 2.8*cm, 2.6*cm, 2.6*cm, 2.4*cm])
+        resumen_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (0, 1), colors.HexColor('#e8f5e9')),
+            ('BACKGROUND', (2, 1), (2, 1), colors.HexColor('#e8f5e9')),
+            ('BACKGROUND', (3, 1), (3, 1), colors.HexColor('#ffebee')),
+            ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 1), (-1, 1), 10),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, 1), [colors.white]),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(resumen_table)
+        elements.append(Spacer(1, 10))
+
+        revision_data = [
+            ['Indicador de Revisión', 'Cantidad', 'Monto (Bs)'],
+            ['Pagos pendientes', str(resumen['count_pagos_pendientes_revision']), f"{resumen['total_pagos_pendientes_revision']:,.2f}"],
+            ['Pagos anulados/cancelados', str(resumen['count_pagos_anulados_cancelados']), f"{resumen['total_pagos_anulados_cancelados']:,.2f}"],
+            ['Afiliados con pago duplicado', str(resumen['count_afiliados_con_pago_duplicado']), '-'],
+        ]
+        revision_table = Table(revision_data, colWidths=[8*cm, 4*cm, 4*cm])
+        revision_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#455a64')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(revision_table)
+        elements.append(Spacer(1, 10))
+
+        # Tabla de pendientes
+        elements.append(Paragraph(f"❌ Afiliados que FALTAN Pagar ({count_pendientes})", heading_style))
+        if count_pendientes > 0:
+            pend_data = [['#', 'Nombre Completo', 'C.I.', 'Teléfono']]
+            for i, af in enumerate(afiliados_pendientes, 1):
+                pend_data.append([str(i), af.nombre_completo, af.ci, af.telefono or '-'])
+            pend_table = Table(pend_data, colWidths=[1*cm, 8*cm, 3.5*cm, 3.5*cm])
+            pend_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#c62828')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fff8f8')]),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            elements.append(pend_table)
+        else:
+            elements.append(Paragraph("✅ ¡Todos los afiliados activos han pagado!", styles['Normal']))
+
+        elements.append(Spacer(1, 16))
+
+        # Tabla de pagados
+        elements.append(Paragraph(f"✅ Afiliados que YA Pagaron ({count_pagaron} pagos)", heading_style))
+        pagos_ord = pagos_query.order_by('afiliado__apellidos', 'afiliado__nombres', 'fecha_pago')
+        if pagos_ord.count() > 0:
+            pag_data = [['#', 'Nombre Completo', 'C.I.', 'Fecha Pago', 'Monto (Bs)']]
+            for i, pago in enumerate(pagos_ord, 1):
+                nombre = pago.afiliado.nombre_completo if pago.afiliado else 'N/A'
+                ci = pago.afiliado.ci if pago.afiliado else '-'
+                pag_data.append([
+                    str(i),
+                    nombre,
+                    ci,
+                    pago.fecha_pago.strftime('%d/%m/%Y') if pago.fecha_pago else '-',
+                    f"{float(pago.monto):,.2f}"
+                ])
+            # Fila total
+            pag_data.append(['', 'TOTAL RECAUDADO', '', '', f"Bs. {float(total_recaudado):,.2f}"])
+            pag_table = Table(pag_data, colWidths=[1*cm, 7*cm, 3*cm, 3*cm, 2*cm])
+            pag_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e7d32')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                ('ALIGN', (-1, 0), (-1, -1), 'RIGHT'),
+                ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f1f8e9')]),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e8f5e9')),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            elements.append(pag_table)
+
+        doc.build(elements)
+        buffer.seek(0)
+        nombre_archivo = f"reporte_{tipo_pago.nombre.replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename={nombre_archivo}'
+        return response
+
+
+class ReporteCategoriaExcelView(APIView):
+    """
+    Exporta el reporte de cobertura por categoría a Excel.
+    URL: GET /api/reportes/por-categoria/excel/?tipo_pago_id=6&fecha_inicio=...&fecha_fin=...
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from tesoreria.models import Pago, TipoPago
+        from afiliados.models import Afiliado
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+        tipo_pago_id = request.GET.get('tipo_pago_id')
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+        todas = request.GET.get('todas') in ['1', 'true', 'True', 'si', 'todos']
+        monto_esperado = _get_decimal_param(request, 'monto_esperado')
+
+        afiliados_activos = Afiliado.objects.filter(estado='activo', is_active=True)
+        total_activos = afiliados_activos.count()
+
+        if todas:
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Resumen por Categoria"
+
+            header_fill = PatternFill("solid", fgColor="1a237e")
+            header_font = Font(color="FFFFFF", bold=True)
+            total_fill = PatternFill("solid", fgColor="e8f5e9")
+            center = Alignment(horizontal='center', vertical='center')
+
+            ws.merge_cells('A1:K1')
+            ws['A1'] = "REPORTE GENERAL POR CATEGORÍAS DE INGRESO"
+            ws['A1'].font = Font(color="FFFFFF", bold=True, size=14)
+            ws['A1'].fill = header_fill
+            ws['A1'].alignment = center
+
+            ws.merge_cells('A2:K2')
+            ws['A2'] = f"Período: {fecha_inicio or 'inicio'} al {fecha_fin or 'hoy'}"
+            ws['A2'].alignment = center
+
+            ws.merge_cells('A3:K3')
+            ws['A3'] = f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            ws['A3'].alignment = center
+
+            ws.append([])
+            ws.append(['Categoría', 'Ya Cancelaron', 'Faltan Pagar', 'Afiliados Activos', '% Cobertura', 'Total Recaudado (Bs)', 'Total Esperado (Bs)', 'Monto Faltante (Bs)', 'Pagos Pendientes', 'Anulados/Cancelados', 'Duplicados'])
+            for cell in ws[5]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = center
+
+            total_general = 0
+            total_esperado_general = 0
+            total_faltante_general = 0
+            for tipo_pago in TipoPago.objects.filter(tipo='ingreso').order_by('nombre'):
+                resumen = _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio, fecha_fin, monto_esperado)
+                total_general += resumen['total_recaudado']
+                if resumen['total_esperado'] is not None:
+                    total_esperado_general += resumen['total_esperado']
+                    total_faltante_general += resumen['monto_faltante']
+
+                ws.append([
+                    tipo_pago.nombre,
+                    resumen['count_pagaron'],
+                    resumen['count_pendientes'],
+                    resumen['total_afiliados_activos'],
+                    f"{resumen['porcentaje_cobertura']}%",
+                    resumen['total_recaudado'],
+                    resumen['total_esperado'] if resumen['total_esperado'] is not None else '',
+                    resumen['monto_faltante'] if resumen['monto_faltante'] is not None else '',
+                    resumen['count_pagos_pendientes_revision'],
+                    resumen['count_pagos_anulados_cancelados'],
+                    resumen['count_afiliados_con_pago_duplicado'],
+                ])
+
+            total_row = ws.max_row + 1
+            ws.cell(row=total_row, column=1, value='TOTAL GENERAL')
+            ws.cell(row=total_row, column=6, value=float(total_general))
+            if monto_esperado is not None:
+                ws.cell(row=total_row, column=7, value=float(total_esperado_general))
+                ws.cell(row=total_row, column=8, value=float(total_faltante_general))
+            for col in range(1, 12):
+                ws.cell(row=total_row, column=col).font = Font(bold=True)
+                ws.cell(row=total_row, column=col).fill = total_fill
+
+            for col_letter, width in [('A', 38), ('B', 16), ('C', 16), ('D', 18), ('E', 14), ('F', 20), ('G', 20), ('H', 20), ('I', 18), ('J', 20), ('K', 14)]:
+                ws.column_dimensions[col_letter].width = width
+
+            ws_pag = wb.create_sheet("Pagos Completados")
+            ws_pag.append(['Categoría', 'Afiliado', 'C.I.', 'Teléfono', 'Fecha Pago', 'Monto (Bs)', 'Nro. Recibo'])
+            for cell in ws_pag[1]:
+                cell.fill = PatternFill("solid", fgColor="2e7d32")
+                cell.font = Font(color="FFFFFF", bold=True)
+                cell.alignment = center
+
+            ws_faltan = wb.create_sheet("Faltan Pagar")
+            ws_faltan.append(['Categoría', 'Afiliado', 'C.I.', 'Teléfono'])
+            for cell in ws_faltan[1]:
+                cell.fill = PatternFill("solid", fgColor="c62828")
+                cell.font = Font(color="FFFFFF", bold=True)
+                cell.alignment = center
+
+            ws_rev = wb.create_sheet("Revision")
+            ws_rev.append(['Tipo Alerta', 'Categoría', 'Afiliado', 'C.I.', 'Fecha Pago', 'Monto (Bs)', 'Estado', 'Nro. Recibo', 'Detalle'])
+            for cell in ws_rev[1]:
+                cell.fill = PatternFill("solid", fgColor="455a64")
+                cell.font = Font(color="FFFFFF", bold=True)
+                cell.alignment = center
+
+            for tipo_pago in TipoPago.objects.filter(tipo='ingreso').order_by('nombre'):
+                pagos_completados = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado'])
+                afiliados_pagaron_ids = set(pagos_completados.values_list('afiliado_id', flat=True))
+                afiliados_pagaron_ids.discard(None)
+
+                for pago in pagos_completados.order_by('afiliado__apellidos', 'afiliado__nombres', 'fecha_pago'):
+                    ws_pag.append([
+                        tipo_pago.nombre,
+                        pago.afiliado.nombre_completo if pago.afiliado else 'N/A',
+                        pago.afiliado.ci if pago.afiliado else '',
+                        pago.afiliado.telefono if pago.afiliado else '',
+                        pago.fecha_pago.strftime('%d/%m/%Y') if pago.fecha_pago else '',
+                        float(pago.monto),
+                        pago.nro_recibo or '',
+                    ])
+
+                for af in afiliados_activos.exclude(id__in=afiliados_pagaron_ids).order_by('apellidos', 'nombres'):
+                    ws_faltan.append([tipo_pago.nombre, af.nombre_completo, af.ci, af.telefono or ''])
+
+                pagos_revision = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['pendiente', 'anulado', 'cancelado'])
+                for pago in pagos_revision.order_by('estado', 'afiliado__apellidos', 'afiliado__nombres'):
+                    ws_rev.append([
+                        'Pago pendiente/anulado',
+                        tipo_pago.nombre,
+                        pago.afiliado.nombre_completo if pago.afiliado else 'N/A',
+                        pago.afiliado.ci if pago.afiliado else '',
+                        pago.fecha_pago.strftime('%d/%m/%Y') if pago.fecha_pago else '',
+                        float(pago.monto),
+                        pago.estado,
+                        pago.nro_recibo or '',
+                        pago.motivo_anulacion or '',
+                    ])
+
+                duplicados = pagos_completados.values('afiliado_id').annotate(cantidad=Count('id'), total=Sum('monto')).filter(cantidad__gt=1)
+                for item in duplicados:
+                    afiliado = Afiliado.objects.filter(id=item['afiliado_id']).first()
+                    ws_rev.append([
+                        'Posible duplicado',
+                        tipo_pago.nombre,
+                        afiliado.nombre_completo if afiliado else 'N/A',
+                        afiliado.ci if afiliado else '',
+                        '',
+                        float(item['total'] or 0),
+                        'completado',
+                        '',
+                        f"{item['cantidad']} pagos completados para el mismo afiliado",
+                    ])
+
+            for sheet in [ws_pag, ws_faltan, ws_rev]:
+                for column_cells in sheet.columns:
+                    column_letter = column_cells[0].column_letter
+                    sheet.column_dimensions[column_letter].width = min(max(len(str(cell.value or '')) for cell in column_cells) + 2, 45)
+
+            response = HttpResponse(
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename=reporte_categorias_{datetime.now().strftime("%Y%m%d")}.xlsx'
+            wb.save(response)
+            return response
+
+        if not tipo_pago_id:
+            return Response({'error': 'Se requiere tipo_pago_id'}, status=400)
+
+        try:
+            tipo_pago = TipoPago.objects.get(id=tipo_pago_id, tipo='ingreso')
+        except TipoPago.DoesNotExist:
+            return Response({'error': 'Categoría no encontrada'}, status=404)
+
+        pagos_query = Pago.objects.filter(
+            tipo_pago=tipo_pago,
+            estado='completado'
+        ).select_related('afiliado')
+        if fecha_inicio:
+            pagos_query = pagos_query.filter(fecha_pago__gte=fecha_inicio)
+        if fecha_fin:
+            pagos_query = pagos_query.filter(fecha_pago__lte=fecha_fin)
+
+        afiliados_pagaron_ids = set(pagos_query.values_list('afiliado_id', flat=True))
+        total_recaudado = pagos_query.aggregate(total=Sum('monto'))['total'] or 0
+
+        afiliados_pendientes = afiliados_activos.exclude(id__in=afiliados_pagaron_ids).order_by('apellidos', 'nombres')
+
+        count_pagaron = len(afiliados_pagaron_ids)
+        cobertura = round(count_pagaron / total_activos * 100, 1) if total_activos > 0 else 0
+        resumen = _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio, fecha_fin, monto_esperado)
+
+        wb = Workbook()
+
+        # --- Hoja 1: Resumen ---
+        ws_res = wb.active
+        ws_res.title = "Resumen"
+
+        header_fill = PatternFill("solid", fgColor="1a237e")
+        header_font = Font(color="FFFFFF", bold=True, size=12)
+        green_fill = PatternFill("solid", fgColor="2e7d32")
+        red_fill = PatternFill("solid", fgColor="c62828")
+        green_light = PatternFill("solid", fgColor="e8f5e9")
+        red_light = PatternFill("solid", fgColor="ffebee")
+        bold_font = Font(bold=True)
+        center = Alignment(horizontal='center', vertical='center')
+
+        ws_res.merge_cells('A1:E1')
+        ws_res['A1'] = f"REPORTE DE COBERTURA — {tipo_pago.nombre.upper()}"
+        ws_res['A1'].font = Font(color="FFFFFF", bold=True, size=14)
+        ws_res['A1'].fill = header_fill
+        ws_res['A1'].alignment = center
+
+        periodo_txt = f"Período: {fecha_inicio or 'inicio'} al {fecha_fin or 'hoy'}"
+        ws_res.merge_cells('A2:E2')
+        ws_res['A2'] = periodo_txt
+        ws_res['A2'].alignment = center
+
+        ws_res.merge_cells('A3:E3')
+        ws_res['A3'] = f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        ws_res['A3'].alignment = center
+
+        ws_res.append([])
+        ws_res.append(['INDICADOR', 'VALOR'])
+        ws_res['A5'].font = bold_font
+        ws_res['B5'].font = bold_font
+        ws_res['A5'].fill = header_fill
+        ws_res['A5'].font = Font(color="FFFFFF", bold=True)
+        ws_res['B5'].fill = header_fill
+        ws_res['B5'].font = Font(color="FFFFFF", bold=True)
+
+        resumen_rows = [
+            ('Total Afiliados Activos', total_activos),
+            ('Afiliados que Pagaron', count_pagaron),
+            ('Afiliados Pendientes', total_activos - count_pagaron),
+            ('% Cobertura', f"{cobertura}%"),
+            ('Total Recaudado (Bs)', float(total_recaudado)),
+            ('Monto Esperado por Afiliado (Bs)', resumen['monto_esperado_por_afiliado'] or ''),
+            ('Total Esperado (Bs)', resumen['total_esperado'] or ''),
+            ('Monto Faltante (Bs)', resumen['monto_faltante'] or ''),
+            ('Pagos Pendientes de Revisión', resumen['count_pagos_pendientes_revision']),
+            ('Pagos Anulados/Cancelados', resumen['count_pagos_anulados_cancelados']),
+            ('Afiliados con Posible Duplicado', resumen['count_afiliados_con_pago_duplicado']),
+        ]
+        for label, val in resumen_rows:
+            ws_res.append([label, val])
+
+        ws_res.column_dimensions['A'].width = 30
+        ws_res.column_dimensions['B'].width = 20
+
+        # --- Hoja 2: Ya Pagaron ---
+        ws_pag = wb.create_sheet("Ya Pagaron")
+        ws_pag.append(['#', 'Nombre Completo', 'C.I.', 'Teléfono', 'Fecha de Pago', 'Monto (Bs)', 'Estado', 'Nro. Recibo'])
+        for cell in ws_pag[1]:
+            cell.fill = green_fill
+            cell.font = Font(color="FFFFFF", bold=True)
+            cell.alignment = center
+
+        for i, pago in enumerate(pagos_query.order_by('afiliado__apellidos', 'afiliado__nombres', 'fecha_pago'), 1):
+            ws_pag.append([
+                i,
+                pago.afiliado.nombre_completo if pago.afiliado else 'N/A',
+                pago.afiliado.ci if pago.afiliado else '-',
+                pago.afiliado.telefono if pago.afiliado else '-',
+                pago.fecha_pago.strftime('%d/%m/%Y') if pago.fecha_pago else '-',
+                float(pago.monto),
+                pago.estado,
+                pago.nro_recibo or '-',
+            ])
+
+        # Fila de total
+        total_row = ws_pag.max_row + 1
+        ws_pag.cell(row=total_row, column=1, value='TOTAL')
+        ws_pag.cell(row=total_row, column=6, value=float(total_recaudado))
+        for col in range(1, 9):
+            ws_pag.cell(row=total_row, column=col).font = bold_font
+            ws_pag.cell(row=total_row, column=col).fill = green_light
+
+        for col_letter, width in [('A', 5), ('B', 35), ('C', 15), ('D', 15), ('E', 15), ('F', 15), ('G', 15), ('H', 12)]:
+            ws_pag.column_dimensions[col_letter].width = width
+
+        # --- Hoja 3: Pendientes ---
+        ws_pend = wb.create_sheet("Pendientes")
+        ws_pend.append(['#', 'Nombre Completo', 'C.I.', 'Teléfono'])
+        for cell in ws_pend[1]:
+            cell.fill = red_fill
+            cell.font = Font(color="FFFFFF", bold=True)
+            cell.alignment = center
+
+        for i, af in enumerate(afiliados_pendientes, 1):
+            ws_pend.append([i, af.nombre_completo, af.ci, af.telefono or '-'])
+            if i % 2 == 0:
+                for col in range(1, 5):
+                    ws_pend.cell(row=i + 1, column=col).fill = red_light
+
+        for col_letter, width in [('A', 5), ('B', 35), ('C', 15), ('D', 15)]:
+            ws_pend.column_dimensions[col_letter].width = width
+
+        # --- Hoja 4: Revisión ---
+        ws_rev = wb.create_sheet("Revision")
+        ws_rev.append(['Tipo Alerta', 'Nombre Completo', 'C.I.', 'Fecha Pago', 'Monto (Bs)', 'Estado', 'Nro. Recibo', 'Detalle'])
+        for cell in ws_rev[1]:
+            cell.fill = PatternFill("solid", fgColor="455a64")
+            cell.font = Font(color="FFFFFF", bold=True)
+            cell.alignment = center
+
+        pagos_revision = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['pendiente', 'anulado', 'cancelado'])
+        for pago in pagos_revision.order_by('estado', 'afiliado__apellidos', 'afiliado__nombres'):
+            ws_rev.append([
+                'Pago pendiente/anulado',
+                pago.afiliado.nombre_completo if pago.afiliado else 'N/A',
+                pago.afiliado.ci if pago.afiliado else '',
+                pago.fecha_pago.strftime('%d/%m/%Y') if pago.fecha_pago else '',
+                float(pago.monto),
+                pago.estado,
+                pago.nro_recibo or '',
+                pago.motivo_anulacion or '',
+            ])
+
+        duplicados = pagos_query.values('afiliado_id').annotate(cantidad=Count('id'), total=Sum('monto')).filter(cantidad__gt=1)
+        for item in duplicados:
+            afiliado = Afiliado.objects.filter(id=item['afiliado_id']).first()
+            ws_rev.append([
+                'Posible duplicado',
+                afiliado.nombre_completo if afiliado else 'N/A',
+                afiliado.ci if afiliado else '',
+                '',
+                float(item['total'] or 0),
+                'completado',
+                '',
+                f"{item['cantidad']} pagos completados para el mismo afiliado",
+            ])
+
+        for col_letter, width in [('A', 24), ('B', 35), ('C', 15), ('D', 15), ('E', 15), ('F', 15), ('G', 12), ('H', 45)]:
+            ws_rev.column_dimensions[col_letter].width = width
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        nombre_archivo = f"cobertura_{tipo_pago.nombre.replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename={nombre_archivo}'
+        wb.save(response)
+        return response

@@ -31,7 +31,10 @@ from reportes.views import (
     TransaccionesCSVView,
     TransaccionesPDFView,
     ReportesOperativosCSVView,
-    ReportesOperativosPDFView
+    ReportesOperativosPDFView,
+    ReporteCategoriaView,
+    ReporteCategoriaPDFView,
+    ReporteCategoriaExcelView,
 )
 from reportes.views_advanced import (
     RentabilidadRutasView,
@@ -120,6 +123,11 @@ urlpatterns = [
     path('api/reportes/rutas-rentables/', RutasRentablesView.as_view()),
     path('api/reportes/ocupacion-historica/', OcupacionHistoricaView.as_view()),
     path('api/reportes/afiliados-morosos/pdf/', AfiliadosMorososPDFView.as_view()),
+    
+    # Reporte de Cobertura por Categoría de Ingreso
+    path('api/reportes/por-categoria/', ReporteCategoriaView.as_view(), name='reporte-por-categoria'),
+    path('api/reportes/por-categoria/pdf/', ReporteCategoriaPDFView.as_view(), name='reporte-por-categoria-pdf'),
+    path('api/reportes/por-categoria/excel/', ReporteCategoriaExcelView.as_view(), name='reporte-por-categoria-excel'),
     
     # Autenticación
     path('api/auth/register', RegisterView.as_view()),

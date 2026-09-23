@@ -345,19 +345,63 @@ function ReportesFinancieros() {
                         </div>
                     )}
 
-                    {/* Gráficos de Pastel */}
+                    {/* Gráficos de Pastel con Desglose por Categoría */}
                     <div className="pie-charts">
                         {datosPieIngresos && (
                             <div className="chart-card pie-chart">
-                                <h3>Distribución de Ingresos por Tipo</h3>
+                                <h3>Distribución de Ingresos por Tipo / Categoría</h3>
                                 <Pie options={opcionesPie} data={datosPieIngresos} />
+                                {datosPorTipo?.ingresos?.length > 0 && (
+                                    <div style={{ marginTop: '1.25rem', width: '100%', overflowX: 'auto' }}>
+                                        <table style={{ width: '100%', fontSize: '0.875rem', borderCollapse: 'collapse' }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#2d3748', background: '#f7fafc' }}>
+                                                    <th style={{ textAlign: 'left', padding: '6px 8px' }}>Categoría</th>
+                                                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>Total (Bs)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {datosPorTipo.ingresos.map((item, idx) => (
+                                                    <tr key={idx} style={{ borderBottom: '1px solid #edf2f7' }}>
+                                                        <td style={{ padding: '6px 8px', fontWeight: '500' }}>{item.tipo}</td>
+                                                        <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#2e7d32', padding: '6px 8px' }}>
+                                                            Bs. {Number(item.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         )}
 
                         {datosPieEgresos && (
                             <div className="chart-card pie-chart">
-                                <h3>Distribución de Egresos por Tipo</h3>
+                                <h3>Distribución de Egresos por Tipo / Categoría</h3>
                                 <Pie options={opcionesPie} data={datosPieEgresos} />
+                                {datosPorTipo?.egresos?.length > 0 && (
+                                    <div style={{ marginTop: '1.25rem', width: '100%', overflowX: 'auto' }}>
+                                        <table style={{ width: '100%', fontSize: '0.875rem', borderCollapse: 'collapse' }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#2d3748', background: '#f7fafc' }}>
+                                                    <th style={{ textAlign: 'left', padding: '6px 8px' }}>Categoría</th>
+                                                    <th style={{ textAlign: 'right', padding: '6px 8px' }}>Total (Bs)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {datosPorTipo.egresos.map((item, idx) => (
+                                                    <tr key={idx} style={{ borderBottom: '1px solid #edf2f7' }}>
+                                                        <td style={{ padding: '6px 8px', fontWeight: '500' }}>{item.tipo}</td>
+                                                        <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#c62828', padding: '6px 8px' }}>
+                                                            Bs. {Number(item.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
