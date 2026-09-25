@@ -1,9 +1,24 @@
+from django.db.models import Count, Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.contenttypes.models import ContentType
+from .constants import MODULOS, nombre_modulo
 from .models import CambioEstado, LogAuditoria
 from .serializers import CambioEstadoSerializer, LogAuditoriaSerializer
+
+
+def paginar(qs, request, default_size=50):
+    try:
+        page = max(int(request.GET.get('page', 1)), 1)
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        page_size = min(max(int(request.GET.get('page_size', default_size)), 1), 200)
+    except (TypeError, ValueError):
+        page_size = default_size
+    inicio = (page - 1) * page_size
+    return qs[inicio:inicio + page_size], page, page_size
 
 
 class HistorialView(APIView):
@@ -29,13 +44,11 @@ class HistorialView(APIView):
             qs = qs.filter(timestamp__lte=hasta)
         if usuario_id:
             qs = qs.filter(usuario_id=usuario_id)
-        page = int(request.GET.get('page', 1))
-        page_size = int(request.GET.get('page_size', 20))
-        start = (page - 1) * page_size
-        end = start + page_size
-        items = qs[start:end]
+        items, page, page_size = paginar(qs, request, default_size=20)
         return Response({
             'count': qs.count(),
+            'page': page,
+            'page_size': page_size,
             'results': CambioEstadoSerializer(items, many=True).data,
         })
 
@@ -48,9 +61,11 @@ class BitacoraView(APIView):
         usuario_id = request.GET.get('usuario_id')
         tabla = request.GET.get('tabla')
         accion = request.GET.get('accion')
-        
+        modulo = request.GET.get('modulo')
+        busqueda = (request.GET.get('q') or '').strip()
+
         qs = LogAuditoria.objects.all().select_related('usuario').order_by('-fecha_hora')
-        
+
         if desde:
             qs = qs.filter(fecha_hora__gte=desde)
         if hasta:
@@ -60,15 +75,44 @@ class BitacoraView(APIView):
         if tabla:
             qs = qs.filter(tabla=tabla.lower())
         if accion:
-            qs = qs.filter(accion=accion)
-            
-        page = int(request.GET.get('page', 1))
-        page_size = int(request.GET.get('page_size', 50))
-        start = (page - 1) * page_size
-        end = start + page_size
-        items = qs[start:end]
-        
+            qs = qs.filter(accion__in=[a for a in accion.split(',') if a])
+        if modulo:
+            qs = qs.filter(app_label__in=[m for m in modulo.split(',') if m])
+        if busqueda:
+            qs = qs.filter(
+                Q(descripcion__icontains=busqueda)
+                | Q(tabla__icontains=busqueda)
+                | Q(objeto_id__icontains=busqueda)
+                | Q(usuario__username__icontains=busqueda)
+            )
+
+        count = qs.count()
+        items, page, page_size = paginar(qs, request)
+
+        # Módulos que realmente tienen movimientos (el filtro se arma con datos, no a mano)
+        modulos = [
+            {
+                'app_label': row['app_label'],
+                'nombre': nombre_modulo(row['app_label']),
+                'total': row['total'],
+            }
+            for row in LogAuditoria.objects.values('app_label').annotate(total=Count('id')).order_by('-total')
+        ]
+
+        resumen_accion = {
+            row['accion']: row['total']
+            for row in LogAuditoria.objects.values('accion').annotate(total=Count('id'))
+        }
+
         return Response({
-            'count': qs.count(),
+            'count': count,
+            'page': page,
+            'page_size': page_size,
+            'modulos': modulos,
+            'resumen': {
+                'total': LogAuditoria.objects.count(),
+                'por_accion': resumen_accion,
+                'sin_usuario': LogAuditoria.objects.filter(usuario__isnull=True).count(),
+            },
             'results': LogAuditoriaSerializer(items, many=True).data,
         })

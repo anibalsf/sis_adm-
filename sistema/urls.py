@@ -87,8 +87,12 @@ urlpatterns = [
     path('api/encomiendas/', include('encomiendas.urls')),  # Encomiendas y Paquetería
     path('api/dashboard', ReportesOperativosView.as_view()), # Usamos Operativos como dashboard base
     # path('dashboard', DashboardHTMLView.as_view()),  # Comentado
+    # Con y sin slash final: el frontend llama '/bitacora/' y sin él la ruta
+    # caía en el catch-all del SPA y devolvía el index.html en vez de JSON.
     path('api/historial', HistorialView.as_view()),
+    path('api/historial/', HistorialView.as_view()),
     path('api/bitacora', BitacoraView.as_view()),
+    path('api/bitacora/', BitacoraView.as_view()),
     
     # Recibos
     path('api/pagos/<int:pk>/recibo/', ReciboView.as_view(), name='pago-recibo'),

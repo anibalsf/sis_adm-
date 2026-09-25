@@ -6,4 +6,8 @@ class HistorialConfig(AppConfig):
     name = 'historial'
 
     def ready(self):
-        import historial.signals  # noqa
+        from .signals import conectar_signals
+
+        # La bitácora se conecta a todos los modelos de todos los módulos para
+        # que ningún cambio quede fuera del registro.
+        conectar_signals()

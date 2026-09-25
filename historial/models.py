@@ -31,10 +31,12 @@ class LogAuditoria(models.Model):
 
     usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     accion = models.CharField(max_length=20, choices=ACCION_CHOICES)
+    app_label = models.CharField(max_length=50, blank=True, default='', db_index=True)  # Módulo: tesoreria, hojasruta...
     tabla = models.CharField(max_length=50)  # Nombre del modelo
     objeto_id = models.CharField(max_length=50, null=True, blank=True)
     descripcion = models.TextField()
     cambios = models.JSONField(null=True, blank=True)  # {'campo': {'antes': 'x', 'despues': 'y'}}
+    cambios_labels = models.JSONField(null=True, blank=True)  # {'campo': 'Nombre legible del campo'}
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     fecha_hora = models.DateTimeField(auto_now_add=True)
 

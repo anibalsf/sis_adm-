@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import CambioEstado, LogAuditoria
+from .constants import nombre_modulo
+
 
 class CambioEstadoSerializer(serializers.ModelSerializer):
     username = serializers.ReadOnlyField(source='usuario.username')
@@ -9,8 +11,8 @@ class CambioEstadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = CambioEstado
         fields = [
-            'id', 'content_type', 'object_id', 'model_name', 
-            'content_object_str', 'estado_anterior', 'estado_nuevo', 
+            'id', 'content_type', 'object_id', 'model_name',
+            'content_object_str', 'estado_anterior', 'estado_nuevo',
             'usuario', 'username', 'timestamp'
         ]
 
@@ -20,20 +22,25 @@ class CambioEstadoSerializer(serializers.ModelSerializer):
     def get_content_object_str(self, obj):
         return str(obj.content_object) if obj.content_object else f"ID: {obj.object_id}"
 
+
 class LogAuditoriaSerializer(serializers.ModelSerializer):
     username = serializers.ReadOnlyField(source='usuario.username')
     full_name = serializers.SerializerMethodField()
     accion_display = serializers.CharField(source='get_accion_display', read_only=True)
+    modulo_display = serializers.SerializerMethodField()
 
     class Meta:
         model = LogAuditoria
         fields = [
-            'id', 'usuario', 'username', 'full_name', 'accion', 
-            'accion_display', 'tabla', 'objeto_id', 'descripcion', 
-            'cambios', 'ip_address', 'fecha_hora'
+            'id', 'usuario', 'username', 'full_name', 'accion',
+            'accion_display', 'app_label', 'modulo_display', 'tabla', 'objeto_id',
+            'descripcion', 'cambios', 'cambios_labels', 'ip_address', 'fecha_hora'
         ]
 
     def get_full_name(self, obj):
         if obj.usuario:
             return f"{obj.usuario.first_name} {obj.usuario.last_name}".strip() or obj.usuario.username
         return "Sistema"
+
+    def get_modulo_display(self, obj):
+        return nombre_modulo(obj.app_label) or obj.tabla.title()
