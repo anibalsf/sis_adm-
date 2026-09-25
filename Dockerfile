@@ -49,5 +49,6 @@ RUN python manage.py collectstatic --noinput
 # Puerto expuesto
 EXPOSE 8000
 
-# Comando para iniciar con Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "sistema.wsgi:application"]
+# Aplicar migraciones pendientes antes de iniciar (railway.json usa Dockerfile, por lo que
+# la línea 'release:' del Procfile no se ejecuta)
+CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn --bind 0.0.0.0:8000 sistema.wsgi:application"]
