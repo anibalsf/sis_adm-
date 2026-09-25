@@ -25,11 +25,33 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-w-aud#lx#x5s=8$4t(%tsz03#bvpt9ol=-n#22*z&f*0jqx!-4')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
-
 # Environment (development, staging, production)
 ENVIRONMENT = config('ENVIRONMENT', default='development')
+
+# SECURITY WARNING: don't run with debug turned on in production!
+# El valor por defecto es False a propósito: con DEBUG=True cualquier visitante
+# ve el traceback completo (rutas del servidor, código y configuración) en cada 500.
+DEBUG = config('DEBUG', default=False, cast=bool)
+
+if DEBUG and ENVIRONMENT in ('production', 'staging'):
+    import warnings
+
+    warnings.warn(
+        f"DEBUG=True con ENVIRONMENT={ENVIRONMENT}: los errores exponen el traceback "
+        "completo a cualquier visitante. En producción pon DEBUG=False en el .env.",
+        RuntimeWarning,
+    )
+
+if not DEBUG and SECRET_KEY.startswith('django-insecure-'):
+    import warnings
+
+    warnings.warn(
+        "SECRET_KEY es la clave insegura por defecto de Django: con ella se pueden "
+        "firmar sesiones y tokens falsos. Genera una con "
+        "`python -c \"from django.core.management.utils import get_random_secret_key; "
+        'print(get_random_secret_key())\'` y ponla en el .env.',
+        RuntimeWarning,
+    )
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv())
 
@@ -429,13 +451,13 @@ if os.name != 'nt':
 
 if not DEBUG:
     # Producción - Configuraciones de seguridad estrictas
-    SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
-    SECURE_HSTS_SECONDS = 31536000  # 1 año
+    SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)  # 1 año
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
  
