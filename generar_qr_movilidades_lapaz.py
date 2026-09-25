@@ -1,7 +1,7 @@
 """
-Script para generar el QR de Movilidades de Turno a La Paz.
-Al escanear, el pasajero verá: nombre completo, placa y teléfono
-de las movilidades (ipsum y minibus) de turno para hacer la reserva.
+Script para generar el QR de la oficina para Las movilidades de La Paz.
+Al escanear, el pasajero verá: nombre completo, placa, color y hora de salida
+de las movilidades (ipsum y minibus) de turno.
 
 Ejecutar: python generar_qr_movilidades_lapaz.py
 """
@@ -10,9 +10,9 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 
 def generate_qr_movilidades():
-    # URL pública exacta para el QR de reservas.
+    # URL pública exacta para el QR de la oficina.
     base_url = "https://administracion.sindicatointegracion.com"
-    url = f"{base_url}/reservas"
+    url = f"{base_url}/movilidades-lapaz"
 
     print(f"Generando QR para: {url}")
 
@@ -75,8 +75,8 @@ def generate_qr_movilidades():
         font_sub   = font_title
 
     # Texto de instrucción
-    title_text = "📱 RESERVA TU PASAJE A LA PAZ"
-    sub_text   = "Escanea para ver afiliado, placa, celular y hora"
+    title_text = "📱 PASAJES A LA PAZ"
+    sub_text   = "Escanea para ver nombre, placa, color y hora de salida"
 
     # Calcular posición centrada del texto
     text_y = qr_h + padding * 2 - 5
@@ -88,8 +88,9 @@ def generate_qr_movilidades():
     final.save(output_path)
     print(f"\n[OK] QR generado: '{output_path}'")
     print(f"     URL: {url}")
-    print("\nPega este QR en la oficina o en la parada para que los pasajeros")
-    print("escaneen y vean las movilidades de turno con telefono para reservar.")
+    print("\nPega este QR en la oficina para que los pasajeros escaneen y")
+    print("vean la movilidad asignada (ipsum o minibus) con nombre, placa,")
+    print("color y hora de salida.")
 
 
 

@@ -135,6 +135,27 @@
     margin-top: 0.3rem;
 }
 
+.mlp-btn-reservar {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--mlp-green);
+    color: #062b21;
+    padding: 0.85rem 1.8rem;
+    border-radius: 50px;
+    text-decoration: none;
+    font-weight: 800;
+    font-size: 1rem;
+    box-shadow: 0 6px 24px rgba(16,185,129,0.35);
+    transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
+}
+
+.mlp-btn-reservar:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.05);
+    box-shadow: 0 10px 30px rgba(16,185,129,0.45);
+}
+
 /* ── MAIN ─────────────────────────────────────── */
 .mlp-main {
     flex: 1;
@@ -435,6 +456,45 @@
     color: #f1f5f9;
     letter-spacing: 0.12em;
     font-variant-numeric: tabular-nums;
+}
+
+/* ── CARD COLOR DE LA MOVILIDAD ───────────────────── */
+.mlp-card-color {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--card-border, rgba(255,255,255,0.15));
+    border-radius: 10px;
+    padding: 0.5rem 1rem;
+    width: fit-content;
+}
+
+.mlp-color-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: var(--mlp-muted);
+    text-transform: uppercase;
+}
+
+.mlp-color-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #f1f5f9;
+    text-transform: capitalize;
+}
+
+.mlp-color-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.35);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5) inset;
+    flex-shrink: 0;
 }
 
 /* ── CARD HORA DE SALIDA ───────────────────────── */

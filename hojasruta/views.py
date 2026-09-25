@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions, filters
+from rest_framework.permissions import BasePermission
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
@@ -833,6 +834,7 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
                 'nombre_completo': turno.afiliado.nombre_completo,
                 'telefono': turno.afiliado.telefono,
                 'vehiculo_placa': vehiculo.placa if vehiculo else None,
+                'vehiculo_color': (vehiculo.color or None) if vehiculo else None,
                 'vehiculo_tipo': vehiculo.tipo if vehiculo else None,
             }
         })
@@ -842,6 +844,8 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
         """
         Devuelve todas las movilidades asignadas (ipsum y minibus) a La Paz
         para hoy (o la fecha indicada). Público: accesible sin autenticación.
+        Incluye los datos que necesita ver el pasajero al escanear el QR de la
+        oficina: nombre del afiliado, placa, color de la movilidad y hora de salida.
         Query param opcional: ?fecha=YYYY-MM-DD
         """
         from django.utils import timezone
@@ -911,6 +915,7 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
                     'nombre_completo': hoja.afiliado.nombre_completo,
                     'telefono': hoja.afiliado.telefono,
                     'placa': hoja.vehiculo.placa,
+                    'color': hoja.vehiculo.color or None,
                     'tipo': str(hoja.vehiculo.tipo or '').lower(),
                     'capacidad': hoja.vehiculo.capacidad,
                     'hora_salida': hoja.hora_salida.strftime('%H:%M') if hoja.hora_salida else None,
@@ -929,6 +934,7 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
                         'nombre_completo': turno.afiliado.nombre_completo,
                         'telefono': turno.afiliado.telefono,
                         'placa': veh.placa,
+                        'color': veh.color or None,
                         'tipo': str(veh.tipo or '').lower(),
                         'capacidad': veh.capacidad,
                         'hora_salida': turno.hora_salida.strftime('%H:%M') if turno.hora_salida else None,
@@ -996,16 +1002,18 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
     def qr_lapaz(self, request):
         """
-        Genera un QR público para pasajeros.
-        Al escanearlo abre /reservas con el listado de afiliados asignados
-        a La Paz (ipsum y minibus): nombre, placa, celular y hora de salida.
+        Genera el QR de la oficina para pasajeros.
+        Al escanearlo abre /movilidades-lapaz, que muestra las movilidades
+        asignadas a La Paz (ipsum y minibus): nombre del afiliado, placa,
+        color de la movilidad y hora de salida.
         """
         import qrcode
         from io import BytesIO
+        from django.conf import settings
         from django.http import HttpResponse
 
-        DOMAIN = "https://administracion.sindicatointegracion.com"
-        url = f"{DOMAIN}/pizarra"
+        base_url = (getattr(settings, 'FRONTEND_URL', '') or '').rstrip('/')
+        url = f"{base_url}/movilidades-lapaz"
 
         qr = qrcode.QRCode(
             version=None,

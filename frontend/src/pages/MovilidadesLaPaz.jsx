@@ -26,6 +26,32 @@ const TIPO_LABELS = {
     minibus: { label: 'MINIBÚS', emoji: '🚌', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: '#f59e0b' },
 };
 
+const COLOR_MOVILIDAD = {
+    blanco: '#f1f5f9',
+    negro: '#0b0f19',
+    gris: '#9ca3af',
+    plata: '#cbd5e1',
+    rojo: '#ef4444',
+    azul: '#3b82f6',
+    verde: '#22c55e',
+    amarillo: '#facc15',
+    dorado: '#f59e0b',
+    naranja: '#fb923c',
+    anaranjado: '#fb923c',
+    cafe: '#92400e',
+    marron: '#78350f',
+    celeste: '#38bdf8',
+    turquesa: '#2dd4bf',
+    morado: '#a855f7',
+    lila: '#c4b5fd',
+    vino: '#7f1d1d',
+    rosa: '#f472b6',
+    beige: '#e7d8c9',
+    crema: '#f5f5dc',
+};
+
+const colorHex = (color) => COLOR_MOVILIDAD[(color || '').trim().toLowerCase()] || '#94a3b8';
+
 export default function MovilidadesLaPaz() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -84,6 +110,7 @@ export default function MovilidadesLaPaz() {
                     <h2>Reserva tu pasaje a <span className="mlp-hero-highlight">La Paz</span></h2>
                     <p>Contáctate directamente con el conductor de turno</p>
                 </div>
+                <a href="/pizarra" className="mlp-btn-reservar">🎫 Reservar mi pasaje</a>
             </div>
 
             {/* Contenido */}
@@ -216,6 +243,18 @@ export default function MovilidadesLaPaz() {
                                                 <span className="mlp-placa-value">{mov.placa}</span>
                                             </div>
                                         )}
+
+                                        {/* Color de la movilidad */}
+                                        <div className="mlp-card-color">
+                                            <span className="mlp-color-label">COLOR</span>
+                                            <span className="mlp-color-value">
+                                                <span
+                                                    className="mlp-color-swatch"
+                                                    style={{ background: colorHex(mov.color) }}
+                                                ></span>
+                                                {mov.color || 'Sin color registrado'}
+                                            </span>
+                                        </div>
 
                                         {/* Hora de salida registrada en la asignación */}
                                         <div className="mlp-card-hora">
