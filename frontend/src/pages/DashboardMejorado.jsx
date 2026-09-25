@@ -16,6 +16,7 @@ import {
 } from 'chart.js';
 import { Bar, Pie, Doughnut, Line } from 'react-chartjs-2';
 import { useTheme } from '../context/ThemeContext';
+import { getSaludo } from '../utils/saludo';
 import SkeletonLoader from '../components/SkeletonLoader';
 import './Dashboard.css';
 import './DashboardMejorado.css';
@@ -85,6 +86,14 @@ const DashboardMejorado = () => {
     const [lastUpdate, setLastUpdate] = useState(new Date());
     const [isFetching, setIsFetching] = useState(false);
     const [periodo, setPeriodo] = useState(6);
+    const [saludo, setSaludo] = useState(() => getSaludo());
+
+    // El saludo se recalcula cada minuto para que cambie solo
+    // (p. ej. de "buenos días" a "buenas tardes") sin recargar la página.
+    useEffect(() => {
+        const intervalo = setInterval(() => setSaludo(getSaludo()), 60 * 1000);
+        return () => clearInterval(intervalo);
+    }, []);
 
     useEffect(() => {
         loadDashboardData();
@@ -382,12 +391,7 @@ const DashboardMejorado = () => {
         return lastUpdate.toLocaleTimeString();
     };
 
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return '¡Buenos días!';
-        if (hour < 19) return '¡Buenas tardes!';
-        return '¡Buenas noches!';
-    };
+    const getGreeting = () => saludo;
 
     return (
         <div className="dashboard-mejorado">
