@@ -2,6 +2,25 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import './Bitacora.css';
 
+const PAGE_SIZE = 25;
+
+const ACCIONES = [
+    { value: 'crear', label: 'Creación' },
+    { value: 'editar', label: 'Edición' },
+    { value: 'eliminar', label: 'Eliminación' },
+    { value: 'login', label: 'Inicio de sesión' },
+    { value: 'otro', label: 'Otro' },
+];
+
+const FILTROS_INICIALES = {
+    desde: '',
+    hasta: '',
+    modulo: '',
+    accion: '',
+    usuario_id: '',
+    q: '',
+};
+
 function Bitacora() {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -9,25 +28,27 @@ function Bitacora() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [pageCount, setPageCount] = useState(0);
+    const [modulos, setModulos] = useState([]);
+    const [resumen, setResumen] = useState(null);
 
-    // Filters
-    const [filters, setFilters] = useState({
-        desde: '',
-        hasta: '',
-        tabla: '',
-        accion: '',
-        usuario_id: ''
-    });
-
+    const [filters, setFilters] = useState(FILTROS_INICIALES);
+    const [busqueda, setBusqueda] = useState('');
     const [users, setUsers] = useState([]);
 
     const loadData = useCallback(async () => {
         setLoading(true);
+        setError('');
+        const params = Object.fromEntries(
+            Object.entries({ ...filters, page, page_size: PAGE_SIZE }).filter(([, v]) => v !== '' && v != null)
+        );
         try {
-            const res = await api.getBitacora({ ...filters, page });
+            const res = await api.getBitacora(params);
             setEvents(res.data?.results || (Array.isArray(res.data) ? res.data : []));
             setPageCount(res.data?.count || 0);
-            setTotalPages(Math.ceil((res.data?.count || 1) / 50));
+            setModulos(res.data?.modulos || []);
+            setResumen(res.data?.resumen || null);
+            const size = res.data?.page_size || PAGE_SIZE;
+            setTotalPages(Math.max(Math.ceil((res.data?.count || 0) / size), 1));
         } catch (err) {
             console.error(err);
             setError('Error al cargar la bitácora');
@@ -36,49 +57,94 @@ function Bitacora() {
         }
     }, [page, filters]);
 
-    const loadUsers = async () => {
-        try {
-            const res = await api.getUsers({ page_size: 100 });
-            setUsers(res.data.results || res.data);
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
     useEffect(() => {
-        loadUsers();
+        api.getUsers({ page_size: 100 })
+            .then((res) => setUsers(res.data.results || res.data || []))
+            .catch((err) => console.error(err));
     }, []);
 
     useEffect(() => {
         loadData();
     }, [loadData]);
 
+    // Búsqueda con retardo para no pedir en cada tecla
+    useEffect(() => {
+        const t = setTimeout(() => {
+            setFilters((prev) => (prev.q === busqueda ? prev : { ...prev, q: busqueda }));
+            setPage(1);
+        }, 400);
+        return () => clearTimeout(t);
+    }, [busqueda]);
+
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
-        setFilters(prev => ({ ...prev, [name]: value }));
-        setPage(1); // Reset page on filter change
+        setFilters((prev) => ({ ...prev, [name]: value }));
+        setPage(1);
+    };
+
+    const limpiarFiltros = () => {
+        setFilters(FILTROS_INICIALES);
+        setBusqueda('');
+        setPage(1);
     };
 
     const formatDate = (dateString) => {
         if (!dateString) return '';
-        const date = new Date(dateString);
-        return date.toLocaleString('es-BO', {
+        return new Date(dateString).toLocaleString('es-BO', {
             day: '2-digit',
             month: '2-digit',
             year: 'numeric',
             hour: '2-digit',
-            minute: '2-digit'
+            minute: '2-digit',
         });
     };
+
+    const accionesResumen = ACCIONES
+        .map((a) => ({ ...a, total: resumen?.por_accion?.[a.value] || 0 }))
+        .filter((a) => a.total > 0);
 
     return (
         <div className="bitacora-container">
             <div className="page-header">
                 <h1>Bitácora de Auditoría</h1>
-                <p>Seguimiento de cambios y estados en el sistema</p>
+                <p>Todos los cambios registrados en cada módulo del sistema</p>
             </div>
 
+            {resumen && (
+                <div className="bitacora-resumen">
+                    <div className="resumen-card">
+                        <span className="resumen-valor">{resumen.total}</span>
+                        <span className="resumen-label">Movimientos</span>
+                    </div>
+                    {accionesResumen.map((a) => (
+                        <div key={a.value} className="resumen-card">
+                            <span className="resumen-valor">{a.total}</span>
+                            <span className="resumen-label">{a.label}</span>
+                        </div>
+                    ))}
+                    <div className="resumen-card">
+                        <span className="resumen-valor">{modulos.length}</span>
+                        <span className="resumen-label">Módulos</span>
+                    </div>
+                    {resumen.sin_usuario > 0 && (
+                        <div className="resumen-card resumen-card-warn">
+                            <span className="resumen-valor">{resumen.sin_usuario}</span>
+                            <span className="resumen-label">Sin usuario</span>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div className="filters-section">
+                <div className="filter-group filter-group-search">
+                    <label>Buscar</label>
+                    <input
+                        type="search"
+                        placeholder="Descripción, modelo, ID o usuario..."
+                        value={busqueda}
+                        onChange={(e) => setBusqueda(e.target.value)}
+                    />
+                </div>
                 <div className="filter-group">
                     <label>Desde</label>
                     <input type="date" name="desde" value={filters.desde} onChange={handleFilterChange} />
@@ -89,40 +155,43 @@ function Bitacora() {
                 </div>
                 <div className="filter-group">
                     <label>Módulo</label>
-                    <select name="tabla" value={filters.tabla} onChange={handleFilterChange}>
-                        <option value="">Todos</option>
-                        <option value="afiliado">Afiliado</option>
-                        <option value="vehiculo">Vehículo</option>
-                        <option value="hojaruta">Hoja de Ruta</option>
-                        <option value="pago">Pago</option>
-                        <option value="cuota">Cuota</option>
-                        <option value="sancion">Sanción</option>
+                    <select name="modulo" value={filters.modulo} onChange={handleFilterChange}>
+                        <option value="">Todos los módulos</option>
+                        {modulos.map((m) => (
+                            <option key={m.app_label} value={m.app_label}>
+                                {m.nombre} ({m.total})
+                            </option>
+                        ))}
                     </select>
                 </div>
                 <div className="filter-group">
                     <label>Acción</label>
                     <select name="accion" value={filters.accion} onChange={handleFilterChange}>
                         <option value="">Todas</option>
-                        <option value="crear">Creación</option>
-                        <option value="editar">Edición</option>
-                        <option value="eliminar">Eliminación</option>
-                        <option value="login">Login</option>
+                        {ACCIONES.map((a) => (
+                            <option key={a.value} value={a.value}>{a.label}</option>
+                        ))}
                     </select>
                 </div>
                 <div className="filter-group">
                     <label>Usuario</label>
                     <select name="usuario_id" value={filters.usuario_id} onChange={handleFilterChange}>
                         <option value="">Todos</option>
-                        {users.map(u => (
+                        {users.map((u) => (
                             <option key={u.id} value={u.id}>{u.username}</option>
                         ))}
                     </select>
                 </div>
+                <button className="btn btn-secondary btn-limpiar" onClick={limpiarFiltros}>
+                    Limpiar filtros
+                </button>
             </div>
 
-            {error && <div className="error-message" style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
+            {error && <div className="error-message">{error}</div>}
 
-            {loading ? <div className="loading">Procesando bitácora...</div> : (
+            {loading ? (
+                <div className="loading">Procesando bitácora...</div>
+            ) : (
                 <div className="table-container">
                     <table className="data-table">
                         <thead>
@@ -130,17 +199,23 @@ function Bitacora() {
                                 <th>Fecha y Hora</th>
                                 <th>Usuario</th>
                                 <th>Acción</th>
+                                <th>Módulo</th>
                                 <th>Descripción</th>
                                 <th>Cambios Registrados</th>
                             </tr>
                         </thead>
                         <tbody>
-                                {events.map((event, index) => (
-                                    <tr key={event.id || index}>
-                                        <td style={{ whiteSpace: 'nowrap' }}>{formatDate(event.fecha_hora)}</td>
+                            {events.map((event, index) => (
+                                <tr key={event.id || index}>
+                                    <td style={{ whiteSpace: 'nowrap' }}>{formatDate(event.fecha_hora)}</td>
                                     <td>
                                         <div style={{ fontWeight: 'bold' }}>{event.full_name || 'Sistema'}</div>
-                                        <div style={{ fontSize: '0.75rem', color: '#888' }}>@{event.username}</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                                            {event.username ? `@${event.username}` : 'sin usuario'}
+                                        </div>
+                                        {event.ip_address && (
+                                            <div className="bitacora-ip">IP {event.ip_address}</div>
+                                        )}
                                     </td>
                                     <td>
                                         <span className={`badge-accion ${event.accion || ''}`}>
@@ -148,35 +223,48 @@ function Bitacora() {
                                         </span>
                                     </td>
                                     <td>
-                                        <div className="bitacora-tabla">{typeof event.tabla === 'string' ? event.tabla.toUpperCase() : String(event.tabla || '')}</div>
+                                        <div className="bitacora-modulo">{event.modulo_display || '-'}</div>
+                                        <div className="bitacora-tabla">
+                                            {event.tabla} #{event.objeto_id}
+                                        </div>
+                                    </td>
+                                    <td>
                                         <div className="bitacora-desc">{String(event.descripcion || '')}</div>
                                     </td>
                                     <td>
                                         {event.cambios ? (
                                             <details className="cambios-details">
-                                                <summary>Ver detalle ({Object.keys(event.cambios).length})</summary>
+                                                <summary>
+                                                    Ver detalle ({Object.keys(event.cambios).length})
+                                                </summary>
                                                 <div className="cambios-grid">
                                                     {Object.entries(event.cambios).map(([campo, valores]) => (
                                                         <div key={campo} className="cambio-item">
-                                                            <strong>{campo}:</strong>
+                                                            <strong>
+                                                                {event.cambios_labels?.[campo] || campo}:
+                                                            </strong>
                                                             <div className="cambio-valores">
-                                                                <span className="val-antes">{typeof valores.antes === 'object' && valores.antes !== null ? JSON.stringify(valores.antes) : String(valores.antes ?? 'vacio')}</span>
+                                                                <span className="val-antes">
+                                                                    {String(valores.antes ?? '') || 'vacío'}
+                                                                </span>
                                                                 <span className="val-arrow">→</span>
-                                                                <span className="val-despues">{typeof valores.despues === 'object' && valores.despues !== null ? JSON.stringify(valores.despues) : String(valores.despues ?? 'vacio')}</span>
+                                                                <span className="val-despues">
+                                                                    {String(valores.despues ?? '') || 'vacío'}
+                                                                </span>
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
                                             </details>
                                         ) : (
-                                            <span style={{ color: '#aaa', fontSize: '0.8rem' }}>Sin cambios detallados</span>
+                                            <span className="sin-cambios">Sin cambios detallados</span>
                                         )}
                                     </td>
                                 </tr>
                             ))}
                             {events.length === 0 && (
                                 <tr>
-                                    <td colSpan="4" style={{ textAlign: 'center', padding: '40px' }}>
+                                    <td colSpan="6" style={{ textAlign: 'center', padding: '40px' }}>
                                         No se encontraron registros de auditoría.
                                     </td>
                                 </tr>
@@ -189,16 +277,16 @@ function Bitacora() {
             <div className="pagination">
                 <button
                     className="btn btn-secondary"
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1 || loading}
                 >
                     Anterior
                 </button>
                 <span>Página {page} de {totalPages} ({pageCount} registros)</span>
                 <button
                     className="btn btn-secondary"
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages || loading}
                 >
                     Siguiente
                 </button>

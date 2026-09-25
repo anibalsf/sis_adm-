@@ -35,6 +35,68 @@
     background: white;
 }
 
+.filter-group-search {
+    flex: 1 1 260px;
+    min-width: 220px;
+}
+
+.filter-group-search input {
+    width: 100%;
+}
+
+.btn-limpiar {
+    align-self: flex-end;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    background: white;
+    color: #475569;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-limpiar:hover {
+    background: #f1f5f9;
+}
+
+/* Resumen */
+.bitacora-resumen {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.resumen-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 18px;
+    min-width: 96px;
+}
+
+.resumen-card-warn {
+    background: #fffbeb;
+    border-color: #fde68a;
+}
+
+.resumen-valor {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.resumen-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    font-weight: 700;
+}
+
 /* Badges */
 .badge-accion {
     padding: 4px 10px;
@@ -69,6 +131,39 @@
     color: #94a3b8;
     font-weight: 700;
     margin-bottom: 2px;
+}
+
+.bitacora-modulo {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.bitacora-ip {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+.sin-cambios {
+    color: #aaa;
+    font-size: 0.8rem;
+}
+
+.error-message {
+    color: #b91c1c;
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-weight: 600;
+}
+
+.loading {
+    padding: 30px;
+    text-align: center;
+    color: #64748b;
 }
 
 .bitacora-desc {
@@ -143,6 +238,22 @@
 [data-theme='dark'] .filters-section {
     background: #1e293b;
     border-color: #334155;
+}
+
+[data-theme='dark'] .resumen-card {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+[data-theme='dark'] .resumen-valor,
+[data-theme='dark'] .bitacora-modulo {
+    color: #e2e8f0;
+}
+
+[data-theme='dark'] .btn-limpiar {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
 }
 
 [data-theme='dark'] .cambios-grid {
