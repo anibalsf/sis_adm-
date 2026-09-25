@@ -9,6 +9,7 @@ from datetime import timedelta, datetime
 from decimal import Decimal
 
 from tesoreria.models import Pago, Egreso
+from reportes.query_helpers import INGRESO_ESTADOS_VALIDOS, EGRESO_ESTADOS_VALIDOS
 from hojasruta.models import HojaRuta
 from afiliados.models import Afiliado
 from vehiculos.models import Vehiculo
@@ -125,14 +126,16 @@ class KPIsEjecutivosView(APIView):
         # 2. Ingresos por vehículo
         vehiculos_activos = Vehiculo.objects.filter(estado='activo').count()
         ingresos_mes = Pago.objects.filter(
-            fecha_pago__gte=inicio_mes
+            fecha_pago__gte=inicio_mes,
+            estado__in=INGRESO_ESTADOS_VALIDOS
         ).aggregate(total=Sum('monto'))['total'] or 0
         
         ingreso_por_vehiculo = (float(ingresos_mes) / vehiculos_activos) if vehiculos_activos > 0 else 0
         
         # 3. Ratio ingresos/egresos
         egresos_mes = Egreso.objects.filter(
-            fecha__gte=inicio_mes
+            fecha__gte=inicio_mes,
+            estado__in=EGRESO_ESTADOS_VALIDOS
         ).aggregate(total=Sum('monto'))['total'] or 0
         
         ratio_ie = (float(ingresos_mes) / float(egresos_mes)) if egresos_mes > 0 else (float(ingresos_mes) if ingresos_mes > 0 else 1.0)
@@ -140,7 +143,8 @@ class KPIsEjecutivosView(APIView):
         # 4. Crecimiento mensual
         ingresos_mes_anterior = Pago.objects.filter(
             fecha_pago__gte=mes_anterior,
-            fecha_pago__lt=inicio_mes
+            fecha_pago__lt=inicio_mes,
+            estado__in=INGRESO_ESTADOS_VALIDOS
         ).aggregate(total=Sum('monto'))['total'] or 0
         
         crecimiento = 0
@@ -232,12 +236,14 @@ class TendenciasMensualesView(APIView):
             
             ingresos = Pago.objects.filter(
                 fecha_pago__gte=fecha_inicio,
-                fecha_pago__lt=fecha_fin
+                fecha_pago__lt=fecha_fin,
+                estado__in=INGRESO_ESTADOS_VALIDOS
             ).aggregate(total=Sum('monto'))['total'] or 0
             
             egresos = Egreso.objects.filter(
                 fecha__gte=fecha_inicio,
-                fecha__lt=fecha_fin
+                fecha__lt=fecha_fin,
+                estado__in=EGRESO_ESTADOS_VALIDOS
             ).aggregate(total=Sum('monto'))['total'] or 0
             
             viajes = HojaRuta.objects.filter(

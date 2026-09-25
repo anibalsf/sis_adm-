@@ -18,6 +18,10 @@ def seed_expense_categories():
         {'nombre': 'Mantenimiento Local', 'descripcion': 'Reparaciones menores en sede'},
         {'nombre': 'Viáticos', 'descripcion': 'Viajes y representación de la directiva'},
         {'nombre': 'Multa Federación', 'descripcion': 'Sanciones impuestas por la matriz'},
+        {'nombre': 'Gastos Aniversario', 'descripcion': 'Gastos de festejos y eventos de aniversario'},
+        {'nombre': 'Gastos Navidad', 'descripcion': 'Gastos de festejos y canastones de navidad'},
+        {'nombre': 'Gastos Carnaval', 'descripcion': 'Gastos de actividades y festejos de carnaval'},
+        {'nombre': 'Sueldo y Salario Secretaría', 'descripcion': 'Pago de sueldo y salario a la secretaria'},
         {'nombre': 'Otros Egresos', 'descripcion': 'Gastos varios no categorizados'},
     ]
 
@@ -32,12 +36,12 @@ def seed_expense_categories():
             }
         )
         if created:
-            print(f"✅ Creado: {cat['nombre']}")
+            print(f"Creado: {cat['nombre']}")
             created_count += 1
         else:
-            print(f"ℹ️ Ya existe: {cat['nombre']}")
+            print(f"Ya existe: {cat['nombre']}")
     
-    print(f"--- Fin: {created_count} nuevas categorías creadas ---")
+    print(f"--- Fin: {created_count} nuevas categorias creadas ---")
 
 if __name__ == "__main__":
     seed_expense_categories()

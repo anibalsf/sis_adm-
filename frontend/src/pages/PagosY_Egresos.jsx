@@ -35,6 +35,30 @@ function PagosYEgresos() {
     const [pageEgresos, setPageEgresos] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [aplicarMulta, setAplicarMulta] = useState(true);
+    const [showNuevaCategoriaInput, setShowNuevaCategoriaInput] = useState(false);
+    const [nuevaCategoriaNombre, setNuevaCategoriaNombre] = useState('');
+    const [creandoCategoria, setCreandoCategoria] = useState(false);
+
+    const handleCrearNuevaCategoria = async () => {
+        if (!nuevaCategoriaNombre.trim()) return;
+        try {
+            setCreandoCategoria(true);
+            const res = await api.createTipoPago({
+                nombre: nuevaCategoriaNombre.trim(),
+                tipo: activeTab === 'ingresos' ? 'ingreso' : 'egreso',
+                descripcion: `Categoría de ${activeTab === 'ingresos' ? 'ingreso' : 'egreso'}`
+            });
+            const nuevaCat = res.data;
+            setTiposPago(prev => [...prev, nuevaCat]);
+            setForm(prev => ({ ...prev, tipo_pago: String(nuevaCat.id) }));
+            setNuevaCategoriaNombre('');
+            setShowNuevaCategoriaInput(false);
+        } catch (err) {
+            alert('Error al crear la categoría: ' + (err.response?.data?.nombre?.[0] || err.message));
+        } finally {
+            setCreandoCategoria(false);
+        }
+    };
 
     const loadTableData = useCallback(async () => {
         try {
@@ -140,6 +164,8 @@ function PagosYEgresos() {
         setSubmitError('');
         setFieldErrors({});
         setAplicarMulta(true);
+        setShowNuevaCategoriaInput(false);
+        setNuevaCategoriaNombre('');
         setShowModal(true);
     };
 

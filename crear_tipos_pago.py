@@ -31,6 +31,10 @@ tipos_egreso = [
     {'nombre': 'Servicios Básicos', 'descripcion': 'Luz, agua, internet', 'tipo': 'egreso'},
     {'nombre': 'Mantenimiento', 'descripcion': 'Mantenimiento de oficina y equipos', 'tipo': 'egreso'},
     {'nombre': 'Pago Personal', 'descripcion': 'Salarios de secretaria y dirigentes', 'tipo': 'egreso'},
+    {'nombre': 'Sueldo y Salario Secretaría', 'descripcion': 'Pago de sueldo y salario a la secretaria', 'tipo': 'egreso'},
+    {'nombre': 'Gastos Aniversario', 'descripcion': 'Gastos de festejos y eventos de aniversario', 'tipo': 'egreso'},
+    {'nombre': 'Gastos Navidad', 'descripcion': 'Gastos de festejos y canastones de navidad', 'tipo': 'egreso'},
+    {'nombre': 'Gastos Carnaval', 'descripcion': 'Gastos de actividades y festejos de carnaval', 'tipo': 'egreso'},
     {'nombre': 'Papelería', 'descripcion': 'Material de oficina', 'tipo': 'egreso'},
     {'nombre': 'Gastos Administrativos', 'descripcion': 'Otros gastos administrativos', 'tipo': 'egreso'},
 ]

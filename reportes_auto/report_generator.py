@@ -33,7 +33,7 @@ class ReportGenerator:
         ingresos_hojas = hojas.aggregate(total=Sum('precio'))['total'] or 0
         
         # Estadísticas de Pagos recibidos
-        pagos = Pago.objects.filter(fecha_pago=yesterday)
+        pagos = Pago.objects.filter(fecha_pago=yesterday, estado='completado')
         total_pagos = pagos.aggregate(total=Sum('monto'))['total'] or 0
         
         # Sanciones aplicadas
@@ -77,7 +77,7 @@ class ReportGenerator:
         ).order_by('-viajes')[:10]
         
         # Pagos recibidos
-        pagos = Pago.objects.filter(fecha_pago__range=[start_date, end_date])
+        pagos = Pago.objects.filter(fecha_pago__range=[start_date, end_date], estado='completado')
         total_pagos = pagos.aggregate(total=Sum('monto'))['total'] or 0
         
         # Afiliados con deuda
@@ -129,7 +129,8 @@ class ReportGenerator:
         
         # Pagos
         pagos = Pago.objects.filter(
-            fecha_pago__range=[first_day_last_month, last_day_last_month]
+            fecha_pago__range=[first_day_last_month, last_day_last_month],
+            estado='completado'
         )
         total_pagos = pagos.aggregate(total=Sum('monto'))['total'] or 0
         

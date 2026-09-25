@@ -34,6 +34,8 @@ function ReportesFinancieros() {
     const [datosMensuales, setDatosMensuales] = useState(null);
     const [datosPorTipo, setDatosPorTipo] = useState(null);
     const [transacciones, setTransacciones] = useState([]);
+    const [resumen, setResumen] = useState(null);
+    const [excluidos, setExcluidos] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [fechaInicio, setFechaInicio] = useState('');
@@ -64,6 +66,8 @@ function ReportesFinancieros() {
             // Cargar transacciones
             const transacRes = await api.getTransacciones({ ...params, page: pagina });
             setTransacciones(transacRes.data.transacciones || []);
+            setResumen(transacRes.data.resumen || null);
+            setExcluidos(transacRes.data.excluidos_por_estado || null);
             setTotalItems(transacRes.data.count || 0);
             setPaginasTotales(transacRes.data.total_pages || 1);
 
@@ -409,7 +413,7 @@ function ReportesFinancieros() {
                     {/* Tabla de Transacciones */}
                     <div className="chart-card" style={{ marginTop: '2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h3>Detalle de Transacciones</h3>
+                            <h3>Informe de Transacciones (Ingresos y Egresos)</h3>
                             <div className="form-actions">
                                 <button
                                     type="button"
@@ -437,6 +441,43 @@ function ReportesFinancieros() {
                                 </button>
                             </div>
                         </div>
+
+                        {resumen && (
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                                gap: '1rem',
+                                marginBottom: '1.25rem'
+                            }}>
+                                <div style={{ background: '#e8f5e9', borderLeft: '4px solid #2e7d32', padding: '0.75rem 1rem', borderRadius: '6px' }}>
+                                    <div style={{ fontSize: '0.8rem', color: '#2d3748', fontWeight: '600' }}>Total Ingresos ({resumen.count_ingresos})</div>
+                                    <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#2e7d32' }}>Bs. {Number(resumen.total_ingresos).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                </div>
+                                <div style={{ background: '#fed7d7', borderLeft: '4px solid #c62828', padding: '0.75rem 1rem', borderRadius: '6px' }}>
+                                    <div style={{ fontSize: '0.8rem', color: '#2d3748', fontWeight: '600' }}>Total Egresos ({resumen.count_egresos})</div>
+                                    <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#c62828' }}>Bs. {Number(resumen.total_egresos).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                </div>
+                                <div style={{ background: resumen.saldo >= 0 ? '#e3f2fd' : '#fff3e0', borderLeft: '4px solid ' + (resumen.saldo >= 0 ? '#1565c0' : '#ef6c00'), padding: '0.75rem 1rem', borderRadius: '6px' }}>
+                                    <div style={{ fontSize: '0.8rem', color: '#2d3748', fontWeight: '600' }}>Saldo del Período</div>
+                                    <div style={{ fontSize: '1.25rem', fontWeight: '700', color: resumen.saldo >= 0 ? '#1565c0' : '#ef6c00' }}>Bs. {Number(resumen.saldo).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                </div>
+                            </div>
+                        )}
+
+                        {excluidos && (excluidos.ingresos.count > 0 || excluidos.egresos.count > 0) && (
+                            <div style={{
+                                background: '#fff8e1',
+                                borderLeft: '4px solid #f9a825',
+                                padding: '0.6rem 1rem',
+                                borderRadius: '6px',
+                                marginBottom: '1rem',
+                                fontSize: '0.875rem',
+                                color: '#5d4037'
+                            }}>
+                                ⚠️ <strong>Excluidos del informe por estado no válido:</strong> {excluidos.ingresos.count} ingreso(s) (Bs. {Number(excluidos.ingresos.monto).toLocaleString(undefined, { minimumFractionDigits: 2 })}) y {excluidos.egresos.count} egreso(s) (Bs. {Number(excluidos.egresos.monto).toLocaleString(undefined, { minimumFractionDigits: 2 })}).
+                            </div>
+                        )}
+
                         <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
@@ -447,6 +488,7 @@ function ReportesFinancieros() {
                                         <th style={{ padding: '0.75rem', textAlign: 'left' }}>Tipo Pago</th>
                                         <th style={{ padding: '0.75rem', textAlign: 'left' }}>Descripción</th>
                                         <th style={{ padding: '0.75rem', textAlign: 'right' }}>Monto (Bs)</th>
+                                        <th style={{ padding: '0.75rem', textAlign: 'left' }}>Estado</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -475,13 +517,24 @@ function ReportesFinancieros() {
                                                     fontWeight: '600',
                                                     color: t.tipo === 'INGRESO' ? '#38a169' : '#e53e3e'
                                                 }}>
-                                                    {t.tipo === 'INGRESO' ? '+' : '-'} {t.monto.toFixed(2)}
+                                                    {t.tipo === 'INGRESO' ? '+' : '-'} {Number(t.monto).toFixed(2)}
+                                                </td>
+                                                <td style={{ padding: '0.75rem' }}>
+                                                    {t.estado === 'VÁLIDO' || t.estado === 'completado' || t.estado === 'aprobado' ? (
+                                                        <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600', backgroundColor: '#e8f5e9', color: '#1b5e20' }}>
+                                                            VÁLIDO
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600', backgroundColor: '#ffebee', color: '#b71c1c' }}>
+                                                            {t.estado || '—'}
+                                                        </span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan="6" style={{ padding: '2rem', textAlign: 'center', color: '#a0aec0' }}>
+                                            <td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: '#a0aec0' }}>
                                                 No hay transacciones para mostrar
                                             </td>
                                         </tr>

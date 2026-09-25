@@ -13,6 +13,7 @@ from reportlab.lib.pagesizes import A4, landscape, letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
 from reportlab.lib.enums import TA_CENTER
 
 
@@ -434,76 +435,28 @@ class OcupacionHistoricaView(APIView):
 class BalanceView(APIView):
     """
     Balance financiero general del sindicato.
+    Solo considera transacciones válidas (ingresos 'completado', egresos 'aprobado').
     URL: GET /api/reportes/balance?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
     """
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        from tesoreria.models import Pago, Egreso
+        from reportes.query_helpers import resumen_periodo
         
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         
-        # Query base para pagos (ingresos)
-        pagos_query = Pago.objects.all()
+        resumen = resumen_periodo(fecha_inicio, fecha_fin)
         
-        # Query base para egresos
-        egresos_query = Egreso.objects.all()
-        
-        # Aplicar filtros de fecha si existen
-        if fecha_inicio:
-            pagos_query = pagos_query.filter(fecha_pago__gte=fecha_inicio)
-            egresos_query = egresos_query.filter(fecha__gte=fecha_inicio)
-        
-        if fecha_fin:
-            pagos_query = pagos_query.filter(fecha_pago__lte=fecha_fin)
-            egresos_query = egresos_query.filter(fecha__lte=fecha_fin)
-        
-        # Calcular totales
-        total_ingresos = pagos_query.aggregate(total=Sum('monto'))['total'] or 0
-        count_ingresos = pagos_query.count()
-        
-        total_egresos = egresos_query.aggregate(total=Sum('monto'))['total'] or 0
-        count_egresos = egresos_query.count()
-        
-        saldo = total_ingresos - total_egresos
-        
-        # Calcular ingresos por tipo para el desglose
-        ingresos_por_tipo = pagos_query.values(
-            'tipo_pago__nombre'
-        ).annotate(
-            total=Sum('monto'),
-            count=Count('id')
-        ).order_by('-total')
-
-        # Calcular gastos por tipo para el desglose
-        egresos_por_tipo = egresos_query.values(
-            'tipo_pago__nombre'
-        ).annotate(
-            total=Sum('monto'),
-            count=Count('id')
-        ).order_by('-total')
-
         response_data = {
-            'total_ingresos': float(total_ingresos),
-            'count_ingresos': count_ingresos,
-            'total_egresos': float(total_egresos),
-            'count_egresos': count_egresos,
-            'saldo': float(saldo),
-            'ingresos_por_tipo': [
-                {
-                    'tipo': item['tipo_pago__nombre'] or 'Otros Ingresos',
-                    'total': float(item['total']),
-                    'count': item['count']
-                } for item in ingresos_por_tipo
-            ],
-            'egresos_por_tipo': [
-                {
-                    'tipo': item['tipo_pago__nombre'] or 'Otros Gastos',
-                    'total': float(item['total']),
-                    'count': item['count']
-                } for item in egresos_por_tipo
-            ]
+            'total_ingresos': resumen['total_ingresos'],
+            'count_ingresos': resumen['count_ingresos'],
+            'total_egresos': resumen['total_egresos'],
+            'count_egresos': resumen['count_egresos'],
+            'saldo': resumen['saldo'],
+            'ingresos_por_tipo': resumen['ingresos_por_tipo'],
+            'egresos_por_tipo': resumen['egresos_por_tipo'],
+            'excluidos_por_estado': resumen['anulados_cancelados'],
         }
         
         # Agregar información del período si se filtró
@@ -526,14 +479,15 @@ class ReportesGraficosView(APIView):
         from tesoreria.models import Pago, Egreso, TipoPago
         from hojasruta.models import HojaRuta
         from django.db.models.functions import TruncMonth, TruncDay
+        from reportes.query_helpers import INGRESO_ESTADOS_VALIDOS, EGRESO_ESTADOS_VALIDOS
         
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         tipo = request.GET.get('tipo', 'mensual')
         
-        # Filtrar por fechas
-        pagos_query = Pago.objects.all()
-        egresos_query = Egreso.objects.all()
+        # Filtrar por fechas y solo transacciones válidas
+        pagos_query = Pago.objects.filter(estado__in=INGRESO_ESTADOS_VALIDOS)
+        egresos_query = Egreso.objects.filter(estado__in=EGRESO_ESTADOS_VALIDOS)
         
         if not fecha_inicio and tipo == 'mensual':
             # Por defecto mostrar últimos 6 meses si no se especifica
@@ -654,30 +608,20 @@ class ReportesGraficosView(APIView):
 
 class TransaccionesView(APIView):
     """
-    Lista de todas las transacciones (ingresos y egresos).
+    Lista de todas las transacciones válidas (ingresos y egresos).
     URL: GET /api/reportes/transacciones?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
     """
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        from tesoreria.models import Pago, Egreso
+        from reportes.query_helpers import pagos_validos, egresos_validos, pagos_excluidos, egresos_excluidos
         
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         
-        # Obtener pagos
-        pagos_query = Pago.objects.select_related('afiliado', 'tipo_pago').all()
-        if fecha_inicio:
-            pagos_query = pagos_query.filter(fecha_pago__gte=fecha_inicio)
-        if fecha_fin:
-            pagos_query = pagos_query.filter(fecha_pago__lte=fecha_fin)
-        
-        # Obtener egresos
-        egresos_query = Egreso.objects.select_related('tipo_pago').all()
-        if fecha_inicio:
-            egresos_query = egresos_query.filter(fecha__gte=fecha_inicio)
-        if fecha_fin:
-            egresos_query = egresos_query.filter(fecha__lte=fecha_fin)
+        # Solo transacciones con estado válido
+        pagos_query = pagos_validos(fecha_inicio, fecha_fin)
+        egresos_query = egresos_validos(fecha_inicio, fecha_fin)
         
         # Convertir a lista de transacciones
         transacciones = []
@@ -688,8 +632,10 @@ class TransaccionesView(APIView):
                 'tipo': 'INGRESO',
                 'afiliado': pago.afiliado.nombre_completo if pago.afiliado else 'N/A',
                 'tipo_pago': pago.tipo_pago.nombre if pago.tipo_pago else 'N/A',
-                'descripcion': pago.observaciones or 'Pago',
-                'monto': float(pago.monto or 0)
+                'descripcion': pago.observaciones or f"Pago por {pago.tipo_pago.nombre if pago.tipo_pago else 'cuota'}",
+                'monto': float(pago.monto or 0),
+                'estado': pago.estado,
+                'nro_recibo': pago.nro_recibo,
             })
         
         for egreso in egresos_query:
@@ -699,11 +645,39 @@ class TransaccionesView(APIView):
                 'afiliado': None,
                 'tipo_pago': egreso.tipo_pago.nombre if egreso.tipo_pago else 'General',
                 'descripcion': egreso.descripcion or 'Egreso',
-                'monto': float(egreso.monto or 0)
+                'monto': float(egreso.monto or 0),
+                'estado': egreso.estado,
+                'nro_recibo': None,
             })
         
         # Ordenar por fecha descendente
         transacciones.sort(key=lambda x: x['fecha'], reverse=True)
+        
+        # Totales del período (solo transacciones válidas)
+        total_ingresos = sum(t['monto'] for t in transacciones if t['tipo'] == 'INGRESO')
+        total_egresos = sum(t['monto'] for t in transacciones if t['tipo'] == 'EGRESO')
+        count_ingresos = sum(1 for t in transacciones if t['tipo'] == 'INGRESO')
+        count_egresos = sum(1 for t in transacciones if t['tipo'] == 'EGRESO')
+        
+        # Registros excluidos por estado no válido (transparencia)
+        excluidos = {
+            'ingresos': {
+                'count': pagos_excluidos(fecha_inicio, fecha_fin).count(),
+                'monto': float(pagos_excluidos(fecha_inicio, fecha_fin).aggregate(total=Sum('monto'))['total'] or 0),
+            },
+            'egresos': {
+                'count': egresos_excluidos(fecha_inicio, fecha_fin).count(),
+                'monto': float(egresos_excluidos(fecha_inicio, fecha_fin).aggregate(total=Sum('monto'))['total'] or 0),
+            },
+        }
+        
+        resumen = {
+            'total_ingresos': float(total_ingresos),
+            'total_egresos': float(total_egresos),
+            'saldo': float(total_ingresos - total_egresos),
+            'count_ingresos': count_ingresos,
+            'count_egresos': count_egresos,
+        }
         
         total_items = len(transacciones)
         
@@ -724,6 +698,8 @@ class TransaccionesView(APIView):
             'total_pages': (total_items + page_size - 1) // page_size,
             'current_page': page,
             'page_size': page_size,
+            'resumen': resumen,
+            'excluidos_por_estado': excluidos,
             'transacciones': transacciones_paginadas
         })
         
@@ -747,15 +723,17 @@ class FinanzasView(APIView):
         ultimo_dia_mes_anterior = inicio_mes - timedelta(days=1)
         inicio_mes_anterior = ultimo_dia_mes_anterior.replace(day=1)
         
-        # 1. Ingresos y Egresos del mes actual
-        ingresos_mes = Pago.objects.filter(fecha_pago__gte=inicio_mes).aggregate(total=Sum('monto'))['total'] or 0
-        egresos_mes = Egreso.objects.filter(fecha__gte=inicio_mes).aggregate(total=Sum('monto'))['total'] or 0
+        # 1. Ingresos y Egresos del mes actual (solo transacciones válidas)
+        from reportes.query_helpers import INGRESO_ESTADOS_VALIDOS, EGRESO_ESTADOS_VALIDOS
+        ingresos_mes = Pago.objects.filter(fecha_pago__gte=inicio_mes, estado__in=INGRESO_ESTADOS_VALIDOS).aggregate(total=Sum('monto'))['total'] or 0
+        egresos_mes = Egreso.objects.filter(fecha__gte=inicio_mes, estado__in=EGRESO_ESTADOS_VALIDOS).aggregate(total=Sum('monto'))['total'] or 0
         saldo_mes = ingresos_mes - egresos_mes
         
         # 2. Porcentaje de cambio ingresos vs mes anterior
         ingresos_mes_anterior = Pago.objects.filter(
             fecha_pago__gte=inicio_mes_anterior, 
-            fecha_pago__lte=ultimo_dia_mes_anterior
+            fecha_pago__lte=ultimo_dia_mes_anterior,
+            estado__in=INGRESO_ESTADOS_VALIDOS
         ).aggregate(total=Sum('monto'))['total'] or 0
         
         porcentaje_cambio = 0
@@ -785,10 +763,10 @@ class FinanzasView(APIView):
         
         # 6. Datos históricos (7 días)
         siete_dias = hoy - timedelta(days=7)
-        ingresos_7 = Pago.objects.filter(fecha_pago__gte=siete_dias).aggregate(total=Sum('monto'))['total'] or 0
-        egresos_7 = Egreso.objects.filter(fecha__gte=siete_dias).aggregate(total=Sum('monto'))['total'] or 0
+        ingresos_7 = Pago.objects.filter(fecha_pago__gte=siete_dias, estado__in=INGRESO_ESTADOS_VALIDOS).aggregate(total=Sum('monto'))['total'] or 0
+        egresos_7 = Egreso.objects.filter(fecha__gte=siete_dias, estado__in=EGRESO_ESTADOS_VALIDOS).aggregate(total=Sum('monto'))['total'] or 0
         
-        top_tipos = Pago.objects.values('tipo_pago__nombre').annotate(total=Sum('monto')).order_by('-total')[:5]
+        top_tipos = Pago.objects.filter(estado__in=INGRESO_ESTADOS_VALIDOS).values('tipo_pago__nombre').annotate(total=Sum('monto')).order_by('-total')[:5]
         
         return Response({
             'mes': str(inicio_mes)[:7],
@@ -905,26 +883,19 @@ class TransaccionesCSVView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from tesoreria.models import Pago, Egreso
+        from reportes.query_helpers import pagos_validos, egresos_validos
         
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         
-        pagos = Pago.objects.select_related('afiliado', 'tipo_pago').all()
-        egresos = Egreso.objects.select_related('tipo_pago').all()
-        
-        if fecha_inicio:
-            pagos = pagos.filter(fecha_pago__gte=fecha_inicio)
-            egresos = egresos.filter(fecha__gte=fecha_inicio)
-        if fecha_fin:
-            pagos = pagos.filter(fecha_pago__lte=fecha_fin)
-            egresos = egresos.filter(fecha__lte=fecha_fin)
+        pagos = pagos_validos(fecha_inicio, fecha_fin)
+        egresos = egresos_validos(fecha_inicio, fecha_fin)
             
         wb = Workbook()
         ws = wb.active
         ws.title = "Transacciones"
         
-        headers = ['Fecha', 'Tipo', 'Afiliado', 'Tipo Pago', 'Descripción', 'Monto (Bs)']
+        headers = ['Fecha', 'Tipo', 'Afiliado', 'Tipo Pago', 'Descripción', 'Monto (Bs)', 'Estado']
         ws.append(headers)
         
         # Combinar y ordenar
@@ -935,8 +906,9 @@ class TransaccionesCSVView(APIView):
                 'INGRESO',
                 p.afiliado.nombre_completo if p.afiliado else 'N/A',
                 p.tipo_pago.nombre if p.tipo_pago else 'N/A',
-                p.observaciones or 'Pago',
-                float(p.monto)
+                p.observaciones or f"Pago por {p.tipo_pago.nombre if p.tipo_pago else 'cuota'}",
+                float(p.monto),
+                p.estado,
             ])
         for e in egresos:
             transacciones.append([
@@ -945,12 +917,19 @@ class TransaccionesCSVView(APIView):
                 'N/A',
                 e.tipo_pago.nombre if e.tipo_pago else 'General',
                 e.descripcion or 'Egreso',
-                float(e.monto)
+                float(e.monto),
+                e.estado,
             ])
             
         transacciones.sort(key=lambda x: x[0], reverse=True)
         for t in transacciones:
             ws.append(t)
+            
+        # Fila de totales
+        ws.append([])
+        ws.append(['TOTAL INGRESOS', '', '', '', '', self._suma(transacciones, 'INGRESO'), ''])
+        ws.append(['TOTAL EGRESOS', '', '', '', '', self._suma(transacciones, 'EGRESO'), ''])
+        ws.append(['SALDO', '', '', '', '', self._saldo(transacciones), ''])
             
         for cell in ws[1]:
             cell.font = cell.font.copy(bold=True)
@@ -960,28 +939,30 @@ class TransaccionesCSVView(APIView):
         wb.save(response)
         return response
 
+    def _suma(self, transacciones, tipo):
+        return round(sum(t[5] for t in transacciones if t[1] == tipo), 2)
+
+    def _saldo(self, transacciones):
+        ingresos = sum(t[5] for t in transacciones if t[1] == 'INGRESO')
+        egresos = sum(t[5] for t in transacciones if t[1] == 'EGRESO')
+        return round(ingresos - egresos, 2)
+
 class TransaccionesPDFView(APIView):
     """
-    Exporta todas las transacciones a PDF.
+    Exporta todas las transacciones válidas a PDF (Informe económico para afiliados).
     URL: GET /api/reportes/transacciones/pdf
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from tesoreria.models import Pago, Egreso
+        from reportes.query_helpers import pagos_validos, egresos_validos, resumen_periodo
         
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         
-        pagos = Pago.objects.select_related('afiliado', 'tipo_pago').all()
-        egresos = Egreso.objects.select_related('tipo_pago').all()
-        
-        if fecha_inicio:
-            pagos = pagos.filter(fecha_pago__gte=fecha_inicio)
-            egresos = egresos.filter(fecha__gte=fecha_inicio)
-        if fecha_fin:
-            pagos = pagos.filter(fecha_pago__lte=fecha_fin)
-            egresos = egresos.filter(fecha__lte=fecha_fin)
+        pagos = pagos_validos(fecha_inicio, fecha_fin)
+        egresos = egresos_validos(fecha_inicio, fecha_fin)
+        resumen = resumen_periodo(fecha_inicio, fecha_fin)
             
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=landscape(A4))
@@ -996,13 +977,45 @@ class TransaccionesPDFView(APIView):
             spaceAfter=20
         )
         
-        elements.append(Paragraph("DETALLE DE TRANSACCIONES (INGRESOS Y EGRESOS)", title_style))
+        elements.append(Paragraph("SINDICATO MIXTO \"INTEGRACIÓN TAIPIPLAYA\"", title_style))
+        subtitle = ParagraphStyle('subtitle', parent=styles['Normal'], fontSize=13, alignment=TA_CENTER,
+                                  textColor=colors.HexColor('#1a237e'), spaceAfter=10)
+        elements.append(Paragraph("INFORME DE TRANSACCIONES (INGRESOS Y EGRESOS)", subtitle))
         if fecha_inicio or fecha_fin:
             rango = f"Período: {fecha_inicio or '...'} al {fecha_fin or '...'}"
-            elements.append(Paragraph(rango, styles['Normal']))
-            elements.append(Spacer(1, 10))
-            
-        data = [['Fecha', 'Tipo', 'Afiliado', 'Tipo Pago', 'Descripción', 'Monto (Bs)']]
+        else:
+            rango = "Período: Todo el historial"
+        elements.append(Paragraph(rango, ParagraphStyle('rango', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, textColor=colors.grey, spaceAfter=14)))
+        
+        # Resumen financiero del período
+        resumen_data = [
+            ['Total Ingresos', 'Total Egresos', 'Saldo', 'N° Ingresos', 'N° Egresos'],
+            [
+                f"Bs. {resumen['total_ingresos']:,.2f}",
+                f"Bs. {resumen['total_egresos']:,.2f}",
+                f"Bs. {resumen['saldo']:,.2f}",
+                str(resumen['count_ingresos']),
+                str(resumen['count_egresos']),
+            ]
+        ]
+        tabla_resumen = Table(resumen_data, colWidths=[3.2*cm, 3.2*cm, 3.2*cm, 3.2*cm, 3.2*cm])
+        tabla_resumen.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E7D32')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 1), (-1, 1), 12),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, 1), [colors.HexColor('#f1f8e9')]),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(tabla_resumen)
+        elements.append(Spacer(1, 18))
+        
+        data = [['Fecha', 'Tipo', 'Afiliado', 'Tipo Pago', 'Descripción', 'Monto (Bs)', 'Estado']]
         
         transacciones = []
         for p in pagos:
@@ -1011,8 +1024,9 @@ class TransaccionesPDFView(APIView):
                 'INGRESO',
                 p.afiliado.nombre_completo if p.afiliado else 'N/A',
                 p.tipo_pago.nombre if p.tipo_pago else 'N/A',
-                p.observaciones or 'Pago',
-                float(p.monto)
+                p.observaciones or f"Pago por {p.tipo_pago.nombre if p.tipo_pago else 'cuota'}",
+                float(p.monto),
+                'VÁLIDO',
             ])
         for e in egresos:
             transacciones.append([
@@ -1021,27 +1035,46 @@ class TransaccionesPDFView(APIView):
                 'N/A',
                 e.tipo_pago.nombre if e.tipo_pago else 'General',
                 e.descripcion or 'Egreso',
-                float(e.monto)
+                float(e.monto),
+                'VÁLIDO',
             ])
             
         transacciones.sort(key=lambda x: x[0], reverse=True)
         for t in transacciones:
             data.append(t)
+        
+        # Fila de totales
+        data.append(['', 'TOTAL INGRESOS', '', '', '', f"Bs. {resumen['total_ingresos']:,.2f}", ''])
+        data.append(['', 'TOTAL EGRESOS', '', '', '', f"Bs. {resumen['total_egresos']:,.2f}", ''])
+        data.append(['', 'SALDO DEL PERÍODO', '', '', '', f"Bs. {resumen['saldo']:,.2f}", ''])
             
-        table = Table(data, repeatRows=1, colWidths=[80, 70, 180, 120, 200, 80])
+        table = Table(data, repeatRows=1, colWidths=[70, 85, 155, 110, 175, 75, 50])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2E7D32')),
             ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0,0), (-1,0), 10),
+            ('FONTSIZE', (0,0), (-1,0), 9),
             ('BOTTOMPADDING', (0,0), (-1,0), 12),
             ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-            ('FONTSIZE', (0,1), (-1,-1), 8),
+            ('FONTSIZE', (0,1), (-1,-3), 8),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('BACKGROUND', (1,-3), (-1,-1), colors.HexColor('#e8f5e9')),
+            ('FONTNAME', (0,-3), (-1,-1), 'Helvetica-Bold'),
+            ('ROWBACKGROUNDS', (0,1), (-1,-4), [colors.white, colors.HexColor('#f7fafc')]),
         ]))
         
         elements.append(table)
+        elements.append(Spacer(1, 10))
+        excl = resumen['anulados_cancelados']
+        nota = ("*Registros excluidos del informe por estado no válido:* "
+                f"{excl['count_ingresos']} ingreso(s) "
+                f"(Bs. {excl['monto_ingresos']:,.2f}) y "
+                f"{excl['count_egresos']} egreso(s) (Bs. {excl['monto_egresos']:,.2f}).")
+        elements.append(Paragraph(
+            nota,
+            ParagraphStyle('nota', parent=styles['Normal'], fontSize=8, textColor=colors.grey, spaceBefore=6)
+        ))
         doc.build(elements)
         buffer.seek(0)
         return HttpResponse(buffer, content_type='application/pdf')

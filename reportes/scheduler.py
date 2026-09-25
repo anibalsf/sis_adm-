@@ -170,12 +170,15 @@ def notify_low_balance():
         # Calcular balance del mes
         inicio_mes = timezone.now().date().replace(day=1)
         
+        from reportes.query_helpers import INGRESO_ESTADOS_VALIDOS, EGRESO_ESTADOS_VALIDOS
         ingresos = Pago.objects.filter(
-            fecha_pago__gte=inicio_mes
+            fecha_pago__gte=inicio_mes,
+            estado__in=INGRESO_ESTADOS_VALIDOS
         ).aggregate(total=Sum('monto'))['total'] or 0
         
         egresos = Egreso.objects.filter(
-            fecha__gte=inicio_mes
+            fecha__gte=inicio_mes,
+            estado__in=EGRESO_ESTADOS_VALIDOS
         ).aggregate(total=Sum('monto'))['total'] or 0
         
         balance = ingresos - egresos

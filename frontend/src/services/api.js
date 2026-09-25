@@ -214,7 +214,7 @@ export const api = {
         const q = new URLSearchParams(params).toString()
         return `${API_URL}/reportes/operativos/csv?${q}`
     },
-    getTransacciones: (params) => axios.get('/reportes/transacciones/', { params }),
+    getTransacciones: (params) => axios.get('/reportes/transacciones', { params }),
     urlTransaccionesPdf: (params) => {
         const q = new URLSearchParams(params).toString()
         return `${API_URL}/reportes/transacciones/pdf?${q}`
@@ -343,9 +343,9 @@ export const api = {
     },
 
     // Nuevos Reportes Avanzados
-    getRentabilidadRutas: (params) => axios.get('/reportes/rentabilidad-rutas/', { params }),
-    getKPIsEjecutivos: () => axios.get('/reportes/kpis-ejecutivos/'),
-    getTendenciasMensuales: (params) => axios.get('/reportes/tendencias-mensuales/', { params }),
+getRentabilidadRutas: (params) => axios.get('/reportes/rentabilidad-rutas', { params }),
+getKPIsEjecutivos: () => axios.get('/reportes/kpis-ejecutivos'),
+getTendenciasMensuales: (params) => axios.get('/reportes/tendencias-mensuales', { params }),
 
     // Alertas de Sistema
     getAlertasNoLeidas: () => axios.get('/alertas/no_leidas/'),

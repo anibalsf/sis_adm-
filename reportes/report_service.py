@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from django.db.models import Sum, Count
 from django.utils import timezone
 from tesoreria.models import Pago, Egreso
+from reportes.query_helpers import INGRESO_ESTADOS_VALIDOS, EGRESO_ESTADOS_VALIDOS
 from hojasruta.models import HojaRuta
 from sanciones.models import Sancion
 from afiliados.models import Afiliado
@@ -15,8 +16,8 @@ class ReportService:
         """Genera resumen del día anterior"""
         ayer = timezone.now().date() - timedelta(days=1)
         
-        ingresos = Pago.objects.filter(fecha_pago=ayer).aggregate(total=Sum('monto'))['total'] or 0
-        egresos = Egreso.objects.filter(fecha=ayer).aggregate(total=Sum('monto'))['total'] or 0
+        ingresos = Pago.objects.filter(fecha_pago=ayer, estado__in=INGRESO_ESTADOS_VALIDOS).aggregate(total=Sum('monto'))['total'] or 0
+        egresos = Egreso.objects.filter(fecha=ayer, estado__in=EGRESO_ESTADOS_VALIDOS).aggregate(total=Sum('monto'))['total'] or 0
         viajes = HojaRuta.objects.filter(fecha_emision=ayer).count()
         sanciones = Sancion.objects.filter(fecha__date=ayer).count()
         
@@ -35,8 +36,8 @@ class ReportService:
         hoy = timezone.now().date()
         hace_una_semana = hoy - timedelta(days=7)
         
-        ingresos = Pago.objects.filter(fecha_pago__gte=hace_una_semana).aggregate(total=Sum('monto'))['total'] or 0
-        egresos = Egreso.objects.filter(fecha__gte=hace_una_semana).aggregate(total=Sum('monto'))['total'] or 0
+        ingresos = Pago.objects.filter(fecha_pago__gte=hace_una_semana, estado__in=INGRESO_ESTADOS_VALIDOS).aggregate(total=Sum('monto'))['total'] or 0
+        egresos = Egreso.objects.filter(fecha__gte=hace_una_semana, estado__in=EGRESO_ESTADOS_VALIDOS).aggregate(total=Sum('monto'))['total'] or 0
         morosos_count = Afiliado.objects.filter(estado='sancionado').count()
         
         resumen = f"📈 *RESUMEN SEMANAL S.M.I.T.*\n"
@@ -56,8 +57,8 @@ class ReportService:
         mes_nombre = hoy.strftime('%B %Y')
         inicio_mes = hoy.replace(day=1)
         
-        ingresos = Pago.objects.filter(fecha_pago__gte=inicio_mes).aggregate(total=Sum('monto'))['total'] or 0
-        egresos = Egreso.objects.filter(fecha__gte=inicio_mes).aggregate(total=Sum('monto'))['total'] or 0
+        ingresos = Pago.objects.filter(fecha_pago__gte=inicio_mes, estado__in=INGRESO_ESTADOS_VALIDOS).aggregate(total=Sum('monto'))['total'] or 0
+        egresos = Egreso.objects.filter(fecha__gte=inicio_mes, estado__in=EGRESO_ESTADOS_VALIDOS).aggregate(total=Sum('monto'))['total'] or 0
         
         resumen = f"🏛️ *BALANCE MENSUAL - {mes_nombre.upper()}*\n\n"
         resumen += f"💰 *Ingresos Totales:* Bs. {ingresos:.2f}\n"
