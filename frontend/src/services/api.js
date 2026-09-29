@@ -351,24 +351,26 @@ getTendenciasMensuales: (params) => axios.get('/reportes/tendencias-mensuales', 
     getAlertasNoLeidas: () => axios.get('/alertas/no_leidas/'),
     marcarAlertaLeida: (id) => axios.post(`/alertas/${id}/marcar_leida/`),
     marcarTodasAlertasLeidas: () => axios.post('/alertas/marcar_todas_leidas/'),
-    // Reporte de Cobertura por Categoria de Ingreso
+    // Reporte por Categoria (ingresos y egresos)
     getReporteCategoria: (params) => axios.get('/reportes/por-categoria/', { params }),
     downloadReporteCategoriaPdf: async (params = {}) => {
         const q = new URLSearchParams(params).toString();
+        const base = params.tipo === 'egreso' ? 'egresos' : 'cobertura';
         const nombre = params.todas
-            ? 'reporte_todas_las_categorias'
+            ? `${base}_todas_las_categorias`
             : params.nombre_categoria
-            ? `cobertura_${params.nombre_categoria.replace(/ /g, '_').toLowerCase()}`
-            : 'cobertura_categoria';
+            ? `${base}_${params.nombre_categoria.replace(/ /g, '_').toLowerCase()}`
+            : `${base}_categoria`;
         return await downloadFile(`/reportes/por-categoria/pdf/?${q}`, `${nombre}.pdf`);
     },
     downloadReporteCategoriaExcel: async (params = {}) => {
         const q = new URLSearchParams(params).toString();
+        const base = params.tipo === 'egreso' ? 'egresos' : 'cobertura';
         const nombre = params.todas
-            ? 'reporte_todas_las_categorias'
+            ? `${base}_todas_las_categorias`
             : params.nombre_categoria
-            ? `cobertura_${params.nombre_categoria.replace(/ /g, '_').toLowerCase()}`
-            : 'cobertura_categoria';
+            ? `${base}_${params.nombre_categoria.replace(/ /g, '_').toLowerCase()}`
+            : `${base}_categoria`;
         return await downloadFile(`/reportes/por-categoria/excel/?${q}`, `${nombre}.xlsx`);
     },
 };

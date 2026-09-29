@@ -40,6 +40,11 @@ def _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio=None, fecha_fin=None,
     return pagos
 
 
+def _es_reporte_egresos(request):
+    """El reporte por categoría también cubre egresos cuando ?tipo=egreso."""
+    return request.GET.get('tipo') == 'egreso'
+
+
 def _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio=None, fecha_fin=None, monto_esperado=None):
     pagos_completados = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado'])
     pagos_pendientes = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['pendiente'])
@@ -1178,8 +1183,10 @@ class ReportesOperativosPDFView(APIView):
 
 class ReporteCategoriaView(APIView):
     """
-    Reporte de cobertura por categoría de ingreso.
-    Muestra qué afiliados pagaron y cuáles faltan en un tipo de pago dado.
+    Reporte por categoría de ingreso o de egreso.
+    Con ?tipo=egreso agrupa los egresos registrados por categoría en lugar de
+    medir la cobertura de pagos de los afiliados.
+
     URL: GET /api/reportes/por-categoria/?tipo_pago_id=6&fecha_inicio=2026-01-01&fecha_fin=2026-12-31
     """
     permission_classes = [IsAuthenticated]
@@ -1193,6 +1200,18 @@ class ReporteCategoriaView(APIView):
         fecha_fin = request.GET.get('fecha_fin')
         todas = request.GET.get('todas') in ['1', 'true', 'True', 'si', 'todos']
         monto_esperado = _get_decimal_param(request, 'monto_esperado')
+
+        if _es_reporte_egresos(request):
+            from . import egresos_categoria
+            reporte = egresos_categoria.construir_reporte(
+                tipo_pago_id=tipo_pago_id,
+                fecha_inicio=fecha_inicio,
+                fecha_fin=fecha_fin,
+                todas=todas,
+            )
+            if 'error' in reporte:
+                return Response(reporte, status=404)
+            return Response(reporte)
 
         afiliados_activos_query = Afiliado.objects.filter(estado='activo', is_active=True)
         total_afiliados_activos = afiliados_activos_query.count()
@@ -1322,8 +1341,8 @@ class ReporteCategoriaView(APIView):
 
 class ReporteCategoriaPDFView(APIView):
     """
-    Exporta el reporte de cobertura por categoría a PDF.
-    URL: GET /api/reportes/por-categoria/pdf/?tipo_pago_id=6&fecha_inicio=...&fecha_fin=...
+    Exporta a PDF el reporte por categoría de ingreso o de egreso.
+    URL: GET /api/reportes/por-categoria/pdf/?tipo=egreso&todas=1&fecha_inicio=...&fecha_fin=...
     """
     permission_classes = [IsAuthenticated]
 
@@ -1337,6 +1356,21 @@ class ReporteCategoriaPDFView(APIView):
         fecha_fin = request.GET.get('fecha_fin')
         todas = request.GET.get('todas') in ['1', 'true', 'True', 'si', 'todos']
         monto_esperado = _get_decimal_param(request, 'monto_esperado')
+
+        if _es_reporte_egresos(request):
+            from . import egresos_categoria
+            contenido, nombre = egresos_categoria.generar_pdf(
+                tipo_pago_id=tipo_pago_id,
+                fecha_inicio=fecha_inicio,
+                fecha_fin=fecha_fin,
+                todas=todas,
+            )
+            if contenido is None:
+                status = 404 if 'no encontrada' in nombre else 400
+                return Response({'error': nombre}, status=status)
+            response = HttpResponse(contenido, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename={nombre}'
+            return response
 
         afiliados_activos = Afiliado.objects.filter(estado='activo', is_active=True)
         total_activos = afiliados_activos.count()
@@ -1581,8 +1615,8 @@ class ReporteCategoriaPDFView(APIView):
 
 class ReporteCategoriaExcelView(APIView):
     """
-    Exporta el reporte de cobertura por categoría a Excel.
-    URL: GET /api/reportes/por-categoria/excel/?tipo_pago_id=6&fecha_inicio=...&fecha_fin=...
+    Exporta a Excel el reporte por categoría de ingreso o de egreso.
+    URL: GET /api/reportes/por-categoria/excel/?tipo=egreso&todas=1&fecha_inicio=...&fecha_fin=...
     """
     permission_classes = [IsAuthenticated]
 
@@ -1596,6 +1630,24 @@ class ReporteCategoriaExcelView(APIView):
         fecha_fin = request.GET.get('fecha_fin')
         todas = request.GET.get('todas') in ['1', 'true', 'True', 'si', 'todos']
         monto_esperado = _get_decimal_param(request, 'monto_esperado')
+
+        if _es_reporte_egresos(request):
+            from . import egresos_categoria
+            contenido, nombre = egresos_categoria.generar_excel(
+                tipo_pago_id=tipo_pago_id,
+                fecha_inicio=fecha_inicio,
+                fecha_fin=fecha_fin,
+                todas=todas,
+            )
+            if contenido is None:
+                status = 404 if 'no encontrada' in nombre else 400
+                return Response({'error': nombre}, status=status)
+            response = HttpResponse(
+                contenido,
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            )
+            response['Content-Disposition'] = f'attachment; filename={nombre}'
+            return response
 
         afiliados_activos = Afiliado.objects.filter(estado='activo', is_active=True)
         total_activos = afiliados_activos.count()
