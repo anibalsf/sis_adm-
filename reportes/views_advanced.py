@@ -4,8 +4,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Count, Avg, Q, F
+from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from datetime import timedelta, datetime
+from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 
 from tesoreria.models import Pago, Egreso
@@ -16,6 +18,62 @@ from vehiculos.models import Vehiculo
 from rutas.models import Ruta
 from reservas.models import Reserva
 
+# Porcentaje estimado de costo operativo sobre la tarifa base, usado como fallback
+# cuando la ruta no tiene un costo real configurado.
+COSTO_ESTIMADO_PORCENTAJE = 0.30
+
+# Nombres de mes en español: strftime('%B') depende del locale del sistema
+# y devolvía nombres en inglés en servidores no configurados.
+MESES_ES = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+]
+
+# Umbrales por defecto de los KPIs (orden: valor, direccion, objetivo)
+# direccion 'min' = menor es mejor, 'max' = mayor es mejor
+KPI_CONFIG = {
+    'tasa_ocupacion': {'objetivo': 75, 'direccion': 'min'},
+    'ingreso_por_vehiculo': {'objetivo': 5000, 'direccion': 'min'},
+    'ratio_ingresos_egresos': {'objetivo': 1.5, 'direccion': 'min'},
+    'crecimiento_mensual': {'objetivo': 5, 'direccion': 'min'},
+    'afiliados_morosos': {'objetivo': 10, 'direccion': 'max'},
+    'eficiencia_operativa': {'objetivo': 95, 'direccion': 'min'},
+}
+
+
+def _estado_kpi(valor, objetivo, direccion, tolerancia_pct=0.0):
+    """Clasifica un KPI como bueno/regular/malo según objetivo y dirección."""
+    if objetivo in (None, 0):
+        return 'regular'
+    if direccion == 'max':
+        if valor <= objetivo:
+            return 'bueno'
+        if valor <= objetivo * (1 + tolerancia_pct):
+            return 'regular'
+        return 'malo'
+    if valor >= objetivo:
+        return 'bueno'
+    if valor >= objetivo * (1 - tolerancia_pct):
+        return 'regular'
+    return 'malo'
+
+
+def _kpi(valor, unidad, descripcion, clave_config, formato=None):
+    """Construye el dict de un KPI con objetivo y estado consistentes."""
+    cfg = KPI_CONFIG.get(clave_config, {})
+    objetivo = cfg.get('objetivo')
+    direccion = cfg.get('direccion', 'min')
+    valor = round(float(valor or 0), 2)
+    if formato:
+        valor = formato(valor)
+    return {
+        'valor': valor,
+        'unidad': unidad,
+        'descripcion': descripcion,
+        'objetivo': objetivo,
+        'estado': _estado_kpi(valor, objetivo, direccion, tolerancia_pct=0.10),
+    }
+
 
 class RentabilidadRutasView(APIView):
     """
@@ -25,9 +83,13 @@ class RentabilidadRutasView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        meses = int(request.GET.get('meses', 3))
+        try:
+            meses = int(request.GET.get('meses', 3))
+        except (TypeError, ValueError):
+            meses = 3
+        meses = max(1, min(meses, 36))
         fecha_fin = timezone.now().date()
-        fecha_inicio = fecha_fin - timedelta(days=meses * 30)
+        fecha_inicio = fecha_fin - relativedelta(months=meses)
         
         rutas = Ruta.objects.all()
         resultados = []
@@ -52,11 +114,14 @@ class RentabilidadRutasView(APIView):
             ).aggregate(total=Sum('cantidad'))['total'] or 0
             ingresos_reservas = float(reservas_asientos) * float(ruta.tarifa_base or 0)
             
-            ingresos = max(ingresos_hojas, ingresos_reservas) if (ingresos_hojas > 0 or ingresos_reservas > 0) else (total_viajes * float(ruta.tarifa_base or 0))
+            # Las hojas de ruta y las reservas son fuentes distintas de ingreso:
+            # se suman (antes setomaba el máximo, subestimando rutas con ambos canales).
+            ingresos = ingresos_hojas + ingresos_reservas
             
-            # Costos operativos estimados (30% de la tarifa como estimación)
-            costo_por_viaje = float(ruta.tarifa_base or 0) * 0.3
-            costos_totales = costo_por_viaje * total_viajes
+            # Costos operativos estimados como % de la tarifa.
+            # TODO(costos): sustituir por costo real por ruta cuando exista tabla de costos.
+            costo_por_viaje_estimado = float(ruta.tarifa_base or 0) * COSTO_ESTIMADO_PORCENTAJE
+            costos_totales = costo_por_viaje_estimado * total_viajes
             
             utilidad = float(ingresos) - float(costos_totales)
             margen = (utilidad / float(ingresos) * 100) if ingresos > 0 else 0
@@ -151,68 +216,70 @@ class KPIsEjecutivosView(APIView):
         if ingresos_mes_anterior > 0:
             crecimiento = ((float(ingresos_mes) - float(ingresos_mes_anterior)) / float(ingresos_mes_anterior) * 100)
         
-        # 5. Afiliados morosos (%)
-        total_afiliados = Afiliado.objects.count()
-        # Verificar deuda por cuotas
-        afiliados_morosos = Afiliado.objects.filter(estado='pasivo').count()
+        # 5. Afiliados con deuda real (cuotas + sanciones pendientes).
+        # Antes se usaba estado='pasivo' como aproximación, lo que reportaba
+        # como morosos a afiliados sin deuda y omitía a los que sí la tienen.
+        from cuotas.models import Cuota
+        from sanciones.models import Sancion
+
+        afiliados_activos = Afiliado.objects.filter(estado='activo', is_active=True)
+        total_afiliados = afiliados_activos.count()
+
+        ids_con_cuota_pendiente = set(
+            Cuota.objects.filter(estado='pendiente', afiliado__in=afiliados_activos)
+            .values_list('afiliado_id', flat=True)
+        )
+        ids_con_sancion_pendiente = set(
+            Sancion.objects.filter(estado='pendiente', afiliado__in=afiliados_activos)
+            .values_list('afiliado_id', flat=True)
+        )
+        afiliados_morosos = len(ids_con_cuota_pendiente | ids_con_sancion_pendiente)
         porcentaje_morosos = (afiliados_morosos / total_afiliados * 100) if total_afiliados > 0 else 0
-        
-        # 6. Eficiencia operativa (viajes completados vs programados)
+
+        # 6. Eficiencia operativa (viajes no anulados vs emitidos)
         viajes_programados = hojas_mes.count()
-        viajes_completados = HojaRuta.objects.filter(
-            fecha_emision__gte=inicio_mes
-        ).exclude(estado='anulada').count()
-        
+        viajes_completados = hojas_mes.exclude(estado='anulada').count()
+
         eficiencia = (viajes_completados / viajes_programados * 100) if viajes_programados > 0 else 100.0
-        
+
         return Response({
             'periodo': str(inicio_mes)[:7],
             'kpis': {
-                'tasa_ocupacion': {
-                    'valor': round(tasa_ocupacion, 2),
-                    'unidad': '%',
-                    'descripcion': 'Ocupación promedio de vehículos',
-                    'objetivo': 75,
-                    'estado': 'bueno' if tasa_ocupacion >= 75 else 'regular' if tasa_ocupacion >= 50 else 'malo'
-                },
-                'ingreso_por_vehiculo': {
-                    'valor': round(float(ingreso_por_vehiculo), 2),
-                    'unidad': 'Bs',
-                    'descripcion': 'Ingreso promedio por vehículo',
-                    'objetivo': 5000
-                },
-                'ratio_ingresos_egresos': {
-                    'valor': round(float(ratio_ie), 2),
-                    'unidad': 'x',
-                    'descripcion': 'Relación ingresos/egresos',
-                    'objetivo': 1.5,
-                    'estado': 'bueno' if ratio_ie >= 1.5 else 'regular' if ratio_ie >= 1.0 else 'malo'
-                },
-                'crecimiento_mensual': {
-                    'valor': round(float(crecimiento), 2),
-                    'unidad': '%',
-                    'descripcion': 'Crecimiento vs mes anterior',
-                    'objetivo': 5
-                },
-                'afiliados_morosos': {
-                    'valor': round(porcentaje_morosos, 2),
-                    'unidad': '%',
-                    'descripcion': 'Porcentaje de afiliados con deuda o inactivos',
-                    'objetivo': 10,
-                    'estado': 'bueno' if porcentaje_morosos <= 10 else 'regular' if porcentaje_morosos <= 20 else 'malo'
-                },
-                'eficiencia_operativa': {
-                    'valor': round(eficiencia, 2),
-                    'unidad': '%',
-                    'descripcion': 'Viajes vigentes vs programados',
-                    'objetivo': 95,
-                    'estado': 'bueno' if eficiencia >= 95 else 'regular' if eficiencia >= 85 else 'malo'
-                }
+                'tasa_ocupacion': _kpi(
+                    tasa_ocupacion, '%',
+                    'Ocupación promedio de vehículos', 'tasa_ocupacion'
+                ),
+                'ingreso_por_vehiculo': _kpi(
+                    ingreso_por_vehiculo, 'Bs',
+                    'Ingreso promedio por vehículo', 'ingreso_por_vehiculo'
+                ),
+                'ratio_ingresos_egresos': _kpi(
+                    ratio_ie, 'x',
+                    'Relación ingresos/egresos', 'ratio_ingresos_egresos'
+                ),
+                'crecimiento_mensual': _kpi(
+                    crecimiento, '%',
+                    'Crecimiento vs mes anterior', 'crecimiento_mensual'
+                ),
+                'afiliados_morosos': _kpi(
+                    porcentaje_morosos, '%',
+                    'Afiliados activos con deuda pendiente', 'afiliados_morosos'
+                ),
+                'eficiencia_operativa': _kpi(
+                    eficiencia, '%',
+                    'Viajes vigentes vs emitidos', 'eficiencia_operativa'
+                )
             },
             'resumen_financiero': {
                 'ingresos_mes': float(ingresos_mes),
                 'egresos_mes': float(egresos_mes),
                 'saldo_mes': float(ingresos_mes - egresos_mes)
+            },
+            'detalle_deuda': {
+                'afiliados_activos': total_afiliados,
+                'afiliados_con_cuota_pendiente': len(ids_con_cuota_pendiente),
+                'afiliados_con_sancion_pendiente': len(ids_con_sancion_pendiente),
+                'afiliados_con_cualquier_deuda': afiliados_morosos,
             }
         })
 
@@ -225,45 +292,75 @@ class TendenciasMensualesView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        meses = int(request.GET.get('meses', 12))
+        try:
+            meses = int(request.GET.get('meses', 12))
+        except (TypeError, ValueError):
+            meses = 12
+        meses = max(1, min(meses, 36))
         hoy = timezone.now().date()
         
+        # Ventana de meses calendario completa (evita el drift de timedelta(days=30))
+        primer_mes = (hoy.replace(day=1) - relativedelta(months=meses - 1))
+        rango_inicio = primer_mes.replace(day=1)
+        rango_fin = hoy.replace(day=1) + relativedelta(months=1)
+
+        # Agregación en base de datos: una consulta por modelo en vez de 4 x N
+        pagos_mes = (Pago.objects
+                     .filter(fecha_pago__gte=rango_inicio, fecha_pago__lt=rango_fin,
+                             estado__in=INGRESO_ESTADOS_VALIDOS)
+                     .annotate(mes=TruncMonth('fecha_pago'))
+                     .values('mes')
+                     .annotate(total=Sum('monto'))
+                     .order_by('mes'))
+        ingresos_por_mes = {row['mes']: row['total'] or 0 for row in pagos_mes}
+
+        egresos_por_mes = {
+            row['mes']: row['total'] or 0
+            for row in (Egreso.objects
+                        .filter(fecha__gte=rango_inicio, fecha__lt=rango_fin,
+                                estado__in=EGRESO_ESTADOS_VALIDOS)
+                        .annotate(mes=TruncMonth('fecha'))
+                        .values('mes')
+                        .annotate(total=Sum('monto'))
+                        .order_by('mes'))
+        }
+
+        viajes_por_mes = {
+            row['mes']: row['total']
+            for row in (HojaRuta.objects
+                        .filter(fecha_emision__gte=rango_inicio, fecha_emision__lt=rango_fin)
+                        .annotate(mes=TruncMonth('fecha_emision'))
+                        .values('mes')
+                        .annotate(total=Count('id'))
+                        .order_by('mes'))
+        }
+
+        nuevos_por_mes = {
+            row['mes']: row['total']
+            for row in (Afiliado.objects
+                        .filter(fecha_ingreso__gte=rango_inicio, fecha_ingreso__lt=rango_fin)
+                        .annotate(mes=TruncMonth('fecha_ingreso'))
+                        .values('mes')
+                        .annotate(total=Count('id'))
+                        .order_by('mes'))
+        }
+
         resultados = []
-        
         for i in range(meses - 1, -1, -1):
-            fecha_fin = hoy.replace(day=1) - timedelta(days=i * 30)
-            fecha_inicio = (fecha_fin - timedelta(days=30)).replace(day=1)
-            
-            ingresos = Pago.objects.filter(
-                fecha_pago__gte=fecha_inicio,
-                fecha_pago__lt=fecha_fin,
-                estado__in=INGRESO_ESTADOS_VALIDOS
-            ).aggregate(total=Sum('monto'))['total'] or 0
-            
-            egresos = Egreso.objects.filter(
-                fecha__gte=fecha_inicio,
-                fecha__lt=fecha_fin,
-                estado__in=EGRESO_ESTADOS_VALIDOS
-            ).aggregate(total=Sum('monto'))['total'] or 0
-            
-            viajes = HojaRuta.objects.filter(
-                fecha_emision__gte=fecha_inicio,
-                fecha_emision__lt=fecha_fin
-            ).count()
-            
-            nuevos_afiliados = Afiliado.objects.filter(
-                fecha_ingreso__gte=fecha_inicio,
-                fecha_ingreso__lt=fecha_fin
-            ).count()
-            
+            fecha_inicio = (hoy.replace(day=1) - relativedelta(months=i)).replace(day=1)
+            clave = fecha_inicio
+
+            ingresos = ingresos_por_mes.get(clave, 0)
+            egresos = egresos_por_mes.get(clave, 0)
+
             resultados.append({
                 'mes': fecha_inicio.strftime('%Y-%m'),
-                'mes_nombre': fecha_inicio.strftime('%B %Y'),
+                'mes_nombre': f'{MESES_ES[fecha_inicio.month - 1]} {fecha_inicio.year}',
                 'ingresos': float(ingresos),
                 'egresos': float(egresos),
                 'saldo': float(ingresos - egresos),
-                'viajes': viajes,
-                'nuevos_afiliados': nuevos_afiliados
+                'viajes': viajes_por_mes.get(clave, 0),
+                'nuevos_afiliados': nuevos_por_mes.get(clave, 0)
             })
         
         if len(resultados) >= 3:

@@ -329,6 +329,9 @@ STORAGES = {
 # Media files (User uploaded files)
 MEDIA_URL = config('MEDIA_URL', default='/media/')
 MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media')
+# Origen público con el que se sirven los archivos de MEDIA_URL. Necesario
+# para enviar adjuntos por WhatsApp: Twilio no acepta URLs relativas.
+MEDIA_BASE_URL = config('MEDIA_BASE_URL', default='').rstrip('/')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -495,24 +498,49 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
+# Prefetch 1: evita que un worker acapare las tareas programadas y retrase
+# los reportes automáticos.
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutos
 
+# ==============================================================================
+# REPORTES AUTOMÁTICOS
+# ==============================================================================
+# Destinatarios por defecto, usados cuando ConfiguracionReporte no define
+# destinatarios para un tipo de reporte.
+REPORT_RECIPIENTS_WHATSAPP = config('REPORT_RECIPIENTS_WHATSAPP', default='')
+# Número que recibe el control diario del puntero La Paz.
+PUNTERO_LA_PAZ_PHONE_NUMBER = config('PUNTERO_LA_PAZ_PHONE_NUMBER', default='')
+# Deuda a partir de la cual un afiliado entra en la alerta semanal de morosos.
+MOROSIDAD_UMBRAL_CRITICO = config('MOROSIDAD_UMBRAL_CRITICO', default=200, cast=int)
+
+# ==============================================================================
 # CELERY BEAT SCHEDULE
+# ==============================================================================
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
-    # Reporte diario a las 8:00 AM
-    'send-daily-report-morning': {
+    # ------------------------------------------------------------------
+    # Reportes automáticos
+    # ------------------------------------------------------------------
+    # La programación real (día y hora) vive en ConfiguracionReporte y la
+    # aplica este dispatcher, que corre cada 10 minutos. Así, editar la
+    # hora o el día desde la UI surte efecto sin tocar este diccionario.
+    'dispatch-reportes-programados': {
+        'task': 'reportes_auto.tasks.dispatch_reportes_programados',
+        'schedule': crontab(minute='*/10'),
+    },
+    # Red de seguridad: si la configuración de un tipo está inactiva o no
+    # existe, el reporte se envía igual a los destinarios de settings.
+    'send-daily-report-fallback': {
         'task': 'reportes_auto.tasks.send_daily_report_task',
         'schedule': crontab(hour=8, minute=0),
     },
-    # Reporte semanal los lunes a las 8:00 AM
-    'send-weekly-report-monday': {
+    'send-weekly-report-fallback': {
         'task': 'reportes_auto.tasks.send_weekly_report_task',
         'schedule': crontab(hour=8, minute=0, day_of_week=1),  # 1 = Lunes
     },
-    # Reporte mensual el día 1 de cada mes a las 8:00 AM
-    'send-monthly-report-first-day': {
+    'send-monthly-report-fallback': {
         'task': 'reportes_auto.tasks.send_monthly_report_task',
         'schedule': crontab(hour=8, minute=0, day_of_month=1),
     },
@@ -531,12 +559,9 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'whatsapp_notif.tasks.send_debt_reminders',
         'schedule': crontab(hour=9, minute=0, day_of_week=1),
     },
-    # Lista de Control Oficial - Lunes 10:00 PM
-    'send-monday-control-report': {
-        'task': 'reportes_auto.tasks.send_monday_hojas_ruta_report_task',
-        'schedule': crontab(hour=22, minute=0, day_of_week=1),
-    },
     # Notificación Puntero La Paz - Diario 7:00 AM
+    # Es un aviso operativo independiente de la configuración de reportes,
+    # por eso queda con horario fijo.
     'send-daily-puntero-report': {
         'task': 'reportes_auto.tasks.send_daily_puntero_la_paz_task',
         'schedule': crontab(hour=7, minute=0),

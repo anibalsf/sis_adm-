@@ -57,13 +57,13 @@ def previsualizar_reporte_lunes():
         )
 
     # Generar el reporte
-    reporte_texto = ReportGenerator.get_monday_hojas_pagadas_report()
-    
+    reporte_texto, _datos = ReportGenerator.get_monday_hojas_pagadas_report()
+
     print("\n--- INICIO DEL MENSAJE DE WHATSAPP ---")
     print(reporte_texto)
     print("--- FIN DEL MENSAJE ---\n")
-    
-    print("✅ El reporte se enviará automáticamente cada lunes a las 10:00 PM.")
+
+    print("✅ El reporte se enviará según la programación configurada en Reportes Automáticos.")
     
     # Limpiar datos de prueba si se desea (opcional)
     # h1.delete()

@@ -184,56 +184,41 @@ def enviar_reporte_diario_ingresos():
 
 def enviar_alertas_morosos_semanal():
     """
-    Reporte semanal de morosos críticos (Viernes 18:00)
+    Reporte semanal de morosos (Viernes 18:00)
+
+    Usa la misma definición de deuda que el reporte de estado de cuentas
+    (cuotas + sanciones pendientes) en vez de un umbral fijo de 200 Bs
+    sobre sanciones solamente.
     """
-    from afiliados.models import Afiliado
     from comunicacion.services import WhatsAppService
     from comunicacion.whatsapp_templates import WhatsAppTemplates
-    
+
     try:
-        # Lógica simplificada de morosos (ej. más de 500Bs deuda)
-        # Esto debería ser más complejo, reusando lógica de reportes
-        afiliados = Afiliado.objects.filter(estado='activo')
-        criticos = []
-        total_deuda_sistema = 0
-        
-        for afi in afiliados:
-            deuda_cuotas = 0 # Implementar cálculo real si props existen
-            # Por ahora solo sanciones para el ejemplo rápido o lo que tenga relación
-            deuda_sanciones = 0
-            # deuda_sanciones = afi.sanciones.filter(estado='pendiente').aggregate(Sum('monto'))['monto__sum'] or 0
-            
-            # Como llamar a relaciones inversas sin importar modelos circularmente puede ser tricky si no están cargados,
-            # confiamos en que sanciones.models importó Afiliado, no al revés.
-            # Usamos related_name si existe.
-            
-            sanciones = afi.sanciones.filter(estado='pendiente')
-            deuda = sanciones.aggregate(t=Sum('monto'))['t'] or 0
-            
-            if deuda > 200: # Umbral de ejemplo
-                criticos.append((afi.nombre_completo, deuda))
-                total_deuda_sistema += deuda
-        
-        # Top 5
-        criticos.sort(key=lambda x: x[1], reverse=True)
-        top_5 = criticos[:5]
-        
-        detalle = ""
-        for nombre, monto in top_5:
-            detalle += f"- {nombre}: Bs. {monto}\n"
-            
-        msg = WhatsAppTemplates.alerta_morosos(
-            len(criticos),
-            total_deuda_sistema,
-            detalle or "Sin morosos críticos"
+        from reportes_auto.morosidad import resumen_morosidad
+
+        resumen = resumen_morosidad(umbral_critico=settings.MOROSIDAD_UMBRAL_CRITICO)
+
+        detalle = "\n".join(
+            f"- {item['nombre_completo']}: Bs. {item['deuda_total']:.2f} "
+            f"({item['nivel_morosidad']})"
+            for item in resumen['top_deudores']
         )
-        
+
+        msg = WhatsAppTemplates.alerta_morosos(
+            resumen['con_deuda'],
+            resumen['deuda_total'],
+            detalle or "Sin afiliados con deuda",
+        )
+
         service = WhatsAppService()
         admin_phone = getattr(settings, 'ADMIN_PHONE_NUMBER', None)
         if admin_phone:
-             service.send_message(admin_phone, msg)
-        
-        logger.info("✅ Reporte semanal de morosos enviado")
+            service.send_message(admin_phone, msg)
+
+        logger.info(
+            f"✅ Reporte semanal de morosos enviado: {resumen['con_deuda']} con deuda, "
+            f"Bs. {resumen['deuda_total']:.2f}"
+        )
         return 1
 
     except Exception as e:
@@ -247,15 +232,23 @@ def enviar_notificacion_puntero_diario():
     """
     from reportes_auto.report_generator import ReportGenerator
     from comunicacion.services import WhatsAppService
-    
+
     try:
-        summary = ReportGenerator.get_daily_puntero_la_paz_report()
-        # Número solicitado por el usuario
-        admin_phone = '71275002'
-        
+        summary, _datos = ReportGenerator.get_daily_puntero_la_paz_report()
+        admin_phone = (
+            getattr(settings, 'PUNTERO_LA_PAZ_PHONE_NUMBER', None)
+            or getattr(settings, 'ADMIN_PHONE_NUMBER', None)
+        )
+        if not admin_phone:
+            logger.warning(
+                "Notificación del puntero omitida: configure PUNTERO_LA_PAZ_PHONE_NUMBER "
+                "o ADMIN_PHONE_NUMBER"
+            )
+            return 0
+
         service = WhatsAppService()
         service.send_message(admin_phone, summary)
-        
+
         logger.info(f"✅ Notificación diaria de puntero enviada a {admin_phone}")
         return 1
     except Exception as e:

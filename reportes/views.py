@@ -92,116 +92,58 @@ class AfiliadosMorososView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        from afiliados.models import Afiliado
-        from tesoreria.models import Pago
-        from sanciones.models import Sancion
-        
-        meses_atras = int(request.GET.get('meses', 3))
-        fecha_limite = datetime.now() - timedelta(days=30 * meses_atras)
-        
-        # Obtener todos los afiliados activos
-        afiliados = Afiliado.objects.filter(estado='activo', is_active=True)
-        
-        morosos = []
-        for afiliado in afiliados:
-            # Calcular deuda total de cuotas pendientes
-            try:
-                cuotas_pendientes = afiliado.cuotas.filter(estado='pendiente')
-                deuda_cuotas = cuotas_pendientes.aggregate(total=Sum('monto'))['total'] or 0
-            except:
-                deuda_cuotas = 0
-            
-            # Calcular deuda de sanciones pendientes
-            try:
-                sanciones_pendientes = afiliado.sanciones.filter(estado='pendiente')
-                deuda_sanciones = sanciones_pendientes.aggregate(total=Sum('monto'))['total'] or 0
-            except:
-                deuda_sanciones = 0
-            
-            deuda_total = deuda_cuotas + deuda_sanciones
-            
-            # Si tiene deuda, agregar a la lista
-            if deuda_total > 0:
-                # Obtener último pago
-                try:
-                    ultimo_pago = Pago.objects.filter(afiliado=afiliado).order_by('-fecha_pago').first()
-                    dias_sin_pagar = (datetime.now().date() - ultimo_pago.fecha_pago).days if ultimo_pago and hasattr(ultimo_pago, 'fecha_pago') else 999
-                except:
-                    dias_sin_pagar = 999
-                
-                # Determinar nivel de morosidad
-                if dias_sin_pagar > 90:
-                    nivel = 'CRÍTICO'
-                elif dias_sin_pagar > 60:
-                    nivel = 'ALTO'
-                elif dias_sin_pagar > 30:
-                    nivel = 'MODERADO'
-                else:
-                    nivel = 'BAJO'
-                
-                try:
-                    cantidad_cuotas = cuotas_pendientes.count()
-                except:
-                    cantidad_cuotas = 0
-                    
-                try:
-                    cantidad_sanciones = sanciones_pendientes.count()
-                except:
-                    cantidad_sanciones = 0
-                
-                try:
-                    cantidad_faltas = afiliado.asistencias.filter(estado='falta').count()
-                except:
-                    cantidad_faltas = 0
+        from dateutil.relativedelta import relativedelta
 
-                morosos.append({
-                    'afiliado_id': afiliado.id,
-                    'nombre_completo': afiliado.nombre_completo,
-                    'ci': afiliado.ci,
-                    'telefono': afiliado.telefono,
-                    'deuda_cuotas': float(deuda_cuotas),
-                    'deuda_sanciones': float(deuda_sanciones),
-                    'deuda_total': float(deuda_total),
-                    'cantidad_cuotas_pendientes': cantidad_cuotas,
-                    'cantidad_sanciones_pendientes': cantidad_sanciones,
-                    'cantidad_faltas': cantidad_faltas,
-                    'ultimo_pago': str(ultimo_pago.fecha_pago) if ultimo_pago and hasattr(ultimo_pago, 'fecha_pago') else 'Nunca',
-                    'dias_sin_pagar': dias_sin_pagar,
-                    'nivel_morosidad': nivel
-                })
-        
-        # Ordenar por deuda total descendente
-        morosos.sort(key=lambda x: x['deuda_total'], reverse=True)
-        
-        # Calcular totales (sobre la lista completa)
-        total_deuda = sum(m['deuda_total'] for m in morosos)
-        total_items = len(morosos)
-        
-        # Paginación manual
+        from reportes_auto.morosidad import (
+            CAMPOS_MOROSO, _deuda_queryset, nivel_morosidad, serializar_filas,
+        )
+
         try:
-            page = int(request.GET.get('page', 1))
-            page_size = int(request.GET.get('page_size', 20))
-        except ValueError:
+            meses_atras = max(1, min(int(request.GET.get('meses', 3)), 36))
+        except (TypeError, ValueError):
+            meses_atras = 3
+        fecha_limite = datetime.now().date() - relativedelta(months=meses_atras)
+
+        try:
+            page = max(1, int(request.GET.get('page', 1)))
+        except (TypeError, ValueError):
             page = 1
+        try:
+            page_size = max(1, min(int(request.GET.get('page_size', 20)), 200))
+        except (TypeError, ValueError):
             page_size = 20
 
-        start = (page - 1) * page_size
-        end = start + page_size
-        morosos_paginados = morosos[start:end]
-        
+        # La deuda se agrega en SQL (subqueries) en vez de una consulta por
+        # afiliado, y el nivel se clasifica con la misma regla que usan el
+        # KPI de morosos y la alerta semanal.
+        morosos_qs = _deuda_queryset(periodo_limite=fecha_limite).order_by('-deuda_total')
+
+        hoy = datetime.now().date()
+        total_items = morosos_qs.count()
+        deuda_total = morosos_qs.aggregate(total=Sum('deuda_total'))['total'] or 0
+
+        # Solo se trae la página pedida a memoria.
+        filas = morosos_qs.values(*CAMPOS_MOROSO)[(page - 1) * page_size: page * page_size]
+        morosos = list(serializar_filas(filas, hoy))
+
+        # El resumen por nivel se cuenta sobre toda la lista, no solo la página,
+        # para que los badges reflejen el total real.
+        niveles = {'critico': 0, 'alto': 0, 'moderado': 0, 'bajo': 0}
+        for ultimo in morosos_qs.values_list('ultimo_pago', flat=True):
+            dias = (hoy - ultimo).days if ultimo else None
+            clave = nivel_morosidad(dias).lower()
+            if clave in niveles:
+                niveles[clave] += 1
+
         return Response({
             'count': total_items,
             'total_pages': (total_items + page_size - 1) // page_size,
             'current_page': page,
             'page_size': page_size,
-            'deuda_total_sistema': float(total_deuda),
-            'morosos': morosos_paginados,
-            'resumen_por_nivel': {
-                'critico': len([m for m in morosos if m['nivel_morosidad'] == 'CRÍTICO']),
-                'alto': len([m for m in morosos if m['nivel_morosidad'] == 'ALTO']),
-                'moderado': len([m for m in morosos if m['nivel_morosidad'] == 'MODERADO']),
-                'bajo': len([m for m in morosos if m['nivel_morosidad'] == 'BAJO'])
-            }
+            'deuda_total_sistema': float(deuda_total),
+            'meses_analizados': meses_atras,
+            'morosos': morosos,
+            'resumen_por_nivel': niveles,
         })
 
 
