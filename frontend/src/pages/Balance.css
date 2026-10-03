@@ -1,3 +1,4 @@
+/* ===== BALANCE CONTAINER ===== */
 .balance-container {
     padding: 2.5rem;
     background: var(--dashboard-bg, #f8fafc);
@@ -6,15 +7,8 @@
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 .balance-container h1 {
@@ -35,19 +29,19 @@
     letter-spacing: -0.02em;
 }
 
-.balance-container p {
+.balance-container > p {
     color: #64748b;
     font-size: 1.1rem;
-    margin-bottom: 2.5rem;
+    margin-bottom: 2rem;
 }
 
-/* Filtros */
+/* ===== FILTROS ===== */
 .filter-card {
     background: white;
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 2rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .filter-form {
@@ -71,11 +65,18 @@
     font-size: 0.875rem;
 }
 
-.filter-form input {
+.filter-form input[type="date"] {
     padding: 0.5rem 0.75rem;
     border: 1px solid #cbd5e0;
-    border-radius: 6px;
+    border-radius: 8px;
     font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.filter-form input[type="date"]:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
 }
 
 .filter-form .form-actions {
@@ -83,68 +84,78 @@
     gap: 0.5rem;
 }
 
-/* Tarjetas de balance */
+.periodo-badge {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: #065f46;
+    font-weight: 500;
+    display: inline-block;
+}
+
+/* ===== TARJETAS DE RESUMEN ===== */
 .balance-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1.5rem;
     margin-bottom: 2rem;
 }
 
 .balance-card {
     background: white;
-    border-radius: 12px;
-    padding: 2rem;
+    border-radius: 16px;
+    padding: 1.75rem;
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
+    gap: 1.25rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transition: transform 0.25s, box-shadow 0.25s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
 }
 
 .balance-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-5px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
-.balance-card .card-icon {
-    font-size: 3rem;
-    line-height: 1;
-}
-
-.balance-card .card-content {
-    flex: 1;
-}
+.balance-card .card-icon { font-size: 2.75rem; line-height: 1; }
+.balance-card .card-content { flex: 1; }
 
 .balance-card h3 {
-    margin: 0 0 0.5rem 0;
-    font-size: 0.875rem;
+    margin: 0 0 0.4rem 0;
+    font-size: 0.8rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #718096;
+    letter-spacing: 0.07em;
+    color: rgba(255,255,255,0.85);
     font-weight: 600;
 }
 
 .balance-card .amount {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 0.25rem;
+    font-size: 1.9rem;
+    font-weight: 800;
+    margin-bottom: 0.2rem;
+    letter-spacing: -0.02em;
 }
 
 .balance-card .count {
-    font-size: 0.875rem;
-    color: #a0aec0;
+    font-size: 0.82rem;
+    color: rgba(255,255,255,0.75);
 }
 
-/* Colores específicos */
+.balance-card .card-arrow {
+    font-size: 1.8rem;
+    opacity: 0.5;
+    font-weight: 300;
+}
+
+/* Variantes de color */
 .balance-card.ingresos {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-}
-
-.balance-card.ingresos h3,
-.balance-card.ingresos .count {
-    color: rgba(255, 255, 255, 0.9);
 }
 
 .balance-card.egresos {
@@ -152,76 +163,433 @@
     color: white;
 }
 
-.balance-card.egresos h3,
-.balance-card.egresos .count {
-    color: rgba(255, 255, 255, 0.9);
-}
-
 .balance-card.saldo.positivo {
     background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
     color: #065f46;
 }
-
 .balance-card.saldo.positivo h3,
-.balance-card.saldo.positivo .count {
-    color: rgba(6, 95, 70, 0.8);
-}
+.balance-card.saldo.positivo .count { color: rgba(6, 95, 70, 0.8); }
 
 .balance-card.saldo.negativo {
     background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
     color: #7c2d12;
 }
-
 .balance-card.saldo.negativo h3,
-.balance-card.saldo.negativo .count {
-    color: rgba(124, 45, 18, 0.8);
+.balance-card.saldo.negativo .count { color: rgba(124, 45, 18, 0.75); }
+
+/* ===== PESTAÑAS ===== */
+.tabs-container {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    background: white;
+    border-radius: 12px;
+    padding: 0.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    flex-wrap: wrap;
 }
 
-/* Información del periodo */
-.periodo-info {
-    background: #edf2f7;
-    padding: 1rem 1.5rem;
+.tab-btn {
+    padding: 0.65rem 1.25rem;
+    border: none;
     border-radius: 8px;
-    text-align: center;
-    color: #2d3748;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    color: #64748b;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-.periodo-info strong {
-    margin-right: 0.5rem;
+.tab-btn:hover { background: #f1f5f9; color: #1e293b; }
+
+.tab-btn.active {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
 }
 
-/* Loading y Error */
-.loading,
-.error {
+.tab-btn.ingresos-tab.active {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+}
+
+.tab-btn.egresos-tab.active {
+    background: linear-gradient(135deg, #f093fb, #f5576c);
+}
+
+.tab-badge {
+    background: rgba(255,255,255,0.25);
+    border-radius: 20px;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.tab-btn:not(.active) .tab-badge {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+/* ===== CONTENIDO DE TABS ===== */
+.tab-content { animation: fadeIn 0.3s ease; }
+
+/* ===== TABLAS ===== */
+.categories-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.75rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.section-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ingresos-title { color: #3730a3; }
+.egresos-title  { color: #be123c; }
+
+.table-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.table-header-row .section-title { margin-bottom: 0; }
+
+.search-input {
+    padding: 0.5rem 1rem;
+    border: 1px solid #cbd5e0;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    min-width: 260px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16,185,129,0.15);
+}
+
+.header-filters {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.estado-filter {
+    padding: 0.5rem 0.9rem;
+    border: 1px solid #cbd5e0;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    background: #ffffff;
+    color: #334155;
+    outline: none;
+    cursor: pointer;
+}
+
+.estado-filter:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16,185,129,0.15);
+}
+
+/* Resumen de totales de egresos (misma info que Pagos y Egresos) */
+.egresos-totales {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+    margin-bottom: 1.25rem;
+}
+
+.egresos-total-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #94a3b8;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.egresos-total-card.principal {
+    border-left-color: #be123c;
+    background: #fff1f2;
+}
+
+.egresos-total-card .label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748b;
+}
+
+.egresos-total-card .valor {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.egresos-total-card.principal .valor {
+    font-size: 1.45rem;
+    color: #be123c;
+}
+
+.egresos-total-card .valor.verde { color: #15803d; }
+.egresos-total-card .valor.ambar { color: #b45309; }
+.egresos-total-card .valor.tachado { color: #94a3b8; text-decoration: line-through; }
+
+.egresos-total-card .detalle {
+    font-size: 0.74rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.total-todos {
+    margin-top: 4px;
+    font-weight: 700;
+    color: #be123c;
+}
+
+/* Badge de estado en la tabla de egresos */
+.estado-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.estado-badge.aprobado,
+.estado-badge.completado {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.estado-badge.pendiente_aprobacion {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.estado-badge.anulado {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.table-container { overflow-x: auto; }
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.data-table thead tr {
+    background: #f8fafc;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.data-table th {
+    padding: 0.85rem 1rem;
+    text-align: left;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+}
+
+.data-table tbody tr {
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.15s;
+}
+
+.data-table tbody tr:hover { background: #f8fafc; }
+.data-table tbody tr:last-child { border-bottom: none; }
+
+.data-table td {
+    padding: 0.85rem 1rem;
+    color: #334155;
+    vertical-align: middle;
+}
+
+.data-table tfoot .total-row {
+    font-weight: 700;
+    font-size: 0.95rem;
+    border-top: 2px solid #e2e8f0;
+}
+
+.total-row.ingresos-total {
+    background: rgba(46, 125, 50, 0.07);
+    color: #15803d;
+}
+
+.total-row.egresos-total {
+    background: rgba(198, 40, 40, 0.07);
+    color: #b91c1c;
+}
+
+/* Badges e identificadores */
+.recibo-badge {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    font-family: monospace;
+}
+
+.egreso-badge {
+    background: linear-gradient(135deg, #f093fb, #f5576c);
+}
+
+.concepto-tag {
+    display: inline-block;
+    border-radius: 20px;
+    padding: 0.2rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.ingreso-tag {
+    background: rgba(103, 126, 234, 0.12);
+    color: #4338ca;
+}
+
+.egreso-tag {
+    background: rgba(240, 147, 251, 0.15);
+    color: #9d174d;
+}
+
+.descripcion-cell {
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+/* ===== SALDO FINAL ===== */
+.saldo-final-card {
+    border-radius: 14px;
+    padding: 1.5rem 2rem;
+    margin-top: 1.5rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+.saldo-final-card.positivo {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid #a7f3d0;
+}
+
+.saldo-final-card.negativo {
+    background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%);
+    border: 1px solid #fecdd3;
+}
+
+.saldo-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    font-size: 1rem;
+    color: #334155;
+}
+
+.saldo-final {
+    padding-top: 0.75rem;
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+.saldo-divider {
+    height: 2px;
+    background: rgba(0,0,0,0.08);
+    margin: 0.5rem 0;
+    border-radius: 2px;
+}
+
+.saldo-amount {
+    font-weight: 700;
+}
+.saldo-amount.ingreso  { color: #15803d; }
+.saldo-amount.egreso   { color: #b91c1c; }
+.saldo-amount.final.positivo { color: #059669; font-size: 1.35rem; }
+.saldo-amount.final.negativo { color: #dc2626; font-size: 1.35rem; }
+
+/* ===== LOADING & ERROR ===== */
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    color: #64748b;
+    gap: 1rem;
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid #e2e8f0;
+    border-top-color: #10b981;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error-state {
     text-align: center;
     padding: 3rem;
-    font-size: 1.125rem;
+    font-size: 1.1rem;
+    color: #dc2626;
+    background: #fff1f2;
+    border-radius: 12px;
+    border: 1px solid #fecdd3;
 }
 
-.error {
-    color: #e53e3e;
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #94a3b8;
+    font-size: 1rem;
+    font-style: italic;
 }
 
-/* Responsive */
+/* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
-    .balance-cards {
-        grid-template-columns: 1fr;
-    }
-
-    .filter-form {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .filter-form .form-group {
-        width: 100%;
-    }
-
-    .filter-form .form-actions {
-        width: 100%;
-    }
-
-    .filter-form .form-actions button {
-        flex: 1;
-    }
+    .balance-container { padding: 1.25rem; }
+    .balance-cards { grid-template-columns: 1fr; }
+    .filter-form { flex-direction: column; align-items: stretch; }
+    .filter-form .form-group { width: 100%; }
+    .filter-form .form-actions { width: 100%; }
+    .filter-form .form-actions button { flex: 1; }
+    .tabs-container { gap: 0.3rem; }
+    .tab-btn { font-size: 0.82rem; padding: 0.55rem 0.85rem; }
+    .balance-card .amount { font-size: 1.5rem; }
+    .table-header-row { flex-direction: column; align-items: flex-start; }
+    .search-input { min-width: unset; width: 100%; }
+    .header-filters { width: 100%; }
+    .estado-filter { width: 100%; }
+    .egresos-totales { grid-template-columns: 1fr; }
+    .saldo-final { font-size: 1rem; }
+    .saldo-amount.final { font-size: 1.1rem !important; }
 }
