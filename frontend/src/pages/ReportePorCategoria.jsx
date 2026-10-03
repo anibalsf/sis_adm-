@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import './ReportesFinancieros.css';
 import './ReportePorCategoria.css';
@@ -10,6 +10,8 @@ const FILTROS_INICIO = {
     monto_esperado: ''
 };
 
+const FILAS_POR_PAGINA = 25;
+
 const bs = (valor) => `Bs. ${Number(valor || 0).toFixed(2)}`;
 
 const badgeEstado = (estado) => {
@@ -20,6 +22,9 @@ const badgeEstado = (estado) => {
 };
 
 const fechaLegible = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString() : '-');
+
+const normalizar = (texto) =>
+    String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 function KpiEgresos({ icono, clase, label, valor, color }) {
     return (
@@ -44,61 +49,354 @@ function BarraParticipacion({ porcentaje }) {
     );
 }
 
-function TablaDetalleEgresos({ egresos, titulo, colorTitulo, mensajeVacio }) {
-    const total = (egresos || []).reduce((acc, e) => acc + Number(e.monto || 0), 0);
+function Paginacion({ pagina, totalPaginas, onCambiar }) {
+    if (totalPaginas <= 1) return null;
+    return (
+        <div className="tabla-paginacion">
+            <button type="button" className="btn-pagina" onClick={() => onCambiar(pagina - 1)} disabled={pagina <= 1}>
+                ‹ Anterior
+            </button>
+            <span>Página {pagina} de {totalPaginas}</span>
+            <button type="button" className="btn-pagina" onClick={() => onCambiar(pagina + 1)} disabled={pagina >= totalPaginas}>
+                Siguiente ›
+            </button>
+        </div>
+    );
+}
+
+function BuscadorTabla({ valor, onChange, placeholder }) {
+    return (
+        <input
+            type="search"
+            className="tabla-buscador"
+            value={valor}
+            placeholder={placeholder}
+            onChange={(e) => onChange(e.target.value)}
+            aria-label={placeholder}
+        />
+    );
+}
+
+/**
+ * Tabla reutilizada por la vista de categoría única y la de "todas las
+ * categorías": muestra la deuda de cada afiliado activo, con búsqueda,
+ * orden por monto y paginación para que siga siendo legible con muchos socios.
+ */
+function TablaDuplicados({ duplicados = [], conCategoria = false, montoTotal }) {
+    const total = duplicados.reduce((acc, d) => acc + Number(d.total_pagado || 0), 0);
+
     return (
         <div className="seccion-card">
-            <h3 className="seccion-card-title" style={colorTitulo ? { color: colorTitulo } : undefined}>
-                {titulo} ({egresos.length})
+            <h3 className="seccion-card-title" style={{ color: '#ea580c' }}>
+                ⚠️ Posibles Pagos Duplicados ({duplicados.length})
             </h3>
-            {egresos.length > 0 ? (
-                <div className="tabla-wrapper">
+            {duplicados.length === 0 ? (
+                <p className="estado-vacio" style={{ color: '#059669' }}>
+                    ✅ No se detectaron posibles pagos duplicados en el período seleccionado.
+                </p>
+            ) : (
+                <>
+                    <p className="seccion-subtitulo">
+                        Afiliados con más de un pago completado en la misma categoría. Revisá los
+                        recibos antes de anular: {bs(total)}
+                        {montoTotal != null && montoTotal !== total && ` · ${duplicados.length} caso(s)`}
+                    </p>
+                    <div className="tabla-wrapper">
+                        <table className="tabla-custom">
+                            <thead>
+                                <tr>
+                                    {conCategoria && <th>Categoría</th>}
+                                    <th>Afiliado</th>
+                                    <th>C.I.</th>
+                                    <th style={{ textAlign: 'center' }}>Pagos</th>
+                                    <th style={{ textAlign: 'right' }}>Total Pagado</th>
+                                    <th>Detalle de pagos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {duplicados.map(item => (
+                                    <tr key={`${item.categoria?.id ?? ''}_${item.afiliado_id}`}>
+                                        {conCategoria && (
+                                            <td>
+                                                <span className="badge-pill info">
+                                                    {item.categoria?.nombre || '-'}
+                                                </span>
+                                            </td>
+                                        )}
+                                        <td style={{ fontWeight: '600' }}>{item.nombre}</td>
+                                        <td>{item.ci || '-'}</td>
+                                        <td style={{ textAlign: 'center' }}>
+                                            <span className="badge-pill warning">{item.cantidad_pagos}</span>
+                                        </td>
+                                        <td style={{ fontWeight: '700', color: '#059669', textAlign: 'right' }}>
+                                            {bs(item.total_pagado)}
+                                        </td>
+                                        <td className="duplicados-detalle">
+                                            {(item.pagos || []).map(p => (
+                                                <div key={p.id}>
+                                                    {p.fecha_pago} · {bs(p.monto)}
+                                                    {p.nro_recibo ? ` · Nro ${p.nro_recibo}` : ''}
+                                                </div>
+                                            ))}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot>
+                                <tr className="tabla-custom-total">
+                                    <td colSpan={conCategoria ? 4 : 3} style={{ textAlign: 'right' }}>
+                                        TOTAL EN PAGOS DUPLICADOS
+                                    </td>
+                                    <td style={{ fontWeight: 800, color: '#ea580c', textAlign: 'right' }}>
+                                        {bs(total)}
+                                    </td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
+
+function TablaPendientes({
+    pendientes = [],
+    totalPendientes,
+    montoTotalPendiente,
+    montoEsperado,
+    truncados = false,
+    titulo,
+    subtitulo,
+    mensajeVacio
+}) {
+    const [busqueda, setBusqueda] = useState('');
+    const [orden, setOrden] = useState('nombre');
+    const [pagina, setPagina] = useState(1);
+
+    const conDeuda = montoEsperado != null;
+
+    const filtrados = useMemo(() => {
+        const termino = normalizar(busqueda);
+        const base = termino
+            ? pendientes.filter(p =>
+                [p.nombre, p.ci, p.telefono].some(campo => normalizar(campo).includes(termino))
+            )
+            : pendientes;
+        return [...base].sort((a, b) => {
+            if (orden === 'deuda') return (b.deuda ?? 0) - (a.deuda ?? 0);
+            if (orden === 'pagado') return (b.pagado ?? 0) - (a.pagado ?? 0);
+            return String(a.nombre).localeCompare(String(b.nombre), 'es');
+        });
+    }, [pendientes, busqueda, orden]);
+
+    const totalPaginas = Math.max(1, Math.ceil(filtrados.length / FILAS_POR_PAGINA));
+    const paginaActual = Math.min(pagina, totalPaginas);
+    const visibles = filtrados.slice((paginaActual - 1) * FILAS_POR_PAGINA, paginaActual * FILAS_POR_PAGINA);
+    const encabezado = totalPendientes ?? pendientes.length;
+
+    if (pendientes.length === 0) {
+        return (
+            <div className="seccion-card">
+                <h3 className="seccion-card-title" style={{ color: '#dc2626' }}>{titulo} (0)</h3>
+                <p className="estado-vacio" style={{ color: '#059669' }}>{mensajeVacio}</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="seccion-card">
+            <h3 className="seccion-card-title" style={{ color: '#dc2626' }}>
+                ❌ {titulo} ({encabezado})
+            </h3>
+            {subtitulo && <p className="seccion-subtitulo">{subtitulo}</p>}
+            {montoTotalPendiente != null && (
+                <p className="deuda-total">💸 Monto total pendiente: {bs(montoTotalPendiente)}</p>
+            )}
+            {!conDeuda && (
+                <p className="aviso-truncado">
+                    ℹ️ Indicá el <strong>monto esperado</strong> en los filtros para ver cuánto debe
+                    pagar cada afiliado. Acá se listan los que no registraron ningún pago.
+                </p>
+            )}
+
+            <div className="tabla-herramientas">
+                <BuscadorTabla
+                    valor={busqueda}
+                    onChange={valor => { setBusqueda(valor); setPagina(1); }}
+                    placeholder="Buscar por nombre, C.I. o teléfono"
+                />
+                <select
+                    className="filtro-control tabla-orden"
+                    value={orden}
+                    onChange={(e) => { setOrden(e.target.value); setPagina(1); }}
+                    aria-label="Ordenar pendientes"
+                >
+                    <option value="nombre">Ordenar por nombre</option>
+                    {conDeuda && <option value="deuda">Mayor deuda primero</option>}
+                    <option value="pagado">Mayor monto pagado primero</option>
+                </select>
+            </div>
+
+            {truncados && (
+                <p className="aviso-truncado">
+                    ⚠️ Mostrando {pendientes.length} de {encabezado} afiliados. Exportá a Excel para el detalle completo.
+                </p>
+            )}
+
+            {filtrados.length === 0 ? (
+                <p className="estado-vacio">Sin resultados para «{busqueda}».</p>
+            ) : (
+                <>
+                    <div className="tabla-wrapper">
                     <table className="tabla-custom">
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Fecha</th>
-                                <th>Categoría</th>
-                                <th>Descripción</th>
-                                <th>Método</th>
-                                <th>Banco / Nro. Op.</th>
-                                <th>Monto</th>
-                                <th>Estado</th>
+                                <th>Nombre Completo</th>
+                                <th>C.I.</th>
+                                <th>Teléfono</th>
+                                <th style={{ textAlign: 'right' }}>Monto a Pagar</th>
+                                <th style={{ textAlign: 'right' }}>Pagó</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {egresos.map((egreso, idx) => (
-                                <tr key={egreso.id}>
-                                    <td style={{ color: '#94a3b8' }}>{idx + 1}</td>
-                                    <td>{fechaLegible(egreso.fecha)}</td>
-                                    <td style={{ fontWeight: '600', color: '#0f172a' }}>{egreso.categoria}</td>
-                                    <td>{egreso.descripcion || '-'}</td>
-                                    <td>{egreso.metodo_pago_label}</td>
-                                    <td>
-                                        {egreso.banco || egreso.nro_operacion
-                                            ? [egreso.banco, egreso.nro_operacion].filter(Boolean).join(' / ')
-                                            : '-'}
+                            {visibles.map((af, idx) => (
+                                <tr key={af.afiliado_id}>
+                                    <td style={{ color: '#94a3b8' }}>
+                                        {(paginaActual - 1) * FILAS_POR_PAGINA + idx + 1}
                                     </td>
-                                    <td style={{ fontWeight: '700', color: '#dc2626' }}>{bs(egreso.monto)}</td>
-                                    <td>
-                                        <span className={badgeEstado(egreso.estado)}>{egreso.estado_label}</span>
+                                    <td style={{ fontWeight: '600', color: '#0f172a' }}>{af.nombre}</td>
+                                    <td>{af.ci}</td>
+                                    <td>{af.telefono || '-'}</td>
+                                    <td style={{ textAlign: 'right', fontWeight: '700', color: '#dc2626' }}>
+                                        {af.deuda != null ? bs(af.deuda) : <span style={{ color: '#94a3b8' }}>—</span>}
+                                    </td>
+                                    <td style={{ textAlign: 'right', color: af.pagado > 0 ? '#b45309' : '#94a3b8' }}>
+                                        {af.pagado > 0 ? bs(af.pagado) : '-'}
+                                        {conDeuda && af.pagado > 0 && af.pagado < montoEsperado && (
+                                            <div style={{ fontSize: '0.72rem', fontWeight: '600' }}>pago parcial</div>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                         <tfoot>
                             <tr className="tabla-custom-total">
-                                <td colSpan={6} style={{ textAlign: 'right' }}>TOTAL</td>
-                                <td style={{ fontWeight: 800, color: '#dc2626' }}>{bs(total)}</td>
-                                <td />
+                                <td colSpan={4} style={{ textAlign: 'right' }}>
+                                    TOTAL {conDeuda ? 'FALTANTE' : 'A COBRAR (sin monto esperado)'}
+                                </td>
+                                <td style={{ fontWeight: 800, color: '#dc2626', textAlign: 'right' }}>
+                                    {montoTotalPendiente != null ? bs(montoTotalPendiente) : '—'}
+                                </td>
+                                <td style={{ fontWeight: 700, color: '#b45309', textAlign: 'right' }}>
+                                    {bs(filtrados.reduce((acc, p) => acc + Number(p.pagado || 0), 0))}
+                                </td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
+                </>
+            )}
+
+            <Paginacion pagina={paginaActual} totalPaginas={totalPaginas} onCambiar={setPagina} />
+        </div>
+    );
+}
+
+function TablaDetalleEgresos({ egresos, titulo, colorTitulo, mensajeVacio }) {
+    const [busqueda, setBusqueda] = useState('');
+    const [pagina, setPagina] = useState(1);
+
+    const filas = useMemo(() => {
+        const termino = normalizar(busqueda);
+        return termino
+            ? egresos.filter(e =>
+                [e.categoria, e.descripcion, e.banco, e.nro_operacion, e.estado_label]
+                    .some(campo => normalizar(campo).includes(termino))
+            )
+            : egresos;
+    }, [egresos, busqueda]);
+
+    const total = filas.reduce((acc, e) => acc + Number(e.monto || 0), 0);
+    const totalPaginas = Math.max(1, Math.ceil(filas.length / FILAS_POR_PAGINA));
+    const paginaActual = Math.min(pagina, totalPaginas);
+    const visibles = filas.slice((paginaActual - 1) * FILAS_POR_PAGINA, paginaActual * FILAS_POR_PAGINA);
+
+    return (
+        <div className="seccion-card">
+            <h3 className="seccion-card-title" style={colorTitulo ? { color: colorTitulo } : undefined}>
+                {titulo} ({egresos.length})
+            </h3>
+            {egresos.length > 0 ? (
+                <>
+                    {egresos.length > FILAS_POR_PAGINA && (
+                        <div className="tabla-herramientas">
+                            <BuscadorTabla
+                                valor={busqueda}
+                                onChange={valor => { setBusqueda(valor); setPagina(1); }}
+                                placeholder="Buscar por categoría, descripción o estado"
+                            />
+                        </div>
+                    )}
+                    {filas.length === 0 ? (
+                        <p className="estado-vacio">Sin resultados para «{busqueda}».</p>
+                    ) : (
+                        <>
+                            <div className="tabla-wrapper">
+                                <table className="tabla-custom">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Fecha</th>
+                                            <th>Categoría</th>
+                                            <th>Descripción</th>
+                                            <th>Método</th>
+                                            <th>Banco / Nro. Op.</th>
+                                            <th>Monto</th>
+                                            <th>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {visibles.map((egreso, idx) => (
+                                            <tr key={egreso.id}>
+                                                <td style={{ color: '#94a3b8' }}>
+                                                    {(paginaActual - 1) * FILAS_POR_PAGINA + idx + 1}
+                                                </td>
+                                                <td>{fechaLegible(egreso.fecha)}</td>
+                                                <td style={{ fontWeight: '600', color: '#0f172a' }}>{egreso.categoria}</td>
+                                                <td>{egreso.descripcion || '-'}</td>
+                                                <td>{egreso.metodo_pago_label}</td>
+                                                <td>
+                                                    {egreso.banco || egreso.nro_operacion
+                                                        ? [egreso.banco, egreso.nro_operacion].filter(Boolean).join(' / ')
+                                                        : '-'}
+                                                </td>
+                                                <td style={{ fontWeight: '700', color: '#dc2626' }}>{bs(egreso.monto)}</td>
+                                                <td>
+                                                    <span className={badgeEstado(egreso.estado)}>{egreso.estado_label}</span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr className="tabla-custom-total">
+                                            <td colSpan={6} style={{ textAlign: 'right' }}>
+                                                TOTAL ({filas.length} de {egresos.length})
+                                            </td>
+                                            <td style={{ fontWeight: 800, color: '#dc2626' }}>{bs(total)}</td>
+                                            <td />
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            <Paginacion pagina={paginaActual} totalPaginas={totalPaginas} onCambiar={setPagina} />
+                        </>
+                    )}
+                </>
             ) : (
-                <p style={{ padding: '1.5rem', textAlign: 'center', color: '#64748b' }}>
-                    {mensajeVacio}
-                </p>
+                <p className="estado-vacio">{mensajeVacio}</p>
             )}
         </div>
     );
@@ -302,6 +600,16 @@ function VistaEgresos({ reporte }) {
 }
 
 function VistaIngresos({ reporte }) {
+    const [busquedaCategorias, setBusquedaCategorias] = useState('');
+
+    const categoriasVisibles = useMemo(() => {
+        const termino = normalizar(busquedaCategorias);
+        if (!termino) return reporte.categorias;
+        return reporte.categorias.filter(item =>
+            normalizar(item.categoria.nombre).includes(termino)
+        );
+    }, [reporte.categorias, busquedaCategorias]);
+
     if (reporte.categorias) {
         return (
             <>
@@ -345,10 +653,29 @@ function VistaIngresos({ reporte }) {
                             <div className="value">{reporte.resumen.total_afiliados_activos}</div>
                         </div>
                     </div>
+                    <div className="kpi-stat-card">
+                        <div className="kpi-stat-icon faltante">❌</div>
+                        <div className="kpi-stat-info">
+                            <label>Deudas Registradas</label>
+                            <div className="value" style={{ color: '#dc2626' }}>
+                                {reporte.resumen.total_pendientes}
+                            </div>
+                            <small className="kpi-nota">
+                                {reporte.categorias.reduce((acc, c) => acc + (c.count_parciales || 0), 0)} pagos parciales
+                            </small>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="seccion-card">
                     <h3 className="seccion-card-title">📊 Resumen Clasificado por Categoría</h3>
+                    <div className="tabla-herramientas">
+                        <BuscadorTabla
+                            valor={busquedaCategorias}
+                            onChange={setBusquedaCategorias}
+                            placeholder="Buscar categoría"
+                        />
+                    </div>
                     <div className="tabla-wrapper">
                         <table className="tabla-custom">
                             <thead>
@@ -366,7 +693,7 @@ function VistaIngresos({ reporte }) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reporte.categorias.map(item => (
+                                {categoriasVisibles.map(item => (
                                     <tr key={item.categoria.id}>
                                         <td style={{ fontWeight: '700', color: '#0f172a' }}>{item.categoria.nombre}</td>
                                         <td><span className="badge-pill success">{item.count_pagaron}</span></td>
@@ -387,7 +714,32 @@ function VistaIngresos({ reporte }) {
                             </tbody>
                         </table>
                     </div>
+                    {categoriasVisibles.length === 0 && (
+                        <p className="estado-vacio">Sin categorías para «{busquedaCategorias}».</p>
+                    )}
                 </div>
+
+                <TablaDuplicados
+                    duplicados={reporte.duplicados || []}
+                    conCategoria
+                    montoTotal={reporte.resumen.total_afiliados_con_pago_duplicado}
+                />
+
+                {reporte.categorias
+                    .filter(item => (item.pendientes?.length || 0) > 0)
+                    .map(item => (
+                        <TablaPendientes
+                            key={`pend_${item.categoria.id}`}
+                            titulo={`Faltan Cancelar: ${item.categoria.nombre}`}
+                            subtitulo={`${item.count_sin_pago} sin ningún pago · ${item.count_parciales} con pago parcial`}
+                            pendientes={item.pendientes}
+                            totalPendientes={item.count_pendientes}
+                            montoTotalPendiente={item.monto_total_pendiente}
+                            montoEsperado={item.monto_esperado_por_afiliado}
+                            truncados={item.pendientes_truncados}
+                            mensajeVacio="Todos los afiliados activos cancelaron esta categoría."
+                        />
+                    ))}
             </>
         );
     }
@@ -419,6 +771,9 @@ function VistaIngresos({ reporte }) {
                     <div className="kpi-stat-info">
                         <label>Afiliados Pendientes</label>
                         <div className="value" style={{ color: '#dc2626' }}>{reporte.resumen.count_pendientes}</div>
+                        <small className="kpi-nota">
+                            {reporte.resumen.count_sin_pago} sin pago · {reporte.resumen.count_parciales} parcial
+                        </small>
                     </div>
                 </div>
                 {reporte.resumen.total_esperado !== null && reporte.resumen.total_esperado !== undefined && (
@@ -476,57 +831,21 @@ function VistaIngresos({ reporte }) {
                 </div>
             </div>
 
-            {reporte.duplicados?.length > 0 && (
-                <div className="seccion-card">
-                    <h3 className="seccion-card-title" style={{ color: '#ea580c' }}>⚠️ Posibles Pagos Duplicados</h3>
-                    <div className="tabla-wrapper">
-                        <table className="tabla-custom">
-                            <thead>
-                                <tr><th>Afiliado</th><th>C.I.</th><th>Cantidad Pagos</th><th>Total Pagado</th></tr>
-                            </thead>
-                            <tbody>
-                                {reporte.duplicados.map(item => (
-                                    <tr key={item.afiliado_id}>
-                                        <td style={{ fontWeight: '600' }}>{item.nombre}</td>
-                                        <td>{item.ci}</td>
-                                        <td><span className="badge-pill warning">{item.cantidad_pagos}</span></td>
-                                        <td style={{ fontWeight: '700', color: '#059669' }}>{bs(item.total_pagado)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
+            <TablaDuplicados
+                duplicados={reporte.duplicados || []}
+                montoTotal={reporte.resumen.count_afiliados_con_pago_duplicado}
+            />
 
-            <div className="seccion-card">
-                <h3 className="seccion-card-title" style={{ color: '#dc2626' }}>
-                    ❌ Afiliados que FALTAN Cancelar ({reporte.pendientes.length})
-                </h3>
-                {reporte.pendientes.length > 0 ? (
-                    <div className="tabla-wrapper">
-                        <table className="tabla-custom">
-                            <thead>
-                                <tr><th>#</th><th>Nombre Completo</th><th>C.I.</th><th>Teléfono</th></tr>
-                            </thead>
-                            <tbody>
-                                {reporte.pendientes.map((af, idx) => (
-                                    <tr key={af.afiliado_id}>
-                                        <td style={{ color: '#94a3b8' }}>{idx + 1}</td>
-                                        <td style={{ fontWeight: '600', color: '#0f172a' }}>{af.nombre}</td>
-                                        <td>{af.ci}</td>
-                                        <td>{af.telefono || '-'}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : (
-                    <p style={{ padding: '1.5rem', textAlign: 'center', color: '#059669', fontWeight: '700' }}>
-                        ✅ ¡Excelente! Todos los afiliados activos han cancelado esta categoría en el período seleccionado.
-                    </p>
-                )}
-            </div>
+            <TablaPendientes
+                titulo={`Afiliados que FALTAN Cancelar — ${reporte.categoria.nombre}`}
+                subtitulo={`${reporte.resumen.count_sin_pago} sin ningún pago · ${reporte.resumen.count_parciales} con pago parcial`}
+                pendientes={reporte.pendientes}
+                totalPendientes={reporte.resumen.count_pendientes}
+                montoTotalPendiente={reporte.resumen.monto_total_pendiente}
+                montoEsperado={reporte.resumen.monto_esperado_por_afiliado}
+                truncados={reporte.resumen.pendientes_truncados}
+                mensajeVacio="¡Excelente! Todos los afiliados activos han cancelado esta categoría en el período seleccionado."
+            />
 
             <div className="seccion-card">
                 <h3 className="seccion-card-title" style={{ color: '#059669' }}>
@@ -574,6 +893,7 @@ function ReportePorCategoria() {
     const [filtros, setFiltros] = useState(FILTROS_INICIO);
     const [reporte, setReporte] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [descargando, setDescargando] = useState(null);
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -586,7 +906,7 @@ function ReportePorCategoria() {
                 }
             } catch (err) {
                 console.error(`Error al cargar categorías de ${tipoReporte}:`, err);
-                if (!cancelado) setError(`Error al cargar categorías de ${esEgreso ? 'egreso' : 'ingreso'}`);
+                if (!cancelado) setError(`Error al cargar categorías de ${tipoReporte === 'egreso' ? 'egreso' : 'ingreso'}`);
             }
         };
         cargarTiposPago();
@@ -604,6 +924,20 @@ function ReportePorCategoria() {
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
         setFiltros(prev => ({ ...prev, [name]: value }));
+    };
+
+    const aplicarPeriodo = (meses) => {
+        const hoy = new Date();
+        const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - (meses - 1), 1);
+        setFiltros(prev => ({
+            ...prev,
+            fecha_inicio: inicio.toISOString().slice(0, 10),
+            fecha_fin: hoy.toISOString().slice(0, 10)
+        }));
+    };
+
+    const aplicarTodo = () => {
+        setFiltros(prev => ({ ...prev, fecha_inicio: '', fecha_fin: '' }));
     };
 
     const buildParams = (conNombreCategoria = false) => {
@@ -630,6 +964,10 @@ function ReportePorCategoria() {
             setError('Debe seleccionar una categoría');
             return;
         }
+        if (filtros.fecha_inicio && filtros.fecha_fin && filtros.fecha_inicio > filtros.fecha_fin) {
+            setError('La fecha "Desde" no puede ser posterior a la fecha "Hasta"');
+            return;
+        }
         try {
             setLoading(true);
             setError('');
@@ -654,18 +992,22 @@ function ReportePorCategoria() {
     };
 
     const descargar = async (formato) => {
-        if (!filtros.tipo_pago_id) return;
+        if (!filtros.tipo_pago_id || descargando) return;
         try {
+            setDescargando(formato);
+            setError('');
             const params = buildParams(true);
             const res = formato === 'pdf'
                 ? await api.downloadReporteCategoriaPdf(params)
                 : await api.downloadReporteCategoriaExcel(params);
             if (!res.success) {
-                alert(`Error al descargar ${formato.toUpperCase()}: ${res.error}`);
+                setError(`Error al descargar ${formato.toUpperCase()}: ${res.error}`);
             }
         } catch (err) {
             console.error(`Error al descargar ${formato.toUpperCase()}:`, err);
-            alert(`Error al descargar ${formato.toUpperCase()}`);
+            setError(`Error al descargar ${formato.toUpperCase()}`);
+        } finally {
+            setDescargando(null);
         }
     };
 
@@ -707,6 +1049,22 @@ function ReportePorCategoria() {
             <div className="filtros-card">
                 <div className="filtros-card-header">
                     <span>⚡ Parámetros del Reporte</span>
+                    <div className="atajos-periodo">
+                        {[1, 3, 6, 12].map(meses => (
+                            <button
+                                key={meses}
+                                type="button"
+                                className="chip-periodo"
+                                onClick={() => aplicarPeriodo(meses)}
+                                disabled={loading}
+                            >
+                                {meses}m
+                            </button>
+                        ))}
+                        <button type="button" className="chip-periodo" onClick={() => aplicarTodo()} disabled={loading}>
+                            Todo
+                        </button>
+                    </div>
                 </div>
                 <form className="filtros-grid" onSubmit={handleSubmit}>
                     <div className="filtro-field">
@@ -749,24 +1107,43 @@ function ReportePorCategoria() {
                     </div>
                 </form>
                 {error && (
-                    <div className="error-message" style={{ marginTop: '1rem', padding: '0.75rem', background: '#fee2e2', color: '#b91c1c', borderRadius: '8px' }}>
-                        {error}
-                    </div>
+                    <div className="alerta-error" role="alert">⚠️ {error}</div>
                 )}
             </div>
+
+            {loading && (
+                <div className="cargando-panel">
+                    <div className="spinner" />
+                    <p>Generando reporte…</p>
+                </div>
+            )}
 
             {reporte && (
                 <>
                     <div className="export-toolbar">
                         <div className="export-toolbar-info">
                             <span>📄 Formatos de descarga oficial listos:</span>
+                            <span className="export-toolbar-periodo">
+                                {reporte.filtros?.fecha_inicio || 'inicio'} → {reporte.filtros?.fecha_fin || 'hoy'}
+                            </span>
                         </div>
                         <div className="export-toolbar-actions">
-                            <button className="btn-export-pill pdf" onClick={() => descargar('pdf')}>
-                                📄 Exportar a PDF
+                            <button className="btn-export-pill print" onClick={() => window.print()}>
+                                🖨️ Imprimir
                             </button>
-                            <button className="btn-export-pill excel" onClick={() => descargar('excel')}>
-                                📊 Exportar a Excel
+                            <button
+                                className="btn-export-pill pdf"
+                                onClick={() => descargar('pdf')}
+                                disabled={!!descargando}
+                            >
+                                {descargando === 'pdf' ? '⏳ Generando PDF…' : '📄 Exportar a PDF'}
+                            </button>
+                            <button
+                                className="btn-export-pill excel"
+                                onClick={() => descargar('excel')}
+                                disabled={!!descargando}
+                            >
+                                {descargando === 'excel' ? '⏳ Generando Excel…' : '📊 Exportar a Excel'}
                             </button>
                         </div>
                     </div>

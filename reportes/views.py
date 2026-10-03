@@ -45,6 +45,138 @@ def _es_reporte_egresos(request):
     return request.GET.get('tipo') == 'egreso'
 
 
+# Tope de afiliados pendientes que se envían al frontend; evita respuestas
+# enormes cuando "todas las categorías" cruza muchas categorías con socios.
+LIMITE_PENDIENTES = 500
+
+
+def _pendientes_por_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin,
+                              monto_esperado, afiliados_activos, limite=LIMITE_PENDIENTES):
+    """Calcula qué afiliados activos todavía deben cancelar una categoría.
+
+    Sin ``monto_esperado`` solo se reportan los que no registraron ningún pago
+    completado. Con monto esperado se reportan también los pagos parciales,
+    calculando la deuda como la diferencia entre lo esperado y lo pagado.
+
+    ``limite`` recorta la lista devuelta (el JSON la acota para no saturar al
+    navegador); las exportaciones pasan ``None`` para obtenerla completa.
+
+    Devuelve un dict con la lista de pendientes, el conteo real, el total
+    adeudado y el desglose entre pagos parciales y pendientes totales.
+    """
+    monto_esperado = float(monto_esperado) if monto_esperado is not None else None
+
+    pagos_completados = _filtrar_pagos_categoria(
+        Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado']
+    )
+    pagado_por_afiliado = {
+        fila['afiliado_id']: float(fila['total'] or 0)
+        for fila in pagos_completados
+        .values('afiliado_id')
+        .annotate(total=Sum('monto'))
+        if fila['afiliado_id']
+    }
+
+    pendientes = []
+    count_pendientes = 0
+    count_parciales = 0
+    count_sin_pago = 0
+    monto_total_pendiente = 0.0
+
+    for afiliado in afiliados_activos:
+        pagado = pagado_por_afiliado.get(afiliado.id, 0.0)
+
+        if monto_esperado is not None:
+            if pagado >= monto_esperado:
+                continue
+            deuda = round(monto_esperado - pagado, 2)
+            if pagado > 0:
+                count_parciales += 1
+            else:
+                count_sin_pago += 1
+        else:
+            if pagado > 0:
+                continue
+            deuda = None
+            count_sin_pago += 1
+
+        count_pendientes += 1
+        monto_total_pendiente += deuda or 0.0
+        pendientes.append({
+            'afiliado_id': afiliado.id,
+            'nombre': afiliado.nombre_completo,
+            'ci': afiliado.ci,
+            'telefono': afiliado.telefono,
+            'deuda': deuda,
+            'pagado': round(pagado, 2),
+        })
+
+    pendientes.sort(key=lambda fila: fila['nombre'])
+    recortada = pendientes[:limite] if limite else pendientes
+
+    return {
+        'pendientes': recortada,
+        'pendientes_truncados': len(recortada) < len(pendientes),
+        'count_pendientes': count_pendientes,
+        'count_parciales': count_parciales,
+        'count_sin_pago': count_sin_pago,
+        'monto_total_pendiente': round(monto_total_pendiente, 2) if monto_esperado is not None else None,
+    }
+
+
+def _duplicados_por_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin):
+    """Detecta posibles pagos duplicados: mismo afiliado con más de un pago
+    completado en la categoría y el período seleccionados.
+
+    Devuelve el detalle con los pagos individuales para que el frontend pueda
+    mostrar qué registros hay que revisar.
+    """
+    pagos_completados = _filtrar_pagos_categoria(
+        Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado']
+    )
+
+    conteo = {
+        fila['afiliado_id']: fila['cantidad']
+        for fila in pagos_completados.values('afiliado_id')
+        .annotate(cantidad=Count('id'))
+        .filter(cantidad__gt=1)
+        if fila['afiliado_id']
+    }
+    if not conteo:
+        return []
+
+    pagos_por_afiliado = {}
+    for pago in pagos_completados.filter(afiliado_id__in=conteo).order_by('fecha_pago'):
+        pagos_por_afiliado.setdefault(pago.afiliado_id, []).append(pago)
+
+    duplicados = []
+    for afiliado_id, cantidad in conteo.items():
+        pagos = pagos_por_afiliado.get(afiliado_id, [])
+        afiliado = pagos[0].afiliado if pagos else None
+        total_pagado = float(sum((p.monto for p in pagos), 0))
+        duplicados.append({
+            'afiliado_id': afiliado_id,
+            'nombre': afiliado.nombre_completo if afiliado else 'N/A',
+            'ci': afiliado.ci if afiliado else '',
+            'telefono': getattr(afiliado, 'telefono', '') if afiliado else '',
+            'cantidad_pagos': cantidad,
+            'total_pagado': round(total_pagado, 2),
+            'pagos': [
+                {
+                    'id': p.id,
+                    'fecha_pago': str(p.fecha_pago),
+                    'monto': float(p.monto),
+                    'nro_recibo': p.nro_recibo,
+                    'metodo_pago': p.get_metodo_pago_display() if hasattr(p, 'get_metodo_pago_display') else (p.metodo_pago or ''),
+                }
+                for p in pagos
+            ],
+        })
+
+    duplicados.sort(key=lambda fila: -fila['total_pagado'])
+    return duplicados
+
+
 def _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio=None, fecha_fin=None, monto_esperado=None):
     pagos_completados = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado'])
     pagos_pendientes = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['pendiente'])
@@ -388,13 +520,84 @@ class BalanceView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        from reportes.query_helpers import resumen_periodo
-        
+        from reportes.query_helpers import resumen_periodo, pagos_validos, egresos_validos
+
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
-        
+
         resumen = resumen_periodo(fecha_inicio, fecha_fin)
-        
+
+        # Registros individuales de ingresos (pagos completados)
+        pagos_qs = pagos_validos(fecha_inicio, fecha_fin).order_by('-fecha_pago')
+        lista_ingresos = []
+        for p in pagos_qs:
+            lista_ingresos.append({
+                'id': p.id,
+                'fecha': p.fecha_pago.strftime('%Y-%m-%d') if p.fecha_pago else '',
+                'afiliado': p.afiliado.nombre_completo if p.afiliado else 'Sin afiliado',
+                'concepto': p.tipo_pago.nombre if p.tipo_pago else 'Ingreso',
+                'metodo_pago': p.get_metodo_pago_display() if hasattr(p, 'get_metodo_pago_display') else (p.metodo_pago or ''),
+                'observaciones': p.observaciones or '',
+                'monto': float(p.monto),
+                'nro_recibo': p.nro_recibo or p.id,
+            })
+
+        # Registros individuales de egresos (aprobados/completados)
+        egresos_qs = egresos_validos(fecha_inicio, fecha_fin).order_by('-fecha')
+        lista_egresos = []
+        for e in egresos_qs:
+            lista_egresos.append({
+                'id': e.id,
+                'fecha': e.fecha.strftime('%Y-%m-%d') if e.fecha else '',
+                'concepto': e.tipo_pago.nombre if e.tipo_pago else 'Egreso',
+                'descripcion': e.descripcion or '',
+                'metodo_pago': e.get_metodo_pago_display() if hasattr(e, 'get_metodo_pago_display') else (e.metodo_pago or ''),
+                'monto': float(e.monto),
+                'estado': e.estado,
+            })
+
+        # Listado completo de egresos (incluye pendientes de aprobación y
+        # anulados) para que el balance muestre la misma información que el
+        # módulo de Pagos y Egresos.
+        from tesoreria.models import Egreso
+        from reportes.query_helpers import EGRESO_ESTADOS_VALIDOS
+        from django.db.models import Q
+
+        egresos_todos_qs = Egreso.objects.select_related('tipo_pago').all()
+        if fecha_inicio:
+            egresos_todos_qs = egresos_todos_qs.filter(fecha__gte=fecha_inicio)
+        if fecha_fin:
+            egresos_todos_qs = egresos_todos_qs.filter(fecha__lte=fecha_fin)
+        egresos_todos_qs = egresos_todos_qs.order_by('-fecha')
+
+        lista_egresos_todos = [
+            {
+                'id': e.id,
+                'fecha': e.fecha.strftime('%Y-%m-%d') if e.fecha else '',
+                'concepto': e.tipo_pago.nombre if e.tipo_pago else 'Egreso',
+                'descripcion': e.descripcion or '',
+                'metodo_pago': e.get_metodo_pago_display() if hasattr(e, 'get_metodo_pago_display') else (e.metodo_pago or ''),
+                'monto': float(e.monto),
+                'estado': e.estado,
+                'es_valido': e.estado in EGRESO_ESTADOS_VALIDOS,
+            }
+            for e in egresos_todos_qs
+        ]
+
+        agregados_egresos = egresos_todos_qs.aggregate(
+            total_monto=Sum('monto'),
+            total_aprobado=Sum('monto', filter=Q(estado__in=EGRESO_ESTADOS_VALIDOS)),
+            total_pendiente_aprobacion=Sum('monto', filter=Q(estado='pendiente_aprobacion')),
+            total_anulado=Sum('monto', filter=Q(estado='anulado')),
+        )
+        totales_egresos = {clave: float(valor or 0) for clave, valor in agregados_egresos.items()}
+        totales_egresos.update({
+            'count_todos': egresos_todos_qs.count(),
+            'count_aprobado': egresos_todos_qs.filter(estado__in=EGRESO_ESTADOS_VALIDOS).count(),
+            'count_pendiente_aprobacion': egresos_todos_qs.filter(estado='pendiente_aprobacion').count(),
+            'count_anulado': egresos_todos_qs.filter(estado='anulado').count(),
+        })
+
         response_data = {
             'total_ingresos': resumen['total_ingresos'],
             'count_ingresos': resumen['count_ingresos'],
@@ -404,14 +607,18 @@ class BalanceView(APIView):
             'ingresos_por_tipo': resumen['ingresos_por_tipo'],
             'egresos_por_tipo': resumen['egresos_por_tipo'],
             'excluidos_por_estado': resumen['anulados_cancelados'],
+            'lista_ingresos': lista_ingresos,
+            'lista_egresos': lista_egresos,
+            'totales_egresos': totales_egresos,
+            'lista_egresos_todos': lista_egresos_todos,
         }
-        
+
         # Agregar información del período si se filtró
         if fecha_inicio:
             response_data['fecha_inicio'] = fecha_inicio
         if fecha_fin:
             response_data['fecha_fin'] = fecha_fin
-        
+
         return Response(response_data)
 
 
@@ -1165,6 +1372,13 @@ class ReporteCategoriaView(APIView):
             total_general_faltante = 0
             total_pagos_pendientes_revision = 0
             total_afiliados_con_pago_duplicado = 0
+            total_pendientes_deuda = 0
+            duplicados_global = []
+            # Se materializa una sola vez: el cálculo de pendientes lo recorre
+            # por cada categoría y no debe volver a la base en cada vuelta.
+            afiliados_activos = list(
+                afiliados_activos_query.only('id', 'nombres', 'apellidos', 'ci', 'telefono')
+            )
             for tipo_pago in TipoPago.objects.filter(tipo='ingreso').order_by('nombre'):
                 resumen = _resumen_categoria(Pago, tipo_pago, total_afiliados_activos, fecha_inicio, fecha_fin, monto_esperado)
                 total_general_recaudado += resumen['total_recaudado']
@@ -1172,7 +1386,30 @@ class ReporteCategoriaView(APIView):
                 total_afiliados_con_pago_duplicado += resumen['count_afiliados_con_pago_duplicado']
                 if resumen['total_esperado'] is not None:
                     total_general_esperado += resumen['total_esperado']
+
+                pendientes = _pendientes_por_categoria(
+                    Pago, tipo_pago, fecha_inicio, fecha_fin, monto_esperado, afiliados_activos
+                )
+                total_pendientes_deuda += pendientes['count_pendientes']
+                # El KPI de faltante usa la deuda real por afiliado para que
+                # cuadre exactamente con el detalle "Faltan Cancelar".
+                if pendientes['monto_total_pendiente'] is not None:
+                    resumen['monto_faltante'] = pendientes['monto_total_pendiente']
+                if resumen['monto_faltante'] is not None:
                     total_general_faltante += resumen['monto_faltante']
+
+                resumen.update(pendientes)
+                # Detalle de posibles pagos duplicados por categoría.
+                duplicados_categoria = _duplicados_por_categoria(
+                    Pago, tipo_pago, fecha_inicio, fecha_fin
+                )
+                for duplicado in duplicados_categoria:
+                    duplicado['categoria'] = {
+                        'id': tipo_pago.id,
+                        'nombre': tipo_pago.nombre,
+                    }
+                resumen['duplicados'] = duplicados_categoria
+                duplicados_global.extend(duplicados_categoria)
                 categorias.append(resumen)
 
             return Response({
@@ -1190,8 +1427,15 @@ class ReporteCategoriaView(APIView):
                     'total_afiliados_activos': total_afiliados_activos,
                     'total_pagos_pendientes_revision': total_pagos_pendientes_revision,
                     'total_afiliados_con_pago_duplicado': total_afiliados_con_pago_duplicado,
+                    'total_pendientes': total_pendientes_deuda,
+                    'total_monto_duplicado': round(
+                        sum(d['total_pagado'] for d in duplicados_global), 2
+                    ),
                 },
                 'categorias': categorias,
+                'duplicados': sorted(
+                    duplicados_global, key=lambda fila: -fila['total_pagado']
+                ),
             })
 
         if not tipo_pago_id:
@@ -1206,9 +1450,6 @@ class ReporteCategoriaView(APIView):
 
         # Filtrar pagos completados del tipo seleccionado
         pagos_query = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado'])
-
-        # Afiliados que pagaron (puede haber más de un pago por afiliado)
-        afiliados_pagaron_ids = set(pagos_query.values_list('afiliado_id', flat=True))
 
         resumen = _resumen_categoria(Pago, tipo_pago, total_afiliados_activos, fecha_inicio, fecha_fin, monto_esperado)
 
@@ -1240,29 +1481,20 @@ class ReporteCategoriaView(APIView):
                 'nro_recibo': pago.nro_recibo,
             })
 
-        duplicados_detalle = []
-        duplicados = pagos_query.values('afiliado_id').annotate(cantidad=Count('id'), total=Sum('monto')).filter(cantidad__gt=1)
-        for item in duplicados:
-            afiliado = Afiliado.objects.filter(id=item['afiliado_id']).first()
-            duplicados_detalle.append({
-                'afiliado_id': item['afiliado_id'],
-                'nombre': afiliado.nombre_completo if afiliado else 'N/A',
-                'ci': afiliado.ci if afiliado else '',
-                'cantidad_pagos': item['cantidad'],
-                'total_pagado': float(item['total'] or 0),
-            })
+        duplicados_detalle = _duplicados_por_categoria(
+            Pago, tipo_pago, fecha_inicio, fecha_fin
+        )
 
-        # Afiliados activos que NO pagaron
-        afiliados_pendientes = afiliados_activos_query.exclude(id__in=afiliados_pagaron_ids).order_by('apellidos', 'nombres')
-
-        pendientes_detalle = []
-        for af in afiliados_pendientes:
-            pendientes_detalle.append({
-                'afiliado_id': af.id,
-                'nombre': af.nombre_completo,
-                'ci': af.ci,
-                'telefono': af.telefono,
-            })
+        # Calcular afiliados pendientes y deudas para categoría individual
+        pendientes_info = _pendientes_por_categoria(
+            Pago, tipo_pago, fecha_inicio, fecha_fin, monto_esperado,
+            list(afiliados_activos_query.only('id', 'nombres', 'apellidos', 'ci', 'telefono')),
+        )
+        # El KPI de faltante usa la deuda real por afiliado para que cuadre con
+        # el total de la tabla de pendientes.
+        if pendientes_info['monto_total_pendiente'] is not None:
+            resumen['monto_faltante'] = pendientes_info['monto_total_pendiente']
+        resumen.update(pendientes_info)
 
         return Response({
             'categoria': {
@@ -1275,7 +1507,7 @@ class ReporteCategoriaView(APIView):
             },
             'resumen': resumen,
             'pagaron': pagos_detalle,
-            'pendientes': pendientes_detalle,
+            'pendientes': pendientes_info['pendientes'],
             'pagos_revision': pagos_revision_detalle,
             'duplicados': duplicados_detalle,
         })
@@ -1322,12 +1554,23 @@ class ReporteCategoriaPDFView(APIView):
             total_general = 0
             total_esperado_general = 0
             total_faltante_general = 0
+            total_pendientes_general = 0
+            total_parciales_general = 0
+            activos = list(afiliados_activos.only('id', 'nombres', 'apellidos', 'ci', 'telefono'))
             for tipo_pago in TipoPago.objects.filter(tipo='ingreso').order_by('nombre'):
                 resumen = _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio, fecha_fin, monto_esperado)
+                pendientes = _pendientes_por_categoria(
+                    Pago, tipo_pago, fecha_inicio, fecha_fin, monto_esperado, activos, limite=None
+                )
                 total_general += resumen['total_recaudado']
+                total_pendientes_general += pendientes['count_pendientes']
+                total_parciales_general += pendientes['count_parciales']
                 if resumen['total_esperado'] is not None:
                     total_esperado_general += resumen['total_esperado']
+                    # El faltante usa la deuda real por afiliado (idéntico al detalle).
+                    resumen['monto_faltante'] = pendientes['monto_total_pendiente']
                     total_faltante_general += resumen['monto_faltante']
+                resumen.update(pendientes)
                 rows.append(resumen)
 
             buffer = io.BytesIO()
@@ -1339,6 +1582,8 @@ class ReporteCategoriaPDFView(APIView):
                                          textColor=colors.HexColor('#1a237e'), spaceAfter=8)
             subtitle_style = ParagraphStyle('SubAll', parent=styles['Normal'], fontSize=10,
                                             alignment=TA_CENTER, textColor=colors.HexColor('#555'), spaceAfter=10)
+            heading_all = ParagraphStyle('HeadAll', parent=styles['Heading2'], fontSize=11,
+                                         textColor=colors.HexColor('#c62828'), spaceBefore=14, spaceAfter=6)
 
             elements.append(Paragraph("SINDICATO MIXTO \"INTEGRACIÓN TAIPIPLAYA\"", title_style))
             elements.append(Paragraph("Reporte General por Categorías de Ingreso", subtitle_style))
@@ -1347,6 +1592,7 @@ class ReporteCategoriaPDFView(APIView):
             elements.append(Paragraph(f"Total recaudado: Bs. {float(total_general):,.2f}", subtitle_style))
             if monto_esperado is not None:
                 elements.append(Paragraph(f"Total esperado: Bs. {float(total_esperado_general):,.2f} | Faltante estimado: Bs. {float(total_faltante_general):,.2f}", subtitle_style))
+            elements.append(Paragraph(f"Afiliados con deuda en alguna categoría: {total_pendientes_general} (de los cuales {total_parciales_general} pagan parcial)", subtitle_style))
             elements.append(Spacer(1, 8))
 
             data = [['Categoría', 'Ya cancelaron', 'Faltan pagar', 'Cobertura', 'Recaudado', 'Esperado', 'Faltante', 'Revisión']]
@@ -1361,7 +1607,7 @@ class ReporteCategoriaPDFView(APIView):
                     f"{r['monto_faltante']:,.2f}" if r['monto_faltante'] is not None else '-',
                     str(r['count_pagos_pendientes_revision'] + r['count_pagos_anulados_cancelados'] + r['count_afiliados_con_pago_duplicado']),
                 ])
-            data.append(['TOTAL', '', '', '', f"Bs. {float(total_general):,.2f}", f"Bs. {float(total_esperado_general):,.2f}" if monto_esperado is not None else '-', f"Bs. {float(total_faltante_general):,.2f}" if monto_esperado is not None else '-', ''])
+            data.append(['TOTAL', '', str(total_pendientes_general), '', f"Bs. {float(total_general):,.2f}", f"Bs. {float(total_esperado_general):,.2f}" if monto_esperado is not None else '-', f"Bs. {float(total_faltante_general):,.2f}" if monto_esperado is not None else '-', ''])
 
             table = Table(data, repeatRows=1, colWidths=[5.7*cm, 2.5*cm, 2.5*cm, 2.1*cm, 2.7*cm, 2.7*cm, 2.7*cm, 2.1*cm])
             table.setStyle(TableStyle([
@@ -1380,6 +1626,52 @@ class ReporteCategoriaPDFView(APIView):
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
             ]))
             elements.append(table)
+            elements.append(Spacer(1, 14))
+
+            # Detalle de pendientes por categoría (solo categorías con deuda)
+            for r in rows:
+                lista_pend = r.get('pendientes') or []
+                if not lista_pend:
+                    continue
+                elements.append(Paragraph(
+                    f"❌ {r['categoria']['nombre']} — {r['count_pendientes']} afiliado(s) sin cancelación completa",
+                    heading_all,
+                ))
+                if r.get('monto_total_pendiente') is not None:
+                    elements.append(Paragraph(
+                        f"Monto pendiente: Bs. {r['monto_total_pendiente']:,.2f}",
+                        ParagraphStyle('DeudaCat', parent=styles['Normal'], fontSize=9,
+                                       textColor=colors.HexColor('#9f1239'), spaceAfter=4),
+                    ))
+                encabezado = ['#', 'Nombre Completo', 'C.I.', 'Teléfono']
+                anchos = [1*cm, 9*cm, 5*cm, 5*cm]
+                if r.get('monto_total_pendiente') is not None:
+                    encabezado += ['Pagado (Bs)', 'Deuda (Bs)']
+                    anchos += [3.5*cm, 3.5*cm]
+                filas_pend = [encabezado]
+                for i, af in enumerate(lista_pend, 1):
+                    fila = [str(i), af['nombre'], af['ci'], af['telefono'] or '-']
+                    if r.get('monto_total_pendiente') is not None:
+                        fila += [f"{af['pagado']:,.2f}", f"{af['deuda']:,.2f}"]
+                    filas_pend.append(fila)
+                style_pend = [
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#c62828')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 7),
+                    ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                    ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fff8f8')]),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ]
+                if len(anchos) > 4:
+                    style_pend.append(('ALIGN', (len(anchos) - 2, 0), (-1, -1), 'RIGHT'))
+                tabla_pend = Table(filas_pend, repeatRows=1, colWidths=anchos)
+                tabla_pend.setStyle(TableStyle(style_pend))
+                elements.append(tabla_pend)
+                elements.append(Spacer(1, 10))
+
             doc.build(elements)
             buffer.seek(0)
             response = HttpResponse(buffer, content_type='application/pdf')
@@ -1396,16 +1688,19 @@ class ReporteCategoriaPDFView(APIView):
 
         pagos_query = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado'])
 
-        afiliados_pagaron_ids = set(pagos_query.values_list('afiliado_id', flat=True))
-        afiliados_pagaron_ids.discard(None)
         total_recaudado = pagos_query.aggregate(total=Sum('monto'))['total'] or 0
         resumen = _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio, fecha_fin, monto_esperado)
 
-        afiliados_pendientes = afiliados_activos.exclude(id__in=afiliados_pagaron_ids).order_by('apellidos', 'nombres')
+        pendientes_info = _pendientes_por_categoria(
+            Pago, tipo_pago, fecha_inicio, fecha_fin, monto_esperado, list(afiliados_activos), limite=None
+        )
+        if pendientes_info['monto_total_pendiente'] is not None:
+            resumen['monto_faltante'] = pendientes_info['monto_total_pendiente']
 
-        count_pagaron = len(afiliados_pagaron_ids)
-        count_pendientes = afiliados_pendientes.count()
-        cobertura = round(count_pagaron / total_activos * 100, 1) if total_activos > 0 else 0
+        count_pagaron = resumen['count_pagaron']
+        count_pendientes = pendientes_info['count_pendientes']
+        cobertura = resumen['porcentaje_cobertura']
+        monto_esperado_afiliado = resumen['monto_esperado_por_afiliado']
 
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm,
@@ -1470,6 +1765,7 @@ class ReporteCategoriaPDFView(APIView):
             ['Pagos pendientes', str(resumen['count_pagos_pendientes_revision']), f"{resumen['total_pagos_pendientes_revision']:,.2f}"],
             ['Pagos anulados/cancelados', str(resumen['count_pagos_anulados_cancelados']), f"{resumen['total_pagos_anulados_cancelados']:,.2f}"],
             ['Afiliados con pago duplicado', str(resumen['count_afiliados_con_pago_duplicado']), '-'],
+            ['Pagos parciales (deuda menor al monto esperado)', str(pendientes_info['count_parciales']), '-'],
         ]
         revision_table = Table(revision_data, colWidths=[8*cm, 4*cm, 4*cm])
         revision_table.setStyle(TableStyle([
@@ -1488,11 +1784,35 @@ class ReporteCategoriaPDFView(APIView):
         # Tabla de pendientes
         elements.append(Paragraph(f"❌ Afiliados que FALTAN Pagar ({count_pendientes})", heading_style))
         if count_pendientes > 0:
-            pend_data = [['#', 'Nombre Completo', 'C.I.', 'Teléfono']]
-            for i, af in enumerate(afiliados_pendientes, 1):
-                pend_data.append([str(i), af.nombre_completo, af.ci, af.telefono or '-'])
-            pend_table = Table(pend_data, colWidths=[1*cm, 8*cm, 3.5*cm, 3.5*cm])
-            pend_table.setStyle(TableStyle([
+            if pendientes_info['monto_total_pendiente'] is not None:
+                elements.append(Paragraph(
+                    f"Monto total pendiente de pago: Bs. {pendientes_info['monto_total_pendiente']:,.2f}",
+                    ParagraphStyle('DeudaTotal', parent=styles['Normal'], fontSize=10,
+                                   textColor=colors.HexColor('#9f1239'), alignment=TA_CENTER,
+                                   spaceAfter=6),
+                ))
+            con_deuda = monto_esperado_afiliado is not None
+            pend_data = [['#', 'Nombre Completo', 'C.I.', 'Teléfono', 'Pagado (Bs)', 'Monto a Pagar (Bs)']]
+            for i, af in enumerate(pendientes_info['pendientes'], 1):
+                if con_deuda:
+                    monto_celda = f"{af['deuda']:,.2f}" if af['deuda'] is not None else '-'
+                    pagado_celda = f"{af['pagado']:,.2f}" if af['pagado'] else '-'
+                else:
+                    monto_celda = f"{monto_esperado_afiliado or 0:,.2f}"
+                    pagado_celda = '-'
+                pend_data.append([
+                    str(i), af['nombre'], af['ci'], af['telefono'] or '-',
+                    pagado_celda, monto_celda,
+                ])
+            if pendientes_info['monto_total_pendiente'] is not None:
+                pend_data.append([
+                    '', 'TOTAL A DEUDAR', '', '',
+                    f"{resumen['total_recaudado']:,.2f}",
+                    f"{pendientes_info['monto_total_pendiente']:,.2f}",
+                ])
+            pend_table = Table(pend_data, repeatRows=1,
+                               colWidths=[1*cm, 6.6*cm, 3.2*cm, 3.2*cm, 2.4*cm, 2.6*cm])
+            pend_style = TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#c62828')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -1500,11 +1820,16 @@ class ReporteCategoriaPDFView(APIView):
                 ('FONTSIZE', (0, 1), (-1, -1), 8),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                ('ALIGN', (4, 0), (-1, -1), 'RIGHT'),
                 ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fff8f8')]),
                 ('TOPPADDING', (0, 0), (-1, -1), 4),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ]))
+            ])
+            if pendientes_info['monto_total_pendiente'] is not None:
+                pend_style.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ffebee'))
+                pend_style.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+            pend_table.setStyle(pend_style)
             elements.append(pend_table)
         else:
             elements.append(Paragraph("✅ ¡Todos los afiliados activos han pagado!", styles['Normal']))
@@ -1628,17 +1953,27 @@ class ReporteCategoriaExcelView(APIView):
             total_general = 0
             total_esperado_general = 0
             total_faltante_general = 0
+            total_pendientes_general = 0
+            activos = list(afiliados_activos.only('id', 'nombres', 'apellidos', 'ci', 'telefono'))
+            pendientes_por_categoria = {}
             for tipo_pago in TipoPago.objects.filter(tipo='ingreso').order_by('nombre'):
                 resumen = _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio, fecha_fin, monto_esperado)
+                pendientes = _pendientes_por_categoria(
+                    Pago, tipo_pago, fecha_inicio, fecha_fin, monto_esperado, activos, limite=None
+                )
                 total_general += resumen['total_recaudado']
+                total_pendientes_general += pendientes['count_pendientes']
                 if resumen['total_esperado'] is not None:
                     total_esperado_general += resumen['total_esperado']
+                    # El faltante usa la deuda real por afiliado (idéntico al detalle).
+                    resumen['monto_faltante'] = pendientes['monto_total_pendiente']
                     total_faltante_general += resumen['monto_faltante']
+                pendientes_por_categoria[tipo_pago.id] = pendientes
 
                 ws.append([
                     tipo_pago.nombre,
                     resumen['count_pagaron'],
-                    resumen['count_pendientes'],
+                    pendientes['count_pendientes'],
                     resumen['total_afiliados_activos'],
                     f"{resumen['porcentaje_cobertura']}%",
                     resumen['total_recaudado'],
@@ -1651,6 +1986,7 @@ class ReporteCategoriaExcelView(APIView):
 
             total_row = ws.max_row + 1
             ws.cell(row=total_row, column=1, value='TOTAL GENERAL')
+            ws.cell(row=total_row, column=3, value=total_pendientes_general)
             ws.cell(row=total_row, column=6, value=float(total_general))
             if monto_esperado is not None:
                 ws.cell(row=total_row, column=7, value=float(total_esperado_general))
@@ -1670,7 +2006,8 @@ class ReporteCategoriaExcelView(APIView):
                 cell.alignment = center
 
             ws_faltan = wb.create_sheet("Faltan Pagar")
-            ws_faltan.append(['Categoría', 'Afiliado', 'C.I.', 'Teléfono'])
+            ws_faltan.append(['Categoría', 'Afiliado', 'C.I.', 'Teléfono', 'Pagado (Bs)',
+                              'Monto a Pagar (Bs)', 'Deuda (Bs)', 'Deuda Total Categoría (Bs)'])
             for cell in ws_faltan[1]:
                 cell.fill = PatternFill("solid", fgColor="c62828")
                 cell.font = Font(color="FFFFFF", bold=True)
@@ -1683,10 +2020,9 @@ class ReporteCategoriaExcelView(APIView):
                 cell.font = Font(color="FFFFFF", bold=True)
                 cell.alignment = center
 
+            monto_esperado_afiliado = float(monto_esperado) if monto_esperado is not None else None
             for tipo_pago in TipoPago.objects.filter(tipo='ingreso').order_by('nombre'):
                 pagos_completados = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado'])
-                afiliados_pagaron_ids = set(pagos_completados.values_list('afiliado_id', flat=True))
-                afiliados_pagaron_ids.discard(None)
 
                 for pago in pagos_completados.order_by('afiliado__apellidos', 'afiliado__nombres', 'fecha_pago'):
                     ws_pag.append([
@@ -1699,8 +2035,19 @@ class ReporteCategoriaExcelView(APIView):
                         pago.nro_recibo or '',
                     ])
 
-                for af in afiliados_activos.exclude(id__in=afiliados_pagaron_ids).order_by('apellidos', 'nombres'):
-                    ws_faltan.append([tipo_pago.nombre, af.nombre_completo, af.ci, af.telefono or ''])
+                pendientes = pendientes_por_categoria.get(tipo_pago.id) or {}
+                for af in pendientes.get('pendientes') or []:
+                    ws_faltan.append([
+                        tipo_pago.nombre,
+                        af['nombre'],
+                        af['ci'],
+                        af['telefono'] or '',
+                        af['pagado'],
+                        monto_esperado_afiliado if monto_esperado_afiliado is not None else '',
+                        af['deuda'] if af['deuda'] is not None else '',
+                        pendientes.get('monto_total_pendiente')
+                        if pendientes.get('monto_total_pendiente') is not None else '',
+                    ])
 
                 pagos_revision = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['pendiente', 'anulado', 'cancelado'])
                 for pago in pagos_revision.order_by('estado', 'afiliado__apellidos', 'afiliado__nombres'):
@@ -1716,9 +2063,13 @@ class ReporteCategoriaExcelView(APIView):
                         pago.motivo_anulacion or '',
                     ])
 
-                duplicados = pagos_completados.values('afiliado_id').annotate(cantidad=Count('id'), total=Sum('monto')).filter(cantidad__gt=1)
+                duplicados = pagos_completados.values('afiliado_id').annotate(
+                    cantidad=Count('id'), total=Sum('monto')
+                ).filter(cantidad__gt=1).order_by('-total')
                 for item in duplicados:
-                    afiliado = Afiliado.objects.filter(id=item['afiliado_id']).first()
+                    afiliado = Afiliado.objects.filter(id=item['afiliado_id']).only(
+                        'id', 'nombres', 'apellidos', 'ci'
+                    ).first()
                     ws_rev.append([
                         'Posible duplicado',
                         tipo_pago.nombre,
@@ -1751,23 +2102,18 @@ class ReporteCategoriaExcelView(APIView):
         except TipoPago.DoesNotExist:
             return Response({'error': 'Categoría no encontrada'}, status=404)
 
-        pagos_query = Pago.objects.filter(
-            tipo_pago=tipo_pago,
-            estado='completado'
-        ).select_related('afiliado')
-        if fecha_inicio:
-            pagos_query = pagos_query.filter(fecha_pago__gte=fecha_inicio)
-        if fecha_fin:
-            pagos_query = pagos_query.filter(fecha_pago__lte=fecha_fin)
-
-        afiliados_pagaron_ids = set(pagos_query.values_list('afiliado_id', flat=True))
+        pagos_query = _filtrar_pagos_categoria(Pago, tipo_pago, fecha_inicio, fecha_fin, ['completado'])
         total_recaudado = pagos_query.aggregate(total=Sum('monto'))['total'] or 0
-
-        afiliados_pendientes = afiliados_activos.exclude(id__in=afiliados_pagaron_ids).order_by('apellidos', 'nombres')
-
-        count_pagaron = len(afiliados_pagaron_ids)
-        cobertura = round(count_pagaron / total_activos * 100, 1) if total_activos > 0 else 0
         resumen = _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio, fecha_fin, monto_esperado)
+
+        pendientes_info = _pendientes_por_categoria(
+            Pago, tipo_pago, fecha_inicio, fecha_fin, monto_esperado, list(afiliados_activos), limite=None
+        )
+        if pendientes_info['monto_total_pendiente'] is not None:
+            resumen['monto_faltante'] = pendientes_info['monto_total_pendiente']
+
+        count_pagaron = resumen['count_pagaron']
+        cobertura = resumen['porcentaje_cobertura']
 
         wb = Workbook()
 
@@ -1811,7 +2157,9 @@ class ReporteCategoriaExcelView(APIView):
         resumen_rows = [
             ('Total Afiliados Activos', total_activos),
             ('Afiliados que Pagaron', count_pagaron),
-            ('Afiliados Pendientes', total_activos - count_pagaron),
+            ('Afiliados Pendientes', pendientes_info['count_pendientes']),
+            ('  de los cuales pagan parcial', pendientes_info['count_parciales']),
+            ('  de los cuales no pagan nada', pendientes_info['count_sin_pago']),
             ('% Cobertura', f"{cobertura}%"),
             ('Total Recaudado (Bs)', float(total_recaudado)),
             ('Monto Esperado por Afiliado (Bs)', resumen['monto_esperado_por_afiliado'] or ''),
@@ -1859,20 +2207,40 @@ class ReporteCategoriaExcelView(APIView):
             ws_pag.column_dimensions[col_letter].width = width
 
         # --- Hoja 3: Pendientes ---
+        monto_esperado_afiliado = resumen['monto_esperado_por_afiliado']
         ws_pend = wb.create_sheet("Pendientes")
-        ws_pend.append(['#', 'Nombre Completo', 'C.I.', 'Teléfono'])
+        if monto_esperado_afiliado is not None:
+            ws_pend.append(['#', 'Nombre Completo', 'C.I.', 'Teléfono',
+                            f'Monto a Pagar (Bs)', 'Pagado (Bs)', 'Deuda (Bs)'])
+        else:
+            ws_pend.append(['#', 'Nombre Completo', 'C.I.', 'Teléfono'])
         for cell in ws_pend[1]:
             cell.fill = red_fill
             cell.font = Font(color="FFFFFF", bold=True)
             cell.alignment = center
 
-        for i, af in enumerate(afiliados_pendientes, 1):
-            ws_pend.append([i, af.nombre_completo, af.ci, af.telefono or '-'])
+        total_columnas = 7 if monto_esperado_afiliado is not None else 4
+        for i, af in enumerate(pendientes_info['pendientes'], 1):
+            fila = [i, af['nombre'], af['ci'], af['telefono'] or '-']
+            if monto_esperado_afiliado is not None:
+                fila += [monto_esperado_afiliado, af['pagado'],
+                         af['deuda'] if af['deuda'] is not None else '']
+            ws_pend.append(fila)
             if i % 2 == 0:
-                for col in range(1, 5):
+                for col in range(1, total_columnas + 1):
                     ws_pend.cell(row=i + 1, column=col).fill = red_light
 
-        for col_letter, width in [('A', 5), ('B', 35), ('C', 15), ('D', 15)]:
+        if pendientes_info['monto_total_pendiente'] is not None:
+            fila_total = ws_pend.max_row + 1
+            ws_pend.cell(row=fila_total, column=1, value='TOTAL')
+            ws_pend.cell(row=fila_total, column=6, value=float(total_recaudado))
+            ws_pend.cell(row=fila_total, column=7,
+                         value=float(pendientes_info['monto_total_pendiente']))
+            for col in range(1, total_columnas + 1):
+                ws_pend.cell(row=fila_total, column=col).font = bold_font
+                ws_pend.cell(row=fila_total, column=col).fill = red_light
+
+        for col_letter, width in [('A', 5), ('B', 35), ('C', 15), ('D', 15), ('E', 18), ('F', 15), ('G', 15)]:
             ws_pend.column_dimensions[col_letter].width = width
 
         # --- Hoja 4: Revisión ---
@@ -1896,9 +2264,13 @@ class ReporteCategoriaExcelView(APIView):
                 pago.motivo_anulacion or '',
             ])
 
-        duplicados = pagos_query.values('afiliado_id').annotate(cantidad=Count('id'), total=Sum('monto')).filter(cantidad__gt=1)
+        duplicados = pagos_query.values('afiliado_id').annotate(
+            cantidad=Count('id'), total=Sum('monto')
+        ).filter(cantidad__gt=1).order_by('-total')
         for item in duplicados:
-            afiliado = Afiliado.objects.filter(id=item['afiliado_id']).first()
+            afiliado = Afiliado.objects.filter(id=item['afiliado_id']).only(
+                'id', 'nombres', 'apellidos', 'ci'
+            ).first()
             ws_rev.append([
                 'Posible duplicado',
                 afiliado.nombre_completo if afiliado else 'N/A',
