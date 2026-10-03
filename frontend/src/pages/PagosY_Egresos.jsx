@@ -13,6 +13,7 @@ function PagosYEgresos() {
     const [egresos, setEgresos] = useState([]);
     const [countPagos, setCountPagos] = useState(0);
     const [countEgresos, setCountEgresos] = useState(0);
+    const [totalesEgresos, setTotalesEgresos] = useState(null);
     const [afiliados, setAfiliados] = useState([]);
     const [tiposPago, setTiposPago] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -75,6 +76,7 @@ function PagosYEgresos() {
             setEgresos(egresosList);
             setCountPagos(pagosRes.data?.count ?? (Array.isArray(pagosList) ? pagosList.length : 0));
             setCountEgresos(egresosRes.data?.count ?? (Array.isArray(egresosList) ? egresosList.length : 0));
+            setTotalesEgresos(egresosRes.data?.totales ?? null);
             setError('');
         } catch (err) {
             setError('Error al cargar los datos');
@@ -606,7 +608,38 @@ function PagosYEgresos() {
                                 </tbody>
                             </table>
                         ) : (
-                            <table>
+                            <div className="tabla-egresos-block">
+                                {totalesEgresos && (
+                                    <div className="egresos-totales">
+                                        <div className="egresos-total-card principal">
+                                            <span className="label">Total de egresos (todos)</span>
+                                            <span className="valor">
+                                                Bs. {Number(totalesEgresos.total_monto || 0).toFixed(2)}
+                                            </span>
+                                            <span className="detalle">{countEgresos} registros</span>
+                                        </div>
+                                        <div className="egresos-total-card">
+                                            <span className="label">Aprobados</span>
+                                            <span className="valor verde">
+                                                Bs. {Number(totalesEgresos.total_aprobado || 0).toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div className="egresos-total-card">
+                                            <span className="label">Pendientes de aprobación</span>
+                                            <span className="valor ambar">
+                                                Bs. {Number(totalesEgresos.total_pendiente_aprobacion || 0).toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div className="egresos-total-card">
+                                            <span className="label">Anulados</span>
+                                            <span className="valor rojo">
+                                                Bs. {Number(totalesEgresos.total_anulado || 0).toFixed(2)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="table-wrapper">
+                                    <table>
                                 <thead>
                                     <tr>
                                         <th>ID</th>
@@ -654,7 +687,22 @@ function PagosYEgresos() {
                                         </tr>
                                     )}
                                 </tbody>
+                                {totalesEgresos && (
+                                    <tfoot>
+                                        <tr className="tabla-total-row">
+                                            <td colSpan="4" style={{ textAlign: 'right' }}>
+                                                TOTAL DE EGRESOS ({countEgresos} registros)
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                Bs. {Number(totalesEgresos.total_monto || 0).toFixed(2)}
+                                            </td>
+                                            <td colSpan="2"></td>
+                                        </tr>
+                                    </tfoot>
+                                )}
                             </table>
+                                </div>
+                            </div>
                         )}
                         <div className="pagination-wrapper" style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '2rem', justifyContent: 'center' }}>
                             <button

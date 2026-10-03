@@ -7,6 +7,7 @@ from .models import Egreso, Pago, TipoPago, ArqueoCaja
 from .serializers import EgresoSerializer, PagoSerializer, TipoPagoSerializer, ArqueoCajaSerializer
 from pagos_qr.services import QRService
 from django.http import HttpResponse, FileResponse
+from django.db.models import Sum, Q
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
@@ -18,6 +19,27 @@ import locale
 class EgresoViewSet(viewsets.ModelViewSet):
     queryset = Egreso.objects.all()
     serializer_class = EgresoSerializer
+
+    def list(self, request, *args, **kwargs):
+        """
+        Devuelve la página de egresos más un bloque 'totales' con la suma de
+        TODOS los egresos (no solo los de la página actual), para que el total
+        mostrado en pantalla coincida con el listado completo.
+        """
+        response = super().list(request, *args, **kwargs)
+
+        if isinstance(response.data, dict):
+            agregados = self.filter_queryset(self.get_queryset()).aggregate(
+                total_monto=Sum('monto'),
+                total_aprobado=Sum('monto', filter=Q(estado='aprobado')),
+                total_pendiente_aprobacion=Sum('monto', filter=Q(estado='pendiente_aprobacion')),
+                total_anulado=Sum('monto', filter=Q(estado='anulado')),
+            )
+            response.data['totales'] = {
+                clave: float(valor or 0) for clave, valor in agregados.items()
+            }
+
+        return response
 
     def perform_create(self, serializer):
         monto = float(self.request.data.get('monto', 0))

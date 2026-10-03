@@ -401,4 +401,84 @@ tr:hover td {
     text-transform: uppercase !important;
     letter-spacing: 0.05em !important;
     color: #475569 !important;
-}
+}
+/* Resumen de totales de egresos (suma de todos los registros) */
+.tabla-egresos-block {
+    display: flex;
+    flex-direction: column;
+}
+
+.egresos-totales {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.egresos-total-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #94a3b8;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.egresos-total-card.principal {
+    border-left-color: #dc2626;
+    background: #fef2f2;
+}
+
+.egresos-total-card .label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748b;
+}
+
+.egresos-total-card .valor {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.egresos-total-card.principal .valor {
+    font-size: 1.5rem;
+    color: #b91c1c;
+}
+
+.egresos-total-card .valor.verde {
+    color: #15803d;
+}
+
+.egresos-total-card .valor.ambar {
+    color: #b45309;
+}
+
+.egresos-total-card .valor.rojo {
+    color: #94a3b8;
+    text-decoration: line-through;
+}
+
+.egresos-total-card .detalle {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.tabla-total-row td {
+    background: #f1f5f9;
+    border-top: 2px solid #cbd5e1;
+    font-weight: 800;
+    color: #0f172a;
+    font-size: 0.95rem;
+}
+
+@media (max-width: 768px) {
+    .egresos-totales {
+        grid-template-columns: 1fr;
+    }
+}
