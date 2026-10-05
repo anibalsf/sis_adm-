@@ -84,8 +84,15 @@ export function AuthProvider({ children }) {
 
             return { success: true, user: userData };
         } catch (error) {
+            console.error('Login error:', error);
+            if (error.request && !error.response) {
+                return { success: false, error: 'No se pudo conectar con el servidor. Verifique que el backend esté corriendo en ' + (import.meta.env.VITE_API_URL || '/api') };
+            }
             const msg = error.response?.data?.detail
                 || error.response?.data?.non_field_errors?.[0]
+                || error.response?.data?.username?.[0]
+                || error.response?.data?.password?.[0]
+                || error.message
                 || 'Error al iniciar sesión';
             return { success: false, error: msg };
         }
