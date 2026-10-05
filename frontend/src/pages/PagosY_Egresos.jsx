@@ -896,7 +896,7 @@ function PagosYEgresos() {
                                                             <rect x="3" y="14" width="7" height="7"></rect>
                                                         </svg>
                                                     </span>
-                                                    <span>QR</span>
+                                                    <span>QR / Yape</span>
                                                 </div>
                                                 <div 
                                                     className={`metodo-pago-card ${metodoPago === 'transferencia' ? 'active' : ''}`}
@@ -908,7 +908,7 @@ function PagosYEgresos() {
                                                             <line x1="1" y1="10" x2="23" y2="10"></line>
                                                         </svg>
                                                     </span>
-                                                    <span>Banco</span>
+                                                    <span>Transferencia</span>
                                                 </div>
                                             </div>
                                         </div>
