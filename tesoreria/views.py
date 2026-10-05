@@ -244,6 +244,12 @@ class PagoViewSet(viewsets.ModelViewSet):
         pago.estado = 'anulado'
         pago.motivo_anulacion = motivo
         pago.save()
+        try:
+            if pago.hoja_ruta:
+                pago.hoja_ruta.estado = 'pendiente'
+                pago.hoja_ruta.save(update_fields=['estado'])
+        except Exception:
+            pass
         return Response({'status': 'Pago anulado'})
     
     @action(detail=True, methods=['get'])
@@ -301,7 +307,8 @@ class PagoViewSet(viewsets.ModelViewSet):
         elements.append(Spacer(1, 6))
         
         # Número de recibo y fecha
-        recibo_nro = f"NRO-{pago.nro_recibo or pago.id:03d}"
+        nro = pago.nro_recibo if pago.nro_recibo is not None else pago.id
+        recibo_nro = f"NRO-{nro:06d}"
         fecha_str = pago.fecha_pago.strftime("%d/%m/%Y") if hasattr(pago, 'fecha_pago') and pago.fecha_pago else datetime.now().strftime("%d/%m/%Y")
         
         elements.append(Paragraph(f"<b>Recibo Nº:</b> {recibo_nro}", right_style))

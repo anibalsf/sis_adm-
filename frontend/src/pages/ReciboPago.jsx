@@ -39,7 +39,15 @@ function ReciboPago() {
     }, [id, type]);
 
     const handlePrint = () => {
-        window.print();
+        try {
+            window.print();
+            setTimeout(() => {
+                alert('Se ha enviado el recibo a impresión');
+            }, 300);
+        } catch (e) {
+            console.error(e);
+            alert('No se pudo abrir la ventana de impresión');
+        }
     };
 
     const handleBack = () => {
@@ -52,7 +60,8 @@ function ReciboPago() {
 
     const isIngreso = type === 'ingreso';
     const titulo = isIngreso ? 'RECIBO DE INGRESO' : 'COMPROBANTE DE EGRESO';
-    const numero = String(data.nro_recibo ?? data.id).padStart(6, '0');
+    const numeroReciboRaw = data.nro_recibo ?? data.id;
+    const numero = String(numeroReciboRaw).padStart(6, '0');
     const esHojaRuta = isIngreso && /hoja/i.test(data.tipo_pago_nombre || '') && /ruta/i.test(data.tipo_pago_nombre || '');
     const total = parseFloat(data.monto || 0);
 
@@ -336,7 +345,41 @@ function ReciboPago() {
                 </div>
 
                 <button className="btn btn-primary" onClick={handlePrint}>
-                    🖨️ Imprimir Formato {layout === 'thermal' ? 'Ticket' : 'Carta'}
+                    �Y-���? Imprimir Formato {layout === 'thermal' ? 'Ticket' : 'Carta'}
+                </button>
+                <button
+                    className="btn btn-secondary"
+                    onClick={async () => {
+                        try {
+                            if (isIngreso) {
+                                const res = await api.generarReciboPago(id);
+                                const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+                                const link = document.createElement('a');
+                                link.href = url;
+                                const numeroRecibo = data?.nro_recibo ?? id;
+                                link.setAttribute('download', `recibo_NRO-${String(numeroRecibo).padStart(6, '0')}.pdf`);
+                                document.body.appendChild(link);
+                                link.click();
+                                link.remove();
+                                window.URL.revokeObjectURL(url);
+                            } else {
+                                const res = await api.downloadComprobanteEgreso(id);
+                                const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.setAttribute('download', `comprobante_egreso_${id}.pdf`);
+                                document.body.appendChild(link);
+                                link.click();
+                                link.remove();
+                                window.URL.revokeObjectURL(url);
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            alert('Error al descargar el PDF');
+                        }
+                    }}
+                >
+                    �Y"" Descargar PDF
                 </button>
                 {isIngreso && (
                     <button

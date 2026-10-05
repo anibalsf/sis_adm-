@@ -572,8 +572,7 @@
         display: block !important;
         width: 68mm !important;
         max-width: 68mm !important;
-        margin-left: 0 !important;
-        margin-right: auto !important;
+        margin: 0 !important;
         padding: 0 !important;
         height: auto !important;
         overflow: visible !important;
@@ -583,22 +582,20 @@
         width: 68mm !important;
         max-width: 68mm !important;
         box-sizing: border-box !important;
-        padding: 2mm 1mm !important;
-        margin-left: 0 !important;
-        margin-right: auto !important;
+        padding: 0.4mm 0.4mm !important;
+        margin: 0 !important;
         box-shadow: none !important;
         border: none !important;
         font-family: 'Courier New', Courier, monospace !important;
-        font-size: 8pt !important;
+        font-size: 7.8pt !important;
         font-weight: 700 !important;
-        line-height: 1.18 !important;
+        line-height: 1.10 !important;
         color: #000 !important;
         display: block !important;
         overflow: visible !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
-        page-break-after: auto !important;
-        break-after: auto !important;
+        page-break-after: avoid !important;
     }
 
     /* Forzar negrilla e intensidad de color negro en todos los textos impresos */
@@ -716,8 +713,8 @@
     }
 
     .tickets-wrapper.thermal .ticket-qr svg {
-        width: 65px !important;
-        height: 65px !important;
+        width: 58px !important;
+        height: 58px !important;
     }
 
     .tickets-wrapper.thermal .ticket-footer {
@@ -757,17 +754,13 @@
 
     /* Divisor de corte en impresión térmica */
     .tickets-wrapper.thermal .ticket-cut-divider {
-        display: block !important;
-        width: 68mm !important;
-        max-width: 68mm !important;
-        text-align: center !important;
-        margin: 2mm 0 !important;
-        font-size: 6.5pt !important;
-        font-weight: 900 !important;
-        color: #000 !important;
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
-        box-sizing: border-box !important;
     }
 
     /* ---- FORMATO ESTÁNDAR (CARTA / A4) ---- */
@@ -795,7 +788,7 @@
     }
 
     @page {
-        size: auto;
+        size: 80mm auto;
         margin: 0mm;
     }
 }
