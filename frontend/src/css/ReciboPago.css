@@ -582,14 +582,14 @@
         width: 68mm !important;
         max-width: 68mm !important;
         box-sizing: border-box !important;
-        padding: 0.4mm 0.4mm !important;
+        padding: 0.2mm 0.3mm !important;
         margin: 0 !important;
         box-shadow: none !important;
         border: none !important;
         font-family: 'Courier New', Courier, monospace !important;
-        font-size: 7.8pt !important;
+        font-size: 7.5pt !important;
         font-weight: 700 !important;
-        line-height: 1.10 !important;
+        line-height: 1.08 !important;
         color: #000 !important;
         display: block !important;
         overflow: visible !important;
@@ -607,7 +607,7 @@
     }
 
     .tickets-wrapper.thermal .ticket-copy-label {
-        font-size: 7.5pt !important;
+        font-size: 7pt !important;
         font-weight: 900 !important;
         border: 1.5px dashed #000 !important;
         padding: 1px !important;
@@ -787,6 +787,17 @@
         visibility: visible !important;
     }
 
+    
+    .tickets-wrapper.thermal {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+    .tickets-wrapper.thermal > * {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+    }
     @page {
         size: 80mm auto;
         margin: 0mm;
