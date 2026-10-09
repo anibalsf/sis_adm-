@@ -64,8 +64,12 @@ export default function MovilidadesLaPaz() {
             const res = await api.getMovilidadesLaPazHoy();
             setData(res.data);
         } catch (err) {
-            setError('No se pudo conectar al servidor. Intente de nuevo.');
             console.error(err);
+            if (err.response) {
+                setError(`El servidor respondió con error (${err.response.status}). Intente de nuevo en unos minutos.`);
+            } else {
+                setError('No se pudo conectar al servidor. Verifique su conexión e inténtelo de nuevo.');
+            }
         } finally {
             setLoading(false);
         }
@@ -214,27 +218,55 @@ export default function MovilidadesLaPaz() {
                                             )}
                                         </div>
 
-                                        {/* Disponibilidad */}
+                                        {/* Disponibilidad: vendidos y disponibles */}
                                         {typeof mov.cupos_disponibles === 'number' && (
-                                            <div
-                                                className="mlp-card-asientos"
-                                                style={mov.llena ? {
-                                                    color: '#f87171',
-                                                    borderColor: 'rgba(248,113,113,0.4)',
-                                                    background: 'rgba(248,113,113,0.08)',
-                                                } : undefined}
-                                            >
-                                                {mov.llena
-                                                    ? '🚫 Movilidad llena — sin asientos'
-                                                    : `🎫 ${mov.cupos_disponibles} asientos disponibles`}
+                                            <div className="mlp-card-asientos-grid">
+                                                <div className="mlp-asiento-stat">
+                                                    <span className="mlp-asiento-num">{mov.cupos_reservados ?? 0}</span>
+                                                    <span className="mlp-asiento-label">🎟️ Vendidos</span>
+                                                </div>
+                                                <div
+                                                    className="mlp-asiento-stat"
+                                                    style={mov.llena ? {
+                                                        color: '#f87171',
+                                                        borderColor: 'rgba(248,113,113,0.4)',
+                                                        background: 'rgba(248,113,113,0.08)',
+                                                    } : undefined}
+                                                >
+                                                    <span className="mlp-asiento-num">{mov.cupos_disponibles}</span>
+                                                    <span className="mlp-asiento-label">✅ Disponibles</span>
+                                                </div>
+                                                <div className="mlp-asiento-stat">
+                                                    <span className="mlp-asiento-num">{mov.capacidad || 0}</span>
+                                                    <span className="mlp-asiento-label">🪑 Total</span>
+                                                </div>
                                             </div>
+                                        )}
+                                        {mov.llena && (
+                                            <div className="mlp-card-llena">🚫 Movilidad llena — sin asientos</div>
                                         )}
 
                                         {/* Nombre conductor */}
                                         <div className="mlp-card-nombre">
-                                            <span className="mlp-card-icon-label">👤 Conductor</span>
+                                            <span className="mlp-card-icon-label">👤 Conductor / Afiliado designado</span>
                                             <h3>{mov.nombre_completo}</h3>
                                         </div>
+
+                                        {/* CI del afiliado */}
+                                        {mov.ci && (
+                                            <div className="mlp-card-dato">
+                                                <span className="mlp-dato-label">CI</span>
+                                                <span className="mlp-dato-value">{mov.ci}</span>
+                                            </div>
+                                        )}
+
+                                        {/* Dirección del afiliado */}
+                                        {mov.direccion && (
+                                            <div className="mlp-card-dato">
+                                                <span className="mlp-dato-label">DIRECCIÓN</span>
+                                                <span className="mlp-dato-value">{mov.direccion}</span>
+                                            </div>
+                                        )}
 
                                         {/* Placa */}
                                         {mov.placa && (

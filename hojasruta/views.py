@@ -913,7 +913,9 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
                 movilidades.append({
                     'afiliado_id': hoja.afiliado_id,
                     'nombre_completo': hoja.afiliado.nombre_completo,
+                    'ci': hoja.afiliado.ci_completo,
                     'telefono': hoja.afiliado.telefono,
+                    'direccion': hoja.afiliado.direccion,
                     'placa': hoja.vehiculo.placa,
                     'color': hoja.vehiculo.color or None,
                     'tipo': str(hoja.vehiculo.tipo or '').lower(),
@@ -932,7 +934,9 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
                     movilidades.append({
                         'afiliado_id': turno.afiliado.id,
                         'nombre_completo': turno.afiliado.nombre_completo,
+                        'ci': turno.afiliado.ci_completo,
                         'telefono': turno.afiliado.telefono,
+                        'direccion': turno.afiliado.direccion,
                         'placa': veh.placa,
                         'color': veh.color or None,
                         'tipo': str(veh.tipo or '').lower(),
@@ -1003,9 +1007,10 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
     def qr_lapaz(self, request):
         """
         Genera el QR de la oficina para pasajeros.
-        Al escanearlo abre /movilidades-lapaz, que muestra las movilidades
-        asignadas a La Paz (ipsum y minibus): nombre del afiliado, placa,
-        color de la movilidad y hora de salida.
+        Al escanearlo abre /reservas (módulo de reservas), que sin sesión
+        muestra las movilidades asignadas a La Paz (ipsum y minibus):
+        nombre del afiliado designado, placa, color de la movilidad y
+        hora de salida.
         """
         import qrcode
         from io import BytesIO
@@ -1013,7 +1018,7 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
         from django.http import HttpResponse
 
         base_url = (getattr(settings, 'FRONTEND_URL', '') or '').rstrip('/')
-        url = f"{base_url}/movilidades-lapaz"
+        url = f"{base_url}/reservas"
 
         qr = qrcode.QRCode(
             version=None,

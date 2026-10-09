@@ -39,7 +39,7 @@ const Header = ({ toggleSidebar }) => {
                 <button
                     onClick={() => setShowScanner(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all font-semibold text-sm border border-primary/20"
-                    title="Escanear Hoja de Ruta"
+                    title="Escanear QR de reservas, hoja de ruta o voucher"
                 >
                     <IconQrCode className="w-5 h-5" />
                     <span className="hidden sm:inline">Escanear QR</span>

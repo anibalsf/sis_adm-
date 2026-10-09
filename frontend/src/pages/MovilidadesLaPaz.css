@@ -377,6 +377,79 @@
     width: fit-content;
 }
 
+/* ── ASIENTOS: VENDIDOS / DISPONIBLES / TOTAL ── */
+.mlp-card-asientos-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+
+.mlp-asiento-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.5rem 0.3rem;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    text-align: center;
+}
+
+.mlp-asiento-num {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #f1f5f9;
+    line-height: 1;
+}
+
+.mlp-asiento-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--mlp-muted);
+}
+
+.mlp-card-llena {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #f87171;
+    background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.4);
+    border-radius: 10px;
+    padding: 0.4rem 0.8rem;
+    width: fit-content;
+}
+
+/* ── DATOS DEL AFILIADO (CI, DIRECCIÓN) ──────── */
+.mlp-card-dato {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--card-border, rgba(255,255,255,0.15));
+    border-radius: 10px;
+    padding: 0.5rem 1rem;
+}
+
+.mlp-dato-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: var(--mlp-muted);
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.mlp-dato-value {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    text-align: right;
+}
+
 /* ── CARD TYPE ───────────────────────────────── */
 .mlp-card-type {
     display: flex;

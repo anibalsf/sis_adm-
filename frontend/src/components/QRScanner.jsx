@@ -3,6 +3,63 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useNavigate } from 'react-router-dom';
 import './QRScanner.css';
 
+const RUTAS_QR = [
+    { match: '/movilidades-lapaz', ruta: () => '/movilidades-lapaz' },
+    { match: '/voucher/', ruta: (t) => extraerRuta(t, '/voucher/') },
+    { match: '/pizarra', ruta: () => '/pizarra' },
+    { match: '/verificar-hoja/', ruta: (t) => extraerRuta(t, '/verificar-hoja/') },
+];
+
+function extraerRuta(texto, marca) {
+    const idx = texto.indexOf(marca);
+    const resto = texto.slice(idx + 1);
+    const limpio = resto.split(/[?\s#]/)[0];
+    return `/${limpio.replace(/\/+$/, '')}`;
+}
+
+function resolverRuta(decodedText) {
+    const texto = (decodedText || '').trim();
+
+    // QR del PDF de confirmación: JSON {"tipo":"reserva","id":N}
+    if (texto.startsWith('{') && texto.includes('"tipo"')) {
+        try {
+            const datos = JSON.parse(texto);
+            if (datos.tipo === 'reserva' && datos.id) {
+                return `/voucher/${datos.id}`;
+            }
+        } catch {
+            // no es JSON válido, continuar con las demás reglas
+        }
+    }
+
+    for (const regla of RUTAS_QR) {
+        if (texto.includes(regla.match)) {
+            return regla.ruta(texto);
+        }
+    }
+
+    // QR del módulo de reservas: abre el módulo, que sin sesión muestra
+    // la movilidad designada a La Paz (nombre, placa y color).
+    if (/\/reservas(\/|[?\s#]|$)/.test(texto)) {
+        return '/reservas';
+    }
+
+    // Es una URL externa del dominio del sistema: abrirla tal cual (ruta interna).
+    if (/^https?:\/\//i.test(texto)) {
+        try {
+            const url = new URL(texto);
+            if (url.pathname && url.pathname !== '/') {
+                return `${url.pathname}${url.search}${url.hash}`;
+            }
+        } catch {
+            // contenido no parseable, cae al comportamiento por defecto
+        }
+    }
+
+    // Texto plano (ID de hoja de ruta impreso sin URL)
+    return `/verificar-hoja/${texto}`;
+}
+
 const QRScanner = ({ onClose }) => {
     const navigate = useNavigate();
     const [scannerLoaded, setScannerLoaded] = useState(false);
@@ -20,7 +77,7 @@ const QRScanner = ({ onClose }) => {
         );
 
         scanner.render(onScanSuccess, onScanFailure);
-        setScannerLoaded(true);
+        const loadTimer = setTimeout(() => setScannerLoaded(true), 0);
 
         // Traducir etiquetas de la librería (que vienen en inglés por defecto)
         const translateLabels = () => {
@@ -43,14 +100,7 @@ const QRScanner = ({ onClose }) => {
             scanner.clear();
             clearInterval(interval);
 
-            // Si es una URL del sistema o solo el ID
-            if (decodedText.includes('/verificar-hoja/')) {
-                const parts = decodedText.split('/');
-                const id = parts[parts.length - 1];
-                navigate(`/verificar-hoja/${id}`);
-            } else {
-                navigate(`/verificar-hoja/${decodedText}`);
-            }
+            navigate(resolverRuta(decodedText));
             if (onClose) onClose();
         }
 
@@ -59,6 +109,7 @@ const QRScanner = ({ onClose }) => {
         }
 
         return () => {
+            clearTimeout(loadTimer);
             clearInterval(interval);
             scanner.clear().catch(err => console.warn("Scanner stop error", err));
         };
@@ -68,13 +119,13 @@ const QRScanner = ({ onClose }) => {
         <div className="qr-scanner-overlay">
             <div className="qr-scanner-modal">
                 <div className="qr-scanner-header">
-                    <h3>Escáner de Hoja de Ruta</h3>
+                    <h3>Escáner de QR</h3>
                     <button onClick={onClose} className="close-btn">✕</button>
                 </div>
                 <div id="reader" className="qr-reader"></div>
                 {!scannerLoaded && <div className="scanner-loading">Iniciando cámara...</div>}
                 <div className="qr-scanner-footer">
-                    <p>Encuadre el código QR de la hoja de ruta para verificarla automáticamente.</p>
+                    <p>Encuadre el QR de la reserva, la hoja de ruta o el voucher para abrirlo automáticamente.</p>
                 </div>
             </div>
         </div>

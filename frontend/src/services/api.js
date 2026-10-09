@@ -1,6 +1,24 @@
 import axios from 'axios';
 
-export const API_URL = import.meta.env.VITE_API_URL || '/api';
+// URL de la API. En producción el frontend se sirve en
+// administracion.sindicatointegracion.com y el backend en
+// backend.sindicatointegracion.com, así que si el build quedó con una
+// ruta relativa ("/api") se resuelve automáticamente al backend real;
+// de lo contrario /api/* caería en el HTML del SPA y fallarían todas
+// las peticiones públicas (como la del QR de reservas).
+const API_PROD = 'https://backend.sindicatointegracion.com/api';
+
+function resolverApiUrl() {
+    const configurada = import.meta.env.VITE_API_URL || '/api';
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    const esLocal = host === 'localhost' || host === '127.0.0.1' || host === '';
+    if (configurada.startsWith('/') && !esLocal) {
+        return API_PROD;
+    }
+    return configurada;
+}
+
+export const API_URL = resolverApiUrl();
 
 // Configurar base URL
 axios.defaults.baseURL = API_URL;

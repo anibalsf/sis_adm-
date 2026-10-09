@@ -210,7 +210,7 @@ function AsignacionLaPaz() {
             alert('Permita ventanas emergentes para imprimir el QR');
             return;
         }
-        w.document.write(`<!DOCTYPE html><html><head><title>QR Reservas La Paz</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;font-family:sans-serif;text-align:center}img{width:320px;height:320px}h2{margin-bottom:4px}.sub{color:#555;margin-top:8px}</style></head><body><h2>Sindicato Mixto "Integración Taipiplaya"</h2><p style="color:#555">RESERVA DE PASAJES — RUTA LA PAZ</p><img src="${qrUrl}" /><p class="sub">Escanee con su celular para ver el nombre del afiliado,<br/>la placa, celular y hora de salida de cada movilidad</p></body></html>`);
+        w.document.write(`<!DOCTYPE html><html><head><title>QR Reservas La Paz</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;font-family:sans-serif;text-align:center}img{width:320px;height:320px}h2{margin-bottom:4px}.sub{color:#555;margin-top:8px}</style></head><body><h2>Sindicato Mixto "Integración Taipiplaya"</h2><p style="color:#555">RESERVA DE PASAJES — RUTA LA PAZ</p><img src="${qrUrl}" /><p class="sub">Escanee con su celular para entrar al módulo de reservas<br/>y ver nombre, placa, color y hora de salida de la movilidad</p></body></html>`);
         w.document.close();
         w.focus();
         w.print();
@@ -318,8 +318,8 @@ function AsignacionLaPaz() {
                         <h3>📱 QR Reservas Pasajeros — La Paz</h3>
                         <p style={{ color: '#666', fontSize: '13px', marginBottom: '15px' }}>
                             Imprima este código y colóquelo en la parada/oficina. Al escanearlo,
-                             el pasajero verá las asignaciones con el nombre del afiliado,
-                             la placa, celular y hora de salida para reservar su pasaje.
+                             el pasajero entra al módulo de reservas y verá la movilidad designada
+                             a La Paz: nombre del afiliado, placa, color y hora de salida.
                         </p>
                         {qrLoading ? (
                             <div className="loading" style={{ padding: '60px 0' }}>Generando QR...</div>
