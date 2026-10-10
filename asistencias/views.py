@@ -2,7 +2,6 @@ from rest_framework import viewsets, filters
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.conf import settings
 from django.http import HttpResponse
 from django.db.models import Count, Q
 from datetime import datetime, timedelta
@@ -11,6 +10,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from .models import Asistencia
 from .serializers import AsistenciaSerializer
 from sanciones.models import Sancion
+from sanciones.services import get_sancion_config_para_reunion
 
 
 class AsistenciaViewSet(viewsets.ModelViewSet):
@@ -53,14 +53,18 @@ class AsistenciaViewSet(viewsets.ModelViewSet):
         instance.save(update_fields=['presente'])
 
         if instance.estado == 'falta':
-            # Crear sanción por falta
+            # Crear sanción por falta (monto según tipo de reunión/actividad)
+            cfg = get_sancion_config_para_reunion(
+                instance.reunion.tipo if instance.reunion else None,
+                getattr(instance.reunion, 'monto_multa', None) if instance.reunion else None,
+            )
             Sancion.objects.get_or_create(
                 afiliado=instance.afiliado,
-                tipo='falta_reunion',
+                tipo=cfg['tipo'],
                 referencia_asistencia=instance,
                 defaults={
-                    'motivo': f'Inasistencia a reunión: {instance.reunion.tema}',
-                    'monto': getattr(settings, 'SANCTION_ABSENCE_AMOUNT', 50),
+                    'motivo': f"Inasistencia: {instance.reunion.tema if instance.reunion else ''}"[:255],
+                    'monto': cfg['monto'],
                     'estado': 'pendiente',
                 },
             )
@@ -80,15 +84,19 @@ class AsistenciaViewSet(viewsets.ModelViewSet):
             instance.presente = False
         instance.save(update_fields=['presente'])
         
-        # Si cambió a falta, crear sanción
+        # Si cambió a falta, crear sanción (monto según tipo de reunión/actividad)
         if not was_falta and is_falta:
+            cfg = get_sancion_config_para_reunion(
+                instance.reunion.tipo if instance.reunion else None,
+                getattr(instance.reunion, 'monto_multa', None) if instance.reunion else None,
+            )
             Sancion.objects.get_or_create(
                 afiliado=instance.afiliado,
-                tipo='falta_reunion',
+                tipo=cfg['tipo'],
                 referencia_asistencia=instance,
                 defaults={
-                    'motivo': f'Inasistencia a reunión: {instance.reunion.tema}',
-                    'monto': getattr(settings, 'SANCTION_ABSENCE_AMOUNT', 50),
+                    'motivo': f"Inasistencia: {instance.reunion.tema if instance.reunion else ''}"[:255],
+                    'monto': cfg['monto'],
                     'estado': 'pendiente',
                 },
             )

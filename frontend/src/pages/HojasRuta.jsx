@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { api } from '../services/api'
 import { useNavigate } from 'react-router-dom'
 import SancionesAlert from '../components/SancionesAlert'
+import YapeQRModal from '../components/YapeQRModal'
 import '../css/Common.css'
 import { IconPencil, IconFile, IconBus, IconPrinter, IconWhatsApp, IconTrash } from '../components/Icons'
 
@@ -42,6 +43,10 @@ function HojasRuta() {
   const [showSancionesAlert, setShowSancionesAlert] = useState(false)
   const [sancionesData, setSancionesData] = useState(null)
   const [pendingFormData, setPendingFormData] = useState(null)
+  const [processingSancionId, setProcessingSancionId] = useState(null)
+  const [payingAllSanciones, setPayingAllSanciones] = useState(false)
+  const [qrSancionData, setQrSancionData] = useState(null)
+  const [verifyingQrSancion, setVerifyingQrSancion] = useState(false)
   const [listaTurnoLaPaz, setListaTurnoLaPaz] = useState([])
   const [loadingTurno, setLoadingTurno] = useState(false)
   const [turnosSalida, setTurnosSalida] = useState([])
@@ -400,6 +405,83 @@ function HojasRuta() {
   const handleContinueWithSanciones = () => {
     setShowSancionesAlert(false)
     save(null, true)
+  }
+
+  const refreshSancionesPendientes = async (afiliadoId) => {
+    try {
+      const res = await api.getSancionesPendientes(afiliadoId)
+      const data = res.data || {}
+      if (!data.tiene_sanciones) {
+        // Ya no hay deuda: se procede a registrar la hoja de ruta
+        setShowSancionesAlert(false)
+        setSancionesData(null)
+        setPendingFormData(null)
+        alert('Sanciones canceladas. Se registrará la hoja de ruta.')
+        save(null, true)
+        return
+      }
+      setSancionesData(data.sanciones)
+      setPendingFormData(prev => ({ ...(prev || {}), total_adeudado: data.total_adeudado }))
+    } catch (err) {
+      console.error(err)
+      alert('No se pudo actualizar el estado de las sanciones')
+    }
+  }
+
+  const handlePagarSancion = async (sancion) => {
+    if (!window.confirm(`¿Registrar pago en EFECTIVO de "${sancion.tipo}" por Bs. ${parseFloat(sancion.monto).toFixed(2)}?`)) return
+    try {
+      setProcessingSancionId(sancion.id)
+      await api.cambiarEstadoSancion(sancion.id, 'pagada')
+      await refreshSancionesPendientes(pendingFormData?.afiliado)
+    } catch (err) {
+      console.error(err)
+      alert('Error al registrar el pago')
+    } finally {
+      setProcessingSancionId(null)
+    }
+  }
+
+  const handlePagarSancionQR = async (sancion) => {
+    try {
+      setProcessingSancionId(sancion.id)
+      const res = await api.generarPagoQrSancion(sancion.id)
+      setQrSancionData({ ...res.data, sancionId: sancion.id })
+    } catch (err) {
+      console.error(err)
+      alert('Error al generar el QR de pago')
+    } finally {
+      setProcessingSancionId(null)
+    }
+  }
+
+  const verificarPagoQrSancion = async () => {
+    if (!qrSancionData) return
+    try {
+      setVerifyingQrSancion(true)
+      await api.cambiarEstadoSancion(qrSancionData.sancionId, 'pagada')
+      setQrSancionData(null)
+      await refreshSancionesPendientes(pendingFormData?.afiliado)
+    } catch (err) {
+      console.error(err)
+      alert('Error al verificar el pago')
+    } finally {
+      setVerifyingQrSancion(false)
+    }
+  }
+
+  const handlePagarTodasSanciones = async () => {
+    if (!window.confirm(`¿Registrar el pago de TODAS las sanciones por Bs. ${Number(pendingFormData?.total_adeudado || 0).toFixed(2)}?`)) return
+    try {
+      setPayingAllSanciones(true)
+      await api.pagarSancionesPendientes(pendingFormData?.afiliado)
+      await refreshSancionesPendientes(pendingFormData?.afiliado)
+    } catch (err) {
+      console.error(err)
+      alert('Error al registrar el pago de las sanciones')
+    } finally {
+      setPayingAllSanciones(false)
+    }
   }
 
   const remove = async (id) => {
@@ -1383,12 +1465,28 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
       )}
       {showSancionesAlert && sancionesData && (
         <SancionesAlert
+          afiliado={(() => {
+            const a = afiliados.find(x => String(x.id) === String(pendingFormData?.afiliado))
+            return a ? `${a.apellidos} ${a.nombres}` : ''
+          })()}
           sanciones={sancionesData}
           totalAdeudado={pendingFormData?.total_adeudado || 0}
           onContinue={handleContinueWithSanciones}
           onCancel={() => setShowSancionesAlert(false)}
+          onPay={handlePagarSancion}
+          onPayQR={handlePagarSancionQR}
+          onPayAll={handlePagarTodasSanciones}
+          processingId={processingSancionId}
+          payingAll={payingAllSanciones}
         />
       )}
+
+      <YapeQRModal
+        qrData={qrSancionData}
+        onVerify={verificarPagoQrSancion}
+        onClose={() => setQrSancionData(null)}
+        verifying={verifyingQrSancion}
+      />
     </div>
   )
 }

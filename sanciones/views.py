@@ -1,10 +1,11 @@
 from rest_framework import viewsets, filters
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
 from .models import Sancion
 from .serializers import SancionSerializer
+from .services import get_sancion_config
 from historial.models import CambioEstado
 from django.contrib.contenttypes.models import ContentType
 from comunicacion.models import Notificacion
@@ -36,8 +37,24 @@ class SancionViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
 
+    def get_queryset(self):
+        """Permite filtrar por varios tipos de sanción con ?tipos=a,b,c"""
+        qs = super().get_queryset()
+        tipos = self.request.query_params.get('tipos')
+        if tipos:
+            lista = [t.strip() for t in tipos.split(',') if t.strip()]
+            if lista:
+                qs = qs.filter(tipo__in=lista)
+        estados = self.request.query_params.get('estados')
+        if estados:
+            lista_estados = [e.strip() for e in estados.split(',') if e.strip()]
+            if lista_estados:
+                qs = qs.filter(estado__in=lista_estados)
+        return qs
+
     def get_permissions(self):
-        if getattr(self, 'action', None) == 'notificar':
+        action = getattr(self, 'action', None)
+        if action == 'notificar':
             class OnlySecretaria(BasePermission):
                 def has_permission(self, request, view):
                     user = request.user
@@ -45,6 +62,9 @@ class SancionViewSet(viewsets.ModelViewSet):
                         return False
                     return user.groups.filter(name='Secretaria').exists()
             return [OnlySecretaria()]
+        if action == 'cobrar':
+            # El personal de tesorería debe poder registrar el pago de las multas.
+            return [IsAuthenticated()]
         return super().get_permissions()
 
     @action(detail=True, methods=['post'])
@@ -111,6 +131,102 @@ class SancionViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=False, methods=['get'])
+    def pendientes(self, request):
+        """Lista todas las multas pendientes/notificadas (para el módulo de pagos).
+
+        Devuelve el detalle por tipo de falta y totales adeudados.
+        """
+        sanciones = (
+            Sancion.objects
+            .filter(estado__in=['pendiente', 'notificada'])
+            .select_related('afiliado', 'referencia_asistencia')
+            .order_by('-created_at')
+        )
+
+        serializer = self.get_serializer(sanciones, many=True)
+
+        por_tipo = {}
+        for s in sanciones:
+            item = por_tipo.setdefault(s.tipo, {'tipo': s.tipo, 'cantidad': 0, 'total': 0.0})
+            item['cantidad'] += 1
+            item['total'] += float(s.monto)
+
+        return Response({
+            'cantidad': sanciones.count(),
+            'total_adeudado': sum(float(s.monto) for s in sanciones),
+            'por_tipo': sorted(por_tipo.values(), key=lambda x: x['tipo']),
+            'sanciones': serializer.data,
+        })
+
+    @action(detail=True, methods=['post'])
+    def cobrar(self, request, pk=None):
+        """Cobra una multa: registra el ingreso en tesorería y marca la sanción.
+
+        Body: { tipo_pago, metodo_pago, fecha_pago, banco, nro_operacion,
+                observaciones, confirmar (opcional, default True salvo QR) }
+        """
+        from datetime import date
+        from django.db.models import Max
+        from tesoreria.models import Pago, TipoPago
+
+        sancion = self.get_object()
+        if sancion.estado not in ('pendiente', 'notificada'):
+            return Response({'detail': 'La multa ya fue pagada o anulada'}, status=400)
+
+        tipo_pago_id = request.data.get('tipo_pago')
+        if not tipo_pago_id:
+            return Response({'detail': 'Debe seleccionar una categoría de ingreso'}, status=400)
+        try:
+            tipo_pago = TipoPago.objects.get(id=tipo_pago_id, tipo='ingreso')
+        except (TipoPago.DoesNotExist, ValueError, TypeError):
+            return Response({'detail': 'Categoría de ingreso no válida'}, status=404)
+
+        metodo = request.data.get('metodo_pago', 'efectivo')
+        monto = request.data.get('monto') or sancion.monto
+        fecha_pago = request.data.get('fecha_pago') or date.today().isoformat()
+        observaciones = request.data.get('observaciones') or f"Pago de {sancion.tipo}: {sancion.motivo}".strip()
+
+        with transaction.atomic():
+            ultimo = Pago.objects.filter(nro_recibo__isnull=False).aggregate(m=Max('nro_recibo'))['m'] or 0
+            pago = Pago.objects.create(
+                afiliado=sancion.afiliado,
+                tipo_pago=tipo_pago,
+                monto=monto,
+                fecha_pago=fecha_pago,
+                metodo_pago=metodo,
+                banco=request.data.get('banco') or None,
+                nro_operacion=request.data.get('nro_operacion') or None,
+                estado='pendiente' if metodo == 'qr' else 'completado',
+                observaciones=observaciones,
+                nro_recibo=ultimo + 1,
+            )
+
+            confirmar = request.data.get('confirmar')
+            if confirmar is None:
+                confirmar = True
+
+            if confirmar:
+                old = sancion.estado
+                sancion.estado = 'pagada'
+                sancion.save(update_fields=['estado', 'updated_at'])
+                CambioEstado.objects.create(
+                    content_type=ContentType.objects.get_for_model(Sancion),
+                    object_id=sancion.id,
+                    estado_anterior=old,
+                    estado_nuevo='pagada',
+                    usuario=request.user if request.user.is_authenticated else None,
+                )
+
+        return Response({
+            'success': True,
+            'sancion_id': sancion.id,
+            'pago_id': pago.id,
+            'requiere_verificacion': metodo == 'qr',
+            'monto': float(pago.monto),
+            'estado_sancion': sancion.estado,
+        }, status=201)
+
+    @action(detail=False, methods=['get'])
     def pendientes_afiliado(self, request):
         """Obtiene sanciones pendientes de un afiliado"""
         afiliado_id = request.query_params.get('afiliado')
@@ -132,7 +248,32 @@ class SancionViewSet(viewsets.ModelViewSet):
             'total_adeudado': total_adeudado,
             'sanciones': serializer.data
         })
-    
+
+    @action(detail=False, methods=['post'])
+    def pagar_pendientes_afiliado(self, request):
+        """Marca como pagadas todas las sanciones pendientes de un afiliado.
+
+        Sirve para que el afiliado regularice sus multas al comprar su hoja de ruta.
+        """
+        afiliado_id = request.data.get('afiliado') or request.query_params.get('afiliado')
+        if not afiliado_id:
+            return Response({'error': 'afiliado_id requerido'}, status=400)
+
+        pendientes = Sancion.objects.filter(
+            afiliado_id=afiliado_id,
+            estado__in=['pendiente', 'notificada']
+        )
+        total = sum(float(s.monto) for s in pendientes)
+
+        with transaction.atomic():
+            count = pendientes.update(estado='pagada')
+
+        return Response({
+            'success': True,
+            'sanciones_pagadas': count,
+            'total_pagado': total,
+        })
+
     def perform_create(self, serializer):
         obj = serializer.save()
         try:
@@ -186,10 +327,10 @@ class SancionViewSet(viewsets.ModelViewSet):
             afiliado = Afiliado.objects.get(id=afiliado_id)
             asistencia = Asistencia.objects.get(id=asistencia_id) if asistencia_id else None
             
-            # Obtener configuración
-            config = settings.SANCIONES_CONFIG.get(tipo_config, {})
-            tipo = config.get('tipo', 'Sanción')
-            monto = config.get('monto_default', 50.00)
+            # Obtener configuración (monto de multa según el tipo de falta)
+            cfg = get_sancion_config(tipo_config)
+            tipo = cfg['tipo']
+            monto = cfg['monto']
             
             # Verificar si ya existe
             if asistencia:

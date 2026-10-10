@@ -156,7 +156,7 @@ export const api = {
     getReuniones: (params) => axios.get('/reuniones/', { params }),
     getReunion: (id) => axios.get(`/reuniones/${id}/`),
     createReunion: (data) => axios.post('/reuniones/', data),
-    updateReunion: (id, data) => axios.put(`/reuniones/${id}/`, data),
+    updateReunion: (id, data) => axios.patch(`/reuniones/${id}/`, data),
     deleteReunion: (id) => axios.delete(`/reuniones/${id}/`),
     cerrarReunion: (id) => axios.post(`/reuniones/${id}/cerrar_reunion/`),
     
@@ -183,7 +183,10 @@ export const api = {
     cambiarEstadoSancion: (id, estado) => axios.post(`/sanciones/${id}/cambiar_estado/`, { estado }),
     notificarSancion: (id, data) => axios.post(`/sanciones/${id}/notificar/`, data),
     getSancionesPendientes: (afiliadoId) => axios.get(`/sanciones/pendientes_afiliado/?afiliado=${afiliadoId}`),
+    pagarSancionesPendientes: (afiliadoId) => axios.post('/sanciones/pagar_pendientes_afiliado/', { afiliado: afiliadoId }),
     generarPagoQrSancion: (id) => axios.post(`/sanciones/${id}/generar_pago_qr/`),
+    getSancionesPendientesTodas: () => axios.get('/sanciones/pendientes/'),
+    cobrarSancion: (id, data) => axios.post(`/sanciones/${id}/cobrar/`, data),
 
     // Asistencias
     getAsistencias: (params) => axios.get('/asistencias/', { params }),

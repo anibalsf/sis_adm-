@@ -250,9 +250,11 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
             
             if sanciones.exists():
                 total = sum(float(s.monto) for s in sanciones)
+                mensaje = f'El afiliado tiene {sanciones.count()} sanción(es) pendiente(s) por Bs. {total:.2f}'
                 return Response({
+                    'detail': mensaje,
                     'requires_confirmation': True,
-                    'mensaje': f'El afiliado tiene {sanciones.count()} sanción(es) pendiente(s) por Bs. {total:.2f}',
+                    'mensaje': mensaje,
                     'sanciones_count': sanciones.count(),
                     'total_adeudado': total,
                     'sanciones': SancionSerializer(sanciones, many=True).data

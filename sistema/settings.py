@@ -284,17 +284,33 @@ CORS_ALLOW_CREDENTIALS = config('CORS_ALLOW_CREDENTIALS', default=True, cast=boo
 # Configuraciones de negocio
 SANCTION_ABSENCE_AMOUNT = config('SANCTION_ABSENCE_AMOUNT', default=50, cast=int)
 
+# Montos de multa por tipo de actividad (configurables por .env)
+SANCTION_ASAMBLEA_AMOUNT = config('SANCTION_ASAMBLEA_AMOUNT', default=100, cast=int)
+SANCTION_REUNION_AMOUNT = config('SANCTION_REUNION_AMOUNT', default=50, cast=int)
+SANCTION_TRABAJO_AMOUNT = config('SANCTION_TRABAJO_AMOUNT', default=100, cast=int)
+
 # ==============================================================================
 # AUTOMATIZACIÓN: CONFIGURACIÓN DE SANCIONES
 # ==============================================================================
+# Cada clave representa una falta; 'monto_default' es la multa por inasistencia.
 SANCIONES_CONFIG = {
+    'FALTA_ASAMBLEA': {
+        'monto_default': float(SANCTION_ASAMBLEA_AMOUNT),
+        'tipo': 'Falta a Asamblea General',
+        'notificar_automatico': True
+    },
     'FALTA_REUNION': {
-        'monto_default': 50.00,
+        'monto_default': float(SANCTION_REUNION_AMOUNT),
         'tipo': 'Falta a Reunión',
         'notificar_automatico': True
     },
+    'FALTA_TRABAJO': {
+        'monto_default': float(SANCTION_TRABAJO_AMOUNT),
+        'tipo': 'Falta a Trabajo / Faena',
+        'notificar_automatico': True
+    },
     'FALTA_TURNO_PARADA': {
-        'monto_default': 50.00,
+        'monto_default': float(SANCTION_TRABAJO_AMOUNT),
         'tipo': 'Falta a Turno de Parada',
         'notificar_automatico': True
     },
@@ -303,6 +319,15 @@ SANCIONES_CONFIG = {
         'tipo': 'Incumplimiento de Reglamento',
         'notificar_automatico': False
     }
+}
+
+# Mapea el 'tipo' de una Reunión con su clave de configuración de sanción
+REUNION_TIPO_A_SANCION = {
+    'asamblea_general': 'FALTA_ASAMBLEA',
+    'ordinaria': 'FALTA_REUNION',
+    'extraordinaria': 'FALTA_REUNION',
+    'emergencia': 'FALTA_REUNION',
+    'trabajo': 'FALTA_TRABAJO',
 }
 
 

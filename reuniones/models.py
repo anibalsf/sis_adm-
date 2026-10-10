@@ -6,6 +6,11 @@ class Reunion(models.Model):
     tema = models.CharField(max_length=200)
     tipo = models.CharField(max_length=30, default='ordinaria')
     quorum = models.PositiveIntegerField(default=0)
+    monto_multa = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        verbose_name='Monto de Multa (Bs)',
+        help_text='Multa por inasistencia. Si es 0 se usa el monto por defecto según el tipo.',
+    )
     ESTADO_CHOICES = [
         ('abierta', 'Abierta'),
         ('cerrada', 'Cerrada'),

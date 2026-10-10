@@ -142,7 +142,7 @@
     border-radius: 8px;
     padding: 1rem;
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 1fr auto auto;
     gap: 1rem;
     align-items: center;
     transition: all 0.2s;
@@ -243,6 +243,31 @@
 
 .btn-secondary:hover {
     background: #5a6268;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #198754 0%, #157347 100%);
+    color: white;
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(25, 135, 84, 0.4);
+}
+
+.btn-sm {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
 /* Scrollbar styling */

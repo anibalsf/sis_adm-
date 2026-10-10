@@ -482,3 +482,32 @@ tr:hover td {
         grid-template-columns: 1fr;
     }
 }
+
+.multas-resumen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.multas-resumen strong {
+    font-size: 1rem;
+    color: #0f172a;
+}
+
+.multas-resumen > span {
+    font-size: 0.85rem;
+    color: #475569;
+    font-weight: 600;
+}
+
+.multas-tipo-chip {
+    background: rgba(99, 102, 241, 0.1) !important;
+    color: #4f46e5 !important;
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+}
+

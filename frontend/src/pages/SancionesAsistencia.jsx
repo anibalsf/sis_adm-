@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import YapeQRModal from '../components/YapeQRModal';
 import './SancionesAsistencia.css';
-import { IconList, IconLock, IconEye, IconCash, IconWhatsApp, IconBan } from '../components/Icons';
+import { IconList, IconLock, IconEye, IconCash, IconWhatsApp, IconBan, IconEdit } from '../components/Icons';
 
 function SancionesAsistencia() {
     const [activeTab, setActiveTab] = useState('reuniones');
@@ -30,7 +30,16 @@ function SancionesAsistencia() {
     const [verificandoPago, setVerificandoPago] = useState(false);
 
     // Form states
-    const [reunionForm, setReunionForm] = useState({ fecha: '', tema: '', tipo: 'ordinaria', quorum: 0 });
+    const [reunionForm, setReunionForm] = useState({ fecha: '', tema: '', tipo: 'ordinaria', quorum: 0, monto_multa: 0 });
+    const [editingReunion, setEditingReunion] = useState(null);
+
+    const defaultMontoPorTipo = {
+        asamblea_general: 100,
+        ordinaria: 50,
+        extraordinaria: 50,
+        emergencia: 50,
+        trabajo: 100
+    };
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -43,7 +52,9 @@ function SancionesAsistencia() {
                     page,
                     search,
                     ordering: '-created_at',
-                    tipo: filterFaltas ? 'falta_reunion' : undefined
+                    tipos: filterFaltas
+                        ? 'Falta a Asamblea General,Falta a Reunión,Falta a Trabajo / Faena,Falta a Turno de Parada,falta_reunion'
+                        : undefined
                 };
                 const res = await api.getSanciones(params);
                 setSanciones(res.data.results || res.data);
@@ -65,18 +76,42 @@ function SancionesAsistencia() {
     const handleCreateReunion = async (e) => {
         e.preventDefault();
         try {
-            await api.createReunion(reunionForm);
+            if (editingReunion) {
+                await api.updateReunion(editingReunion.id, reunionForm);
+                alert('Reunión actualizada exitosamente');
+            } else {
+                await api.createReunion(reunionForm);
+                alert('Reunión creada exitosamente');
+            }
             setShowReunionModal(false);
-            setReunionForm({ fecha: '', tema: '', tipo: 'ordinaria', quorum: 0 });
+            setEditingReunion(null);
+            setReunionForm({ fecha: '', tema: '', tipo: 'ordinaria', quorum: 0, monto_multa: 0 });
             loadData();
-            alert('Reunión creada exitosamente');
         } catch (err) {
             console.error('Error completo:', err.response?.data);
             const errorMsg = err.response?.data?.detail ||
                 JSON.stringify(err.response?.data) ||
-                'Error al crear reunión';
+                'Error al guardar reunión';
             alert(errorMsg);
         }
+    };
+
+    const openNuevaReunion = () => {
+        setEditingReunion(null);
+        setReunionForm({ fecha: '', tema: '', tipo: 'ordinaria', quorum: 0, monto_multa: 0 });
+        setShowReunionModal(true);
+    };
+
+    const openEditarReunion = (reunion) => {
+        setEditingReunion(reunion);
+        setReunionForm({
+            fecha: reunion.fecha,
+            tema: reunion.tema,
+            tipo: reunion.tipo,
+            quorum: reunion.quorum || 0,
+            monto_multa: reunion.monto_multa || 0
+        });
+        setShowReunionModal(true);
     };
 
     const openAsistencia = async (reunion) => {
@@ -300,7 +335,7 @@ function SancionesAsistencia() {
                     </div>
                 )}
                 {activeTab === 'reuniones' && (
-                    <button className="btn btn-primary" onClick={() => setShowReunionModal(true)}>
+                    <button className="btn btn-primary" onClick={openNuevaReunion}>
                         + Nueva Reunión
                     </button>
                 )}
@@ -319,6 +354,7 @@ function SancionesAsistencia() {
                                 <th>Tema</th>
                                 <th>Tipo</th>
                                 <th>Quorum</th>
+                                <th>Multa (Bs)</th>
                                 <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
@@ -330,6 +366,7 @@ function SancionesAsistencia() {
                                     <td>{r.tema}</td>
                                     <td><span className="badge">{r.tipo}</span></td>
                                     <td>{r.quorum}</td>
+                                    <td>{r.monto_multa && Number(r.monto_multa) > 0 ? `Bs. ${r.monto_multa}` : 'Automático'}</td>
                                     <td>
                                         <span className={`badge ${r.estado === 'cerrada' ? 'danger' : 'success'}`}>
                                             {r.estado || 'abierta'}
@@ -339,6 +376,7 @@ function SancionesAsistencia() {
                                         {r.estado !== 'cerrada' ? (
                                             <>
                                                 <button className="btn-icon btn-view" onClick={() => openAsistencia(r)} title="Tomar Lista"><IconList /></button>
+                                                <button className="btn-icon btn-edit" onClick={() => openEditarReunion(r)} title="Editar / Multa"><IconEdit /></button>
                                                 <button className="btn-icon btn-delete" onClick={() => handleCerrarReunion(r)} title="Cerrar Reunión y Sancionar"><IconLock /></button>
                                             </>
                                         ) : (
@@ -348,7 +386,7 @@ function SancionesAsistencia() {
                                 </tr>
                             ))}
 
-                            {reuniones.length === 0 && <tr><td colSpan="5" style={{ textAlign: 'center' }}>No hay reuniones registradas</td></tr>}
+                            {reuniones.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center' }}>No hay reuniones registradas</td></tr>}
                         </tbody>
                     </table>
                 </div>
@@ -403,7 +441,7 @@ function SancionesAsistencia() {
                 <div className="modal-overlay" onClick={() => setShowReunionModal(false)}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>Nueva Reunión</h2>
+                            <h2>{editingReunion ? 'Editar Reunión' : 'Nueva Reunión'}</h2>
                             <button className="modal-close" onClick={() => setShowReunionModal(false)}>✕</button>
                         </div>
                         <form onSubmit={handleCreateReunion}>
@@ -429,12 +467,32 @@ function SancionesAsistencia() {
                                 <label>Tipo</label>
                                 <select
                                     value={reunionForm.tipo}
-                                    onChange={e => setReunionForm({ ...reunionForm, tipo: e.target.value })}
+                                    onChange={e => {
+                                        const tipo = e.target.value;
+                                        setReunionForm({
+                                            ...reunionForm,
+                                            tipo,
+                                            monto_multa: defaultMontoPorTipo[tipo] ?? reunionForm.monto_multa
+                                        });
+                                    }}
                                 >
+                                    <option value="asamblea_general">Asamblea General</option>
                                     <option value="ordinaria">Ordinaria</option>
                                     <option value="extraordinaria">Extraordinaria</option>
                                     <option value="emergencia">Emergencia</option>
+                                    <option value="trabajo">Trabajo / Faena</option>
                                 </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Monto de Multa por Inasistencia (Bs)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={reunionForm.monto_multa}
+                                    onChange={e => setReunionForm({ ...reunionForm, monto_multa: e.target.value === '' ? '' : parseFloat(e.target.value) })}
+                                />
+                                <small>Se aplicará a cada afiliado que falte. 0 usa el monto por defecto según el tipo.</small>
                             </div>
                             <div className="form-group">
                                 <label>Quorum Mínimo</label>
@@ -446,7 +504,7 @@ function SancionesAsistencia() {
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowReunionModal(false)}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary">Crear</button>
+                                <button type="submit" className="btn btn-primary">{editingReunion ? 'Guardar cambios' : 'Crear'}</button>
                             </div>
                         </form>
                     </div>

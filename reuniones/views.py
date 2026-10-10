@@ -23,7 +23,11 @@ class ReunionViewSet(viewsets.ModelViewSet):
         
         from asistencias.models import Asistencia
         from sanciones.models import Sancion
-        from django.conf import settings
+        from sanciones.services import get_sancion_config_para_reunion
+        
+        # Resolver tipo y monto de multa según el tipo de reunión/actividad
+        # (el monto de la reunión es editable; si es 0 se usa el monto por defecto)
+        cfg = get_sancion_config_para_reunion(reunion.tipo, reunion.monto_multa)
         
         # 1. Asegurar que todos los que tengan 'falta' tengan su sanción
         asistencias_falta = reunion.asistencias.filter(estado='falta')
@@ -32,11 +36,11 @@ class ReunionViewSet(viewsets.ModelViewSet):
         for asist in asistencias_falta:
             sancion, created = Sancion.objects.get_or_create(
                 afiliado=asist.afiliado,
-                tipo='falta_reunion',
+                tipo=cfg['tipo'],
                 referencia_asistencia=asist,
                 defaults={
-                    'motivo': f'Inasistencia a reunión: {reunion.tema}',
-                    'monto': getattr(settings, 'SANCTION_ABSENCE_AMOUNT', 50),
+                    'motivo': f"Inasistencia: {reunion.tema}"[:255],
+                    'monto': cfg['monto'],
                     'estado': 'pendiente',
                 }
             )
@@ -48,8 +52,13 @@ class ReunionViewSet(viewsets.ModelViewSet):
         reunion.save()
         
         return Response({
-            'detail': f'Reunión cerrada exitosamente. Se generaron {sanciones_creadas} nuevas sanciones.',
-            'sanciones_creadas': sanciones_creadas
+            'detail': (
+                f"Reunión cerrada exitosamente. Se generaron {sanciones_creadas} "
+                f"nuevas sanciones de {cfg['tipo']} por Bs. {cfg['monto']}."
+            ),
+            'sanciones_creadas': sanciones_creadas,
+            'tipo_sancion': cfg['tipo'],
+            'monto': cfg['monto'],
         })
 
     class IsSecretariaOrDirectivaOrReadOnly(BasePermission):

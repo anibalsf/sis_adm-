@@ -39,6 +39,14 @@ function PagosYEgresos() {
     const [showNuevaCategoriaInput, setShowNuevaCategoriaInput] = useState(false);
     const [nuevaCategoriaNombre, setNuevaCategoriaNombre] = useState('');
     const [creandoCategoria, setCreandoCategoria] = useState(false);
+    const [multasData, setMultasData] = useState(null);
+    const [loadingMultas, setLoadingMultas] = useState(false);
+    const [showCobroModal, setShowCobroModal] = useState(false);
+    const [cobroSancion, setCobroSancion] = useState(null);
+    const [cobroForm, setCobroForm] = useState({});
+    const [cobroMetodo, setCobroMetodo] = useState('efectivo');
+    const [cobroError, setCobroError] = useState('');
+    const [cobroSaving, setCobroSaving] = useState(false);
 
     const handleCrearNuevaCategoria = async () => {
         if (!nuevaCategoriaNombre.trim()) return;
@@ -86,6 +94,18 @@ function PagosYEgresos() {
         }
     }, [pageIngresos, pageEgresos, pageSize]);
 
+    const loadMultas = useCallback(async () => {
+        try {
+            setLoadingMultas(true);
+            const res = await api.getSancionesPendientesTodas();
+            setMultasData(res.data);
+        } catch (err) {
+            console.error('Error cargando multas pendientes:', err);
+        } finally {
+            setLoadingMultas(false);
+        }
+    }, []);
+
     // Cargar datos auxiliares en segundo plano
     useEffect(() => {
         const loadAuxData = async () => {
@@ -110,6 +130,10 @@ function PagosYEgresos() {
     useEffect(() => {
         loadTableData();
     }, [loadTableData]);
+
+    useEffect(() => {
+        if (activeTab === 'multas') loadMultas();
+    }, [activeTab, loadMultas]);
 
     useEffect(() => {
         if (activeTab !== 'ingresos') return;
@@ -414,11 +438,65 @@ function PagosYEgresos() {
                 navigate(`/recibo/ingreso/${pagoId}`);
             }
             await loadTableData();
+            await loadMultas();
         } catch (err) {
             console.error(err);
             alert('Aún no se ha detectado el pago. Por favor intenta de nuevo en unos momentos.');
         } finally {
             setVerificandoPago(false);
+        }
+    };
+
+    const openCobro = (sancion) => {
+        const tpMulta = tiposPago.find(t => t.tipo === 'ingreso' && /multa|sanci/i.test(t.nombre || ''));
+        setCobroSancion(sancion);
+        setCobroForm({
+            tipo_pago: tpMulta ? String(tpMulta.id) : '',
+            fecha_pago: new Date().toISOString().slice(0, 10),
+            monto: String(sancion.monto),
+            banco: '',
+            nro_operacion: '',
+            observaciones: `Pago de multa: ${sancion.tipo}`,
+        });
+        setCobroMetodo('efectivo');
+        setCobroError('');
+        setShowCobroModal(true);
+    };
+
+    const saveCobro = async (e) => {
+        e.preventDefault();
+        if (!cobroForm.tipo_pago) {
+            setCobroError('Seleccione una categoría de ingreso');
+            return;
+        }
+        if (cobroMetodo === 'transferencia' && (!cobroForm.banco || !cobroForm.nro_operacion)) {
+            setCobroError('Ingrese el banco y el número de operación');
+            return;
+        }
+        try {
+            setCobroSaving(true);
+            setCobroError('');
+            const res = await api.cobrarSancion(cobroSancion.id, { ...cobroForm, metodo_pago: cobroMetodo });
+            const pagoId = res.data.pago_id;
+            setShowCobroModal(false);
+            await loadMultas();
+            await loadTableData();
+            if (cobroMetodo === 'qr' && pagoId) {
+                try {
+                    const qrRes = await api.generarPagoQrIngreso(pagoId);
+                    setQrData(qrRes.data);
+                } catch (err) {
+                    console.error('Error generando QR:', err);
+                    alert('Multa registrada pero hubo un error generando el QR.');
+                }
+            } else if (pagoId) {
+                navigate(`/recibo/ingreso/${pagoId}`);
+            }
+        } catch (err) {
+            setCobroError(err.response?.data?.detail || 'Error al registrar el cobro');
+            console.error(err);
+        } finally {
+            setCobroSaving(false);
         }
     };
 
@@ -520,37 +598,60 @@ function PagosYEgresos() {
                     <button className={activeTab === 'egresos' ? 'active' : ''} onClick={() => setActiveTab('egresos')}>
                         Egresos
                     </button>
+                    <button className={activeTab === 'multas' ? 'active' : ''} onClick={() => setActiveTab('multas')}>
+                        Multas Pendientes{multasData?.cantidad ? ` (${multasData.cantidad})` : ''}
+                    </button>
                 </div>
 
                 <div className="table-header">
-                    <input
-                        type="text"
-                        placeholder="Buscar..."
-                        className="search-input"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    <select
-                        value={pageSize}
-                        onChange={(e) => {
-                            const v = parseInt(e.target.value || '10', 10);
-                            setPageSize(v);
-                            setPageIngresos(1);
-                            setPageEgresos(1);
-                        }}
-                        style={{ marginLeft: '10px' }}
-                    >
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
-                        <option value={50}>50</option>
-                    </select>
-                    <button className="btn btn-success" style={{ marginLeft: '10px' }} onClick={() => activeTab === 'ingresos' ? api.downloadPagosExcel() : api.downloadEgresosExcel()}>
-                        📥 Descargar Excel
-                    </button>
-                    <button className="btn btn-primary" onClick={openCreate}>
-                        <span>{activeTab === 'ingresos' ? '➕ Registrar Ingreso' : '➕ Registrar Egreso'}</span>
-                    </button>
-
+                    {activeTab === 'multas' ? (
+                        <div className="multas-resumen">
+                            {multasData ? (
+                                <>
+                                    <strong>{multasData.cantidad} multa(s) por cobrar</strong>
+                                    <span>Total adeudado: Bs. {Number(multasData.total_adeudado || 0).toFixed(2)}</span>
+                                    {(multasData.por_tipo || []).map(pt => (
+                                        <span key={pt.tipo} className="multas-tipo-chip">
+                                            {pt.tipo}: {pt.cantidad} (Bs. {Number(pt.total).toFixed(2)})
+                                        </span>
+                                    ))}
+                                </>
+                            ) : <span>Cargando multas...</span>}
+                            <button className="btn btn-secondary" style={{ marginLeft: 'auto' }} onClick={loadMultas}>
+                                🔄 Actualizar
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <input
+                                type="text"
+                                placeholder="Buscar..."
+                                className="search-input"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            <select
+                                value={pageSize}
+                                onChange={(e) => {
+                                    const v = parseInt(e.target.value || '10', 10);
+                                    setPageSize(v);
+                                    setPageIngresos(1);
+                                    setPageEgresos(1);
+                                }}
+                                style={{ marginLeft: '10px' }}
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                            </select>
+                            <button className="btn btn-success" style={{ marginLeft: '10px' }} onClick={() => activeTab === 'ingresos' ? api.downloadPagosExcel() : api.downloadEgresosExcel()}>
+                                📥 Descargar Excel
+                            </button>
+                            <button className="btn btn-primary" onClick={openCreate}>
+                                <span>{activeTab === 'ingresos' ? '➕ Registrar Ingreso' : '➕ Registrar Egreso'}</span>
+                            </button>
+                        </>
+                    )}
                 </div>
 
                 {loading ? (
@@ -607,7 +708,7 @@ function PagosYEgresos() {
                                     )}
                                 </tbody>
                             </table>
-                        ) : (
+                        ) : activeTab === 'egresos' ? (
                             <div className="tabla-egresos-block">
                                 {totalesEgresos && (
                                     <div className="egresos-totales">
@@ -703,7 +804,70 @@ function PagosYEgresos() {
                             </table>
                                 </div>
                             </div>
+                        ) : (
+                            <div className="tabla-multas-block">
+                                {loadingMultas ? (
+                                    <div className="loading">Cargando multas...</div>
+                                ) : (
+                                    <div className="table-wrapper">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>ID</th>
+                                                    <th>Afiliado</th>
+                                                    <th>Tipo de Falta</th>
+                                                    <th>Motivo</th>
+                                                    <th>Monto (Bs.)</th>
+                                                    <th>Estado</th>
+                                                    <th>Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(multasData?.sanciones || []).length > 0 ? (
+                                                    multasData.sanciones.map((s) => (
+                                                        <tr key={s.id}>
+                                                            <td>{s.id}</td>
+                                                            <td>{s.afiliado_nombre}</td>
+                                                            <td>{s.tipo}</td>
+                                                            <td>{s.motivo || '-'}</td>
+                                                            <td>{parseFloat(s.monto).toFixed(2)}</td>
+                                                            <td>
+                                                                <span className="badge badge-warning">
+                                                                    {s.estado ? s.estado.toUpperCase() : 'PENDIENTE'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="actions">
+                                                                <button className="btn btn-primary btn-sm" onClick={() => openCobro(s)}>
+                                                                    💵 Cobrar
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan="7" style={{ textAlign: 'center' }}>No hay multas pendientes</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                            {multasData?.sanciones?.length > 0 && (
+                                                <tfoot>
+                                                    <tr className="tabla-total-row">
+                                                        <td colSpan="4" style={{ textAlign: 'right' }}>
+                                                            TOTAL ADEUDADO ({multasData.cantidad} multas)
+                                                        </td>
+                                                        <td style={{ textAlign: 'right' }}>
+                                                            Bs. {Number(multasData.total_adeudado || 0).toFixed(2)}
+                                                        </td>
+                                                        <td colSpan="2"></td>
+                                                    </tr>
+                                                </tfoot>
+                                            )}
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
                         )}
+                        {activeTab !== 'multas' && (
                         <div className="pagination-wrapper" style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '2rem', justifyContent: 'center' }}>
                             <button
                                 className="btn btn-secondary"
@@ -736,6 +900,7 @@ function PagosYEgresos() {
                                 Total: {activeTab === 'ingresos' ? countPagos : countEgresos} registros
                             </span>
                         </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -1067,6 +1232,78 @@ function PagosYEgresos() {
                             <div className="form-actions">
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
                                 <button type="submit" className="btn btn-primary">Guardar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {showCobroModal && cobroSancion && (
+                <div className="modal-overlay" onClick={() => setShowCobroModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>💵 Cobrar Multa</h2>
+                            <button className="modal-close" onClick={() => setShowCobroModal(false)}>✕</button>
+                        </div>
+                        {cobroError && <div className="error" style={{ marginBottom: '10px' }}>{cobroError}</div>}
+                        <div style={{ marginBottom: '15px' }}>
+                            <div><strong>Afiliado:</strong> {cobroSancion.afiliado_nombre}</div>
+                            <div><strong>Tipo de falta:</strong> {cobroSancion.tipo}</div>
+                            {cobroSancion.motivo && <div><strong>Motivo:</strong> {cobroSancion.motivo}</div>}
+                        </div>
+                        <form onSubmit={saveCobro} className="modal-form">
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label htmlFor="cobro_tipo_pago">Categoría de Ingreso *</label>
+                                    <select id="cobro_tipo_pago" value={cobroForm.tipo_pago || ''} onChange={(e) => setCobroForm(prev => ({ ...prev, tipo_pago: e.target.value }))} required>
+                                        <option value="">Seleccionar...</option>
+                                        {tiposPago.filter(t => t.tipo === 'ingreso').map(t => (
+                                            <option key={t.id} value={t.id}>{t.nombre}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="cobro_fecha">Fecha *</label>
+                                    <input id="cobro_fecha" type="date" value={cobroForm.fecha_pago || ''} onChange={(e) => setCobroForm(prev => ({ ...prev, fecha_pago: e.target.value }))} required />
+                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="cobro_monto">Monto (Bs.) *</label>
+                                <input id="cobro_monto" type="text" inputMode="decimal" value={cobroForm.monto || ''} onChange={(e) => setCobroForm(prev => ({ ...prev, monto: e.target.value }))} required />
+                            </div>
+                            <div className="form-group">
+                                <label>Método de Pago</label>
+                                <div className="metodo-pago-container">
+                                    <div className={`metodo-pago-card ${cobroMetodo === 'efectivo' ? 'active' : ''}`} onClick={() => setCobroMetodo('efectivo')}>
+                                        <span>💵 Efectivo</span>
+                                    </div>
+                                    <div className={`metodo-pago-card ${cobroMetodo === 'transferencia' ? 'active' : ''}`} onClick={() => setCobroMetodo('transferencia')}>
+                                        <span>🏦 Transferencia</span>
+                                    </div>
+                                    <div className={`metodo-pago-card ${cobroMetodo === 'qr' ? 'active' : ''}`} onClick={() => setCobroMetodo('qr')}>
+                                        <span>📱 QR / Yape</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {cobroMetodo === 'transferencia' && (
+                                <div style={{ display: 'flex', gap: '15px' }}>
+                                    <div className="form-group" style={{ flex: 1 }}>
+                                        <label htmlFor="cobro_banco">Banco *</label>
+                                        <input id="cobro_banco" type="text" value={cobroForm.banco || ''} onChange={(e) => setCobroForm(prev => ({ ...prev, banco: e.target.value }))} />
+                                    </div>
+                                    <div className="form-group" style={{ flex: 1 }}>
+                                        <label htmlFor="cobro_nro">Nro Operación *</label>
+                                        <input id="cobro_nro" type="text" value={cobroForm.nro_operacion || ''} onChange={(e) => setCobroForm(prev => ({ ...prev, nro_operacion: e.target.value }))} />
+                                    </div>
+                                </div>
+                            )}
+                            <div className="form-group">
+                                <label htmlFor="cobro_obs">Observaciones</label>
+                                <textarea id="cobro_obs" rows="2" value={cobroForm.observaciones || ''} onChange={(e) => setCobroForm(prev => ({ ...prev, observaciones: e.target.value }))}></textarea>
+                            </div>
+                            <div className="form-actions">
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowCobroModal(false)}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary" disabled={cobroSaving}>{cobroSaving ? 'Registrando...' : 'Registrar Pago'}</button>
                             </div>
                         </form>
                     </div>
