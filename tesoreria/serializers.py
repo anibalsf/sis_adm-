@@ -9,10 +9,12 @@ class TipoPagoSerializer(serializers.ModelSerializer):
 class PagoSerializer(serializers.ModelSerializer):
     afiliado_nombre = serializers.CharField(source='afiliado.nombre_completo', read_only=True)
     tipo_pago_nombre = serializers.CharField(source='tipo_pago.nombre', read_only=True)
+    sanciones_ids = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
+    cuotas_ids = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
 
     class Meta:
         model = Pago
-        fields = ['id', 'afiliado', 'afiliado_nombre', 'tipo_pago', 'tipo_pago_nombre', 'monto', 'saldo_anterior_gestion', 'fecha_pago', 'metodo_pago', 'banco', 'nro_operacion', 'estado', 'motivo_anulacion', 'observaciones', 'hoja_ruta', 'nro_recibo', 'created_at']
+        fields = ['id', 'afiliado', 'afiliado_nombre', 'tipo_pago', 'tipo_pago_nombre', 'monto', 'saldo_anterior_gestion', 'fecha_pago', 'metodo_pago', 'banco', 'nro_operacion', 'estado', 'motivo_anulacion', 'observaciones', 'hoja_ruta', 'nro_recibo', 'detalle_faltas', 'sanciones_ids', 'cuotas_ids', 'created_at']
     
     def validate_monto(self, value):
         try:

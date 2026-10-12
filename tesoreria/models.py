@@ -52,11 +52,16 @@ class Pago(models.Model):
     hoja_ruta = models.ForeignKey(HojaRuta, on_delete=models.SET_NULL, null=True, blank=True, related_name='pagos_tesoreria')
     auditado_en = models.ForeignKey('ArqueoCaja', on_delete=models.SET_NULL, null=True, blank=True, related_name='pagos_auditados')
     nro_recibo = models.PositiveIntegerField(null=True, blank=True, help_text="Número correlativo de recibo de ingreso (reinicia secuencia)")
+    detalle_faltas = models.JSONField(null=True, blank=True, help_text="Detalle de faltas/multas incluidas en el pago")
     uuid = models.CharField(max_length=32, unique=True, help_text="Identificador único del pago")
 
     def save(self, *args, **kwargs):
         if not self.uuid:
             self.uuid = uuid.uuid4().hex
+        if not self.nro_recibo:
+            from django.db.models import Max
+            ultimo = Pago.objects.filter(nro_recibo__isnull=False).aggregate(m=Max('nro_recibo'))['m'] or 0
+            self.nro_recibo = ultimo + 1
         super().save(*args, **kwargs)
 
     created_at = models.DateTimeField(auto_now_add=True)

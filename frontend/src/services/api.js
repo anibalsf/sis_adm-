@@ -95,7 +95,6 @@ export const api = {
 
     // Nuevas funciones - Fase 4: Recibos Automáticos
     generarReciboPago: (id) => axios.get(`/pagos/${id}/generar_recibo/`, { responseType: 'blob' }),
-
     // Nuevas funciones - Fase 5: Asistencia Mejorada
     getInasistenciasFrecuentes: (params) => axios.get('/asistencias/inasistencias_frecuentes/', { params }),
     getEstadisticasAsistencia: () => axios.get('/asistencias/estadisticas_generales/'),
@@ -262,6 +261,12 @@ export const api = {
     anularPago: (id, data) => axios.post(`/pagos/${id}/anular/`, data),
     downloadRecibo: (id) => axios.get(`/pagos/${id}/generar_recibo/`, { responseType: 'blob' }),
     generarPagoQrIngreso: (id) => axios.post(`/pagos/${id}/generar_pago_qr/`),
+    getFaltasAfiliado: (afiliadoId) => axios.get(`/pagos/faltas_afiliado/?afiliado_id=${afiliadoId}`),
+
+    // Pagos QR (transacciones)
+    generarQr: (data) => axios.post('/pagos-qr/transactions/', data),
+    verifyPagoQr: (transactionId) => axios.post('/pagos-qr/transactions/verify/', { transaction_id: transactionId }),
+    getQrStatus: (id) => axios.get(`/pagos-qr/transactions/${id}/check_status/`),
 
     // Egresos
     getEgresos: (params) => axios.get('/egresos/', { params }),

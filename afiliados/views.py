@@ -35,6 +35,16 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
             ).values_list('id', flat=True)
             
             queryset = queryset.filter(estado='activo', is_active=True).exclude(id__in=la_paz_ids).exclude(id__in=convenio_ids).distinct()
+        
+        # Filtro por CI (búsqueda parcial)
+        ci = self.request.query_params.get('ci')
+        if ci:
+            queryset = queryset.filter(ci__icontains=ci)
+        
+        # Filtro por estado
+        estado = self.request.query_params.get('estado')
+        if estado:
+            queryset = queryset.filter(estado=estado)
             
         return queryset
 

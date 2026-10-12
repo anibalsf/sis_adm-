@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from sistema.permissions import IsSecretariaOrDirectivaOrSistemas
 from django.db.models import Sum, Count, Avg, Q
 from datetime import datetime, timedelta
 from django.utils.timezone import now
@@ -227,7 +228,7 @@ class AfiliadosMorososView(APIView):
         from dateutil.relativedelta import relativedelta
 
         from reportes_auto.morosidad import (
-            CAMPOS_MOROSO, _deuda_queryset, nivel_morosidad, serializar_filas,
+            CAMPOS_MOROSO, _deuda_queryset, clave_nivel, nivel_morosidad, serializar_filas,
         )
 
         try:
@@ -263,7 +264,7 @@ class AfiliadosMorososView(APIView):
         niveles = {'critico': 0, 'alto': 0, 'moderado': 0, 'bajo': 0}
         for ultimo in morosos_qs.values_list('ultimo_pago', flat=True):
             dias = (hoy - ultimo).days if ultimo else None
-            clave = nivel_morosidad(dias).lower()
+            clave = clave_nivel(nivel_morosidad(dias))
             if clave in niveles:
                 niveles[clave] += 1
 
@@ -284,7 +285,7 @@ class AfiliadosMorososPDFView(APIView):
     Genera PDF de afiliados morosos.
     URL: GET /api/reportes/afiliados-morosos/pdf/
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
 
     def get(self, request):
         import io
@@ -517,7 +518,7 @@ class BalanceView(APIView):
     Solo considera transacciones válidas (ingresos 'completado', egresos 'aprobado').
     URL: GET /api/reportes/balance?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
     
     def get(self, request):
         from reportes.query_helpers import resumen_periodo, pagos_validos, egresos_validos
@@ -765,7 +766,7 @@ class TransaccionesView(APIView):
     Lista de todas las transacciones válidas (ingresos y egresos).
     URL: GET /api/reportes/transacciones?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
     
     def get(self, request):
         from reportes.query_helpers import pagos_validos, egresos_validos, pagos_excluidos, egresos_excluidos
@@ -1034,7 +1035,7 @@ class TransaccionesCSVView(APIView):
     Exporta todas las transacciones a Excel (XLSX).
     URL: GET /api/reportes/transacciones/csv
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
 
     def get(self, request):
         from reportes.query_helpers import pagos_validos, egresos_validos
@@ -1106,7 +1107,7 @@ class TransaccionesPDFView(APIView):
     Exporta todas las transacciones válidas a PDF (Informe económico para afiliados).
     URL: GET /api/reportes/transacciones/pdf
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
 
     def get(self, request):
         from reportes.query_helpers import pagos_validos, egresos_validos, resumen_periodo
@@ -1238,7 +1239,7 @@ class ReportesOperativosCSVView(APIView):
     Exporta estadísticas operativas a Excel.
     URL: GET /api/reportes/operativos/csv
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
 
     def get(self, request):
         from afiliados.models import Afiliado
@@ -1286,7 +1287,7 @@ class ReportesOperativosPDFView(APIView):
     Exporta estadísticas operativas a PDF.
     URL: GET /api/reportes/operativos/pdf
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
 
     def get(self, request):
         from afiliados.models import Afiliado
@@ -1338,7 +1339,7 @@ class ReporteCategoriaView(APIView):
 
     URL: GET /api/reportes/por-categoria/?tipo_pago_id=6&fecha_inicio=2026-01-01&fecha_fin=2026-12-31
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
 
     def get(self, request):
         from tesoreria.models import Pago, TipoPago
@@ -1518,7 +1519,7 @@ class ReporteCategoriaPDFView(APIView):
     Exporta a PDF el reporte por categoría de ingreso o de egreso.
     URL: GET /api/reportes/por-categoria/pdf/?tipo=egreso&todas=1&fecha_inicio=...&fecha_fin=...
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
 
     def get(self, request):
         from tesoreria.models import Pago, TipoPago
@@ -1885,7 +1886,7 @@ class ReporteCategoriaExcelView(APIView):
     Exporta a Excel el reporte por categoría de ingreso o de egreso.
     URL: GET /api/reportes/por-categoria/excel/?tipo=egreso&todas=1&fecha_inicio=...&fecha_fin=...
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
 
     def get(self, request):
         from tesoreria.models import Pago, TipoPago

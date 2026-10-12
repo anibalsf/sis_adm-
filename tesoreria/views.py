@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Egreso, Pago, TipoPago, ArqueoCaja
 from .serializers import EgresoSerializer, PagoSerializer, TipoPagoSerializer, ArqueoCajaSerializer
 from pagos_qr.services import QRService
+from sistema.permissions import IsSecretariaOrDirectivaOrReadOnly
 from django.http import HttpResponse, FileResponse
 from django.db.models import Sum, Q
 from reportlab.pdfgen import canvas
@@ -19,6 +20,13 @@ import locale
 class EgresoViewSet(viewsets.ModelViewSet):
     queryset = Egreso.objects.all()
     serializer_class = EgresoSerializer
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrReadOnly]
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {'detail': 'No se permite eliminar egresos; use la anulación para conservar el historial.'},
+            status=405,
+        )
 
     def list(self, request, *args, **kwargs):
         """
@@ -217,16 +225,73 @@ class EgresoViewSet(viewsets.ModelViewSet):
 class PagoViewSet(viewsets.ModelViewSet):
     queryset = Pago.objects.all()
     serializer_class = PagoSerializer
-    
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrReadOnly]
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {'detail': 'No se permite eliminar pagos; use la anulación para conservar el historial.'},
+            status=405,
+        )
+
     def perform_create(self, serializer):
         # Si es QR, el estado inicial es pendiente hasta que se verifique
         metodo = self.request.data.get('metodo_pago', 'efectivo')
         estado_inicial = 'pendiente' if metodo == 'qr' else 'completado'
 
+        sanciones_ids = serializer.validated_data.pop('sanciones_ids', None)
+        if not sanciones_ids:
+            sanciones_ids = self.request.data.get('sanciones_ids', [])
+
+        cuotas_ids = serializer.validated_data.pop('cuotas_ids', None)
+        if not cuotas_ids:
+            cuotas_ids = self.request.data.get('cuotas_ids', [])
+
         from django.db.models import Max
         ultimo = Pago.objects.filter(nro_recibo__isnull=False).aggregate(m=Max('nro_recibo'))['m'] or 0
         obj = serializer.save(estado=estado_inicial, nro_recibo=ultimo + 1)
         
+        # Procesar sanciones asociadas si vienen en la petición o en detalle_faltas
+        if not sanciones_ids and obj.detalle_faltas:
+            sanciones_ids = [f.get('id') for f in obj.detalle_faltas if isinstance(f, dict) and f.get('categoria', 'falta') == 'falta' and f.get('id')]
+            
+        if not cuotas_ids and obj.detalle_faltas:
+            cuotas_ids = [f.get('id') for f in obj.detalle_faltas if isinstance(f, dict) and f.get('categoria') == 'aporte' and f.get('id')]
+
+        if sanciones_ids:
+            from sanciones.models import Sancion
+            from historial.models import CambioEstado
+            from django.contrib.contenttypes.models import ContentType
+            sanciones_a_pagar = Sancion.objects.filter(id__in=sanciones_ids, estado__in=['pendiente', 'notificada'])
+            for s in sanciones_a_pagar:
+                old = s.estado
+                s.estado = 'pagada'
+                s.save(update_fields=['estado', 'updated_at'])
+                CambioEstado.objects.create(
+                    content_type=ContentType.objects.get_for_model(Sancion),
+                    object_id=s.id,
+                    estado_anterior=old,
+                    estado_nuevo='pagada',
+                    usuario=self.request.user if self.request.user.is_authenticated else None,
+                )
+
+        if cuotas_ids:
+            from cuotas.models import Cuota
+            from historial.models import CambioEstado
+            from django.contrib.contenttypes.models import ContentType
+            cuotas_a_pagar = Cuota.objects.filter(id__in=cuotas_ids, estado='pendiente')
+            for c in cuotas_a_pagar:
+                old = c.estado
+                c.estado = 'pagada'
+                c.fecha_pago = obj.fecha_pago
+                c.save(update_fields=['estado', 'fecha_pago', 'updated_at'])
+                CambioEstado.objects.create(
+                    content_type=ContentType.objects.get_for_model(Cuota),
+                    object_id=c.id,
+                    estado_anterior=old,
+                    estado_nuevo='pagada',
+                    usuario=self.request.user if self.request.user.is_authenticated else None,
+                )
+
         # Actualizar estado de la hoja de ruta si existe el vínculo
         if obj.hoja_ruta:
             obj.hoja_ruta.estado = 'pagada'
@@ -234,6 +299,101 @@ class PagoViewSet(viewsets.ModelViewSet):
             
         # La notificación de WhatsApp se maneja vía Signals en signals.py
         return obj
+
+    @action(detail=False, methods=['get'])
+    def faltas_afiliado(self, request):
+        """Devuelve las faltas/sanciones y aportes/cuotas pendientes de un afiliado para cobro en cualquier ingreso."""
+        afiliado_id = request.query_params.get('afiliado_id')
+        if not afiliado_id:
+            return Response({'detail': 'afiliado_id es requerido'}, status=400)
+            
+        from sanciones.models import Sancion
+        from cuotas.models import Cuota
+        
+        # 1. Faltas / Sanciones pendientes
+        sanciones = Sancion.objects.filter(
+            afiliado_id=afiliado_id,
+            estado__in=['pendiente', 'notificada']
+        ).select_related('referencia_asistencia__reunion').order_by('-created_at')
+        
+        items_faltas = []
+        total_faltas = 0.0
+        for s in sanciones:
+            tipo_label = s.tipo
+            tema = ''
+            fecha_reunion = None
+            if s.referencia_asistencia and s.referencia_asistencia.reunion:
+                r = s.referencia_asistencia.reunion
+                tema = r.tema
+                fecha_reunion = str(r.fecha)
+                if r.tipo == 'extraordinaria':
+                    tipo_label = 'Falta a Reunión Extraordinaria'
+                elif r.tipo == 'emergencia':
+                    tipo_label = 'Falta a Reunión de Emergencia'
+                elif r.tipo == 'asamblea_general':
+                    tipo_label = 'Falta a Asamblea General'
+                elif r.tipo == 'trabajo':
+                    tipo_label = 'Falta a Trabajo / Faena'
+            else:
+                tipo_lower = (s.tipo or '').lower()
+                if 'asamblea' in tipo_lower:
+                    tipo_label = 'Falta a Asamblea General'
+                elif 'extraordinaria' in tipo_lower:
+                    tipo_label = 'Falta a Reunión Extraordinaria'
+                elif 'emergencia' in tipo_lower:
+                    tipo_label = 'Falta a Reunión de Emergencia'
+                elif 'trabajo' in tipo_lower or 'faena' in tipo_lower:
+                    tipo_label = 'Falta a Trabajo / Faena'
+                    
+            monto_val = float(s.monto)
+            total_faltas += monto_val
+            items_faltas.append({
+                'id': s.id,
+                'tipo': tipo_label,
+                'tipo_original': s.tipo,
+                'motivo': s.motivo or tema or 'Inasistencia',
+                'tema': tema,
+                'fecha': fecha_reunion or (s.created_at.strftime('%Y-%m-%d') if s.created_at else ''),
+                'monto': monto_val,
+                'estado': s.estado,
+                'categoria': 'falta',
+            })
+            
+        # 2. Aportes / Cuotas pendientes
+        cuotas = Cuota.objects.filter(
+            afiliado_id=afiliado_id,
+            estado='pendiente'
+        ).order_by('-periodo')
+        
+        items_aportes = []
+        total_aportes = 0.0
+        for c in cuotas:
+            periodo_str = c.periodo.strftime('%m/%Y') if c.periodo else ''
+            tipo_label = f"Aporte / Cuota {c.tipo.capitalize()} ({periodo_str})"
+            monto_val = float(c.monto)
+            total_aportes += monto_val
+            items_aportes.append({
+                'id': c.id,
+                'tipo': tipo_label,
+                'tipo_original': c.tipo,
+                'periodo': str(c.periodo),
+                'motivo': f"Cuota {c.tipo} {periodo_str}",
+                'monto': monto_val,
+                'estado': c.estado,
+                'categoria': 'aporte',
+            })
+            
+        return Response({
+            'afiliado_id': int(afiliado_id),
+            'cantidad_faltas': len(items_faltas),
+            'total_faltas': total_faltas,
+            'faltas': items_faltas,
+            'cantidad_aportes': len(items_aportes),
+            'total_aportes': total_aportes,
+            'aportes': items_aportes,
+            'cantidad_total': len(items_faltas) + len(items_aportes),
+            'total_deuda': total_faltas + total_aportes,
+        })
 
     @action(detail=True, methods=['post'])
     def anular(self, request, pk=None):
@@ -250,6 +410,47 @@ class PagoViewSet(viewsets.ModelViewSet):
                 pago.hoja_ruta.save(update_fields=['estado'])
         except Exception:
             pass
+
+        if pago.detalle_faltas:
+            try:
+                from sanciones.models import Sancion
+                from cuotas.models import Cuota
+                from historial.models import CambioEstado
+                from django.contrib.contenttypes.models import ContentType
+                sanciones_ids = [f.get('id') for f in pago.detalle_faltas if isinstance(f, dict) and f.get('categoria', 'falta') == 'falta' and f.get('id')]
+                cuotas_ids = [f.get('id') for f in pago.detalle_faltas if isinstance(f, dict) and f.get('categoria') == 'aporte' and f.get('id')]
+
+                if sanciones_ids:
+                    sanciones_a_revertir = Sancion.objects.filter(id__in=sanciones_ids, estado='pagada')
+                    for s in sanciones_a_revertir:
+                        old = s.estado
+                        s.estado = 'pendiente'
+                        s.save(update_fields=['estado', 'updated_at'])
+                        CambioEstado.objects.create(
+                            content_type=ContentType.objects.get_for_model(Sancion),
+                            object_id=s.id,
+                            estado_anterior=old,
+                            estado_nuevo='pendiente',
+                            usuario=request.user if request.user.is_authenticated else None,
+                        )
+
+                if cuotas_ids:
+                    cuotas_a_revertir = Cuota.objects.filter(id__in=cuotas_ids, estado='pagada')
+                    for c in cuotas_a_revertir:
+                        old = c.estado
+                        c.estado = 'pendiente'
+                        c.fecha_pago = None
+                        c.save(update_fields=['estado', 'fecha_pago', 'updated_at'])
+                        CambioEstado.objects.create(
+                            content_type=ContentType.objects.get_for_model(Cuota),
+                            object_id=c.id,
+                            estado_anterior=old,
+                            estado_nuevo='pendiente',
+                            usuario=request.user if request.user.is_authenticated else None,
+                        )
+            except Exception:
+                pass
+
         return Response({'status': 'Pago anulado'})
     
     @action(detail=True, methods=['get'])
@@ -333,7 +534,23 @@ class PagoViewSet(viewsets.ModelViewSet):
         if pago.metodo_pago == 'transferencia':
             data.append(['Datos Transferencia', f"Banco: {pago.banco or '-'} | Operación: {pago.nro_operacion or '-'}"])
             
-        data.append(['Monto', f"Bs. {float(pago.monto):.2f}"])
+        if pago.detalle_faltas and len(pago.detalle_faltas) > 0:
+            monto_faltas_tot = sum(float(f.get('monto', 0)) for f in pago.detalle_faltas)
+            monto_base_calc = float(pago.monto) - monto_faltas_tot - float(pago.saldo_anterior_gestion or 0)
+            data.append(['Monto Base (Hoja de Ruta)', f"Bs. {max(0, monto_base_calc):.2f}"])
+            for f in pago.detalle_faltas:
+                desc_falta = f.get('tipo', 'Falta')
+                detalle_extra = f.get('motivo') or f.get('tema')
+                if detalle_extra and detalle_extra != 'Inasistencia':
+                    desc_falta += f" - {detalle_extra}"
+                data.append([f"• {desc_falta}", f"Bs. {float(f.get('monto', 0)):.2f}"])
+            if pago.saldo_anterior_gestion and float(pago.saldo_anterior_gestion) > 0:
+                data.append(['Saldo Anterior Gestión', f"Bs. {float(pago.saldo_anterior_gestion):.2f}"])
+            data.append(['TOTAL PAGADO', f"Bs. {float(pago.monto):.2f}"])
+        else:
+            if pago.saldo_anterior_gestion and float(pago.saldo_anterior_gestion) > 0:
+                data.append(['Saldo Anterior Gestión', f"Bs. {float(pago.saldo_anterior_gestion):.2f}"])
+            data.append(['Monto Total', f"Bs. {float(pago.monto):.2f}"])
         
         # Crear tabla
         table = Table(data, colWidths=[2*inch, 4*inch])

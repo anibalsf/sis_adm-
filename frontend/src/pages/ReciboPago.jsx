@@ -64,6 +64,10 @@ function ReciboPago() {
     const numero = String(numeroReciboRaw).padStart(6, '0');
     const esHojaRuta = isIngreso && /hoja/i.test(data.tipo_pago_nombre || '') && /ruta/i.test(data.tipo_pago_nombre || '');
     const total = parseFloat(data.monto || 0);
+    const detalleFaltas = Array.isArray(data.detalle_faltas) ? data.detalle_faltas : [];
+    const totalFaltas = detalleFaltas.reduce((acc, f) => acc + (parseFloat(f.monto) || 0), 0);
+    const saldoAnt = parseFloat(data.saldo_anterior_gestion || 0);
+    const montoBase = detalleFaltas.length > 0 ? Math.max(0, total - totalFaltas - saldoAnt) : total;
 
     const renderTicket = (copiaLabel) => {
         const isOriginal = copiaLabel.includes('ORIGINAL');
@@ -120,9 +124,21 @@ function ReciboPago() {
                                     <div className="ticket-separator-dots"></div>
                                     <div className="ticket-detalle-title">DETALLE:</div>
                                     <div className="ticket-row">
-                                        <span>Hoja de Ruta</span>
-                                        <span>{total.toFixed(2)} Bs</span>
+                                        <span>Hoja de Ruta (Base)</span>
+                                        <span>{montoBase.toFixed(2)} Bs</span>
                                     </div>
+                                    {detalleFaltas.map((f, idx) => (
+                                        <div className="ticket-row" key={idx} style={{ fontSize: '0.85rem' }}>
+                                            <span>• {f.tipo}{f.tema ? ` (${f.tema})` : ''}</span>
+                                            <span>{Number(f.monto).toFixed(2)} Bs</span>
+                                        </div>
+                                    ))}
+                                    {saldoAnt > 0 && (
+                                        <div className="ticket-row" style={{ fontSize: '0.85rem' }}>
+                                            <span>Saldo Anterior</span>
+                                            <span>{saldoAnt.toFixed(2)} Bs</span>
+                                        </div>
+                                    )}
                                     <div className="ticket-separator-dots"></div>
                                 </div>
                             )}
@@ -266,20 +282,45 @@ function ReciboPago() {
                             <table className="details-table">
                                 <thead>
                                     <tr>
-                                        <th>Descripción</th>
-                                        <th>Monto</th>
-                                        <th>Multas/Recargos</th>
-                                        <th>Total</th>
+                                        <th>Descripción / Detalle</th>
+                                        <th>Tipo / Concepto</th>
+                                        <th>Monto (Bs.)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td>Hoja de Ruta</td>
-                                        <td>{total.toFixed(2)} Bs.</td>
-                                        <td>0.00 Bs.</td>
-                                        <td>{total.toFixed(2)} Bs.</td>
+                                        <td>Hoja de Ruta (Monto Base)</td>
+                                        <td>Pasaje / Salida</td>
+                                        <td>{montoBase.toFixed(2)} Bs.</td>
                                     </tr>
+                                    {detalleFaltas.map((f, idx) => (
+                                        <tr key={idx} style={{ background: 'rgba(239, 68, 68, 0.04)' }}>
+                                            <td>
+                                                <strong style={{ color: '#b91c1c' }}>• {f.tipo}</strong>
+                                                {(f.motivo || f.tema) && (
+                                                    <div style={{ fontSize: '0.82rem', color: '#555', marginTop: '2px' }}>
+                                                        {f.motivo || f.tema} {f.fecha ? `· ${f.fecha}` : ''}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td>Sanción / Falta</td>
+                                            <td style={{ fontWeight: 600 }}>{Number(f.monto).toFixed(2)} Bs.</td>
+                                        </tr>
+                                    ))}
+                                    {saldoAnt > 0 && (
+                                        <tr>
+                                            <td>Saldo Anterior de Gestión</td>
+                                            <td>Saldo Pendiente</td>
+                                            <td>{saldoAnt.toFixed(2)} Bs.</td>
+                                        </tr>
+                                    )}
                                 </tbody>
+                                <tfoot>
+                                    <tr style={{ fontWeight: 'bold', background: '#f8fafc' }}>
+                                        <td colSpan="2" style={{ textAlign: 'right', fontSize: '0.95rem' }}>TOTAL A PAGAR:</td>
+                                        <td style={{ color: '#047857', fontSize: '1.05rem' }}>{total.toFixed(2)} Bs.</td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     )}

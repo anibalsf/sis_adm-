@@ -82,6 +82,7 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/web/', include('web_publica.urls')),  # Web Publica (Multimedia, etc)
     path('api/whatsapp/', include('whatsapp_notif.urls')),  # WhatsApp notifications
+    path('api/pagos-qr/', include('pagos_qr.urls')),  # Cobros con QR (transacciones)
     path('api/mantenimiento/', include('mantenimiento.urls')),  # Vehicle Maintenance
     path('api/reportes-auto/', include('reportes_auto.urls')),  # Reportes Automáticos
     path('api/encomiendas/', include('encomiendas.urls')),  # Encomiendas y Paquetería

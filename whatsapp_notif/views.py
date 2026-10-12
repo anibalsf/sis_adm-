@@ -52,24 +52,29 @@ class WhatsAppMessageViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Enviar mensaje
+        # Enviar mensaje (síncrono para que el administrador vea el resultado real)
         result = whatsapp_service.send_message(
             phone=serializer.validated_data['phone'],
             message=serializer.validated_data['message'],
             message_type=serializer.validated_data['message_type'],
             recipient_name=serializer.validated_data.get('recipient_name', ''),
+            use_celery=False,
         )
         
-        if result:
+        if result is None:
+            return Response(
+                {'error': 'WhatsApp está deshabilitado o sin credenciales de Twilio configuradas en backend/.env (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if result.status == 'sent':
             return Response(
                 WhatsAppMessageSerializer(result).data,
                 status=status.HTTP_201_CREATED
             )
-        else:
-            return Response(
-                {'error': 'No se pudo enviar el mensaje. Verifique la configuración.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response(
+            {'error': result.error_message or 'No se pudo enviar el mensaje. Verifique la configuración.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
     
     @action(detail=False, methods=['post'])
     def send_from_template(self, request):
@@ -217,14 +222,29 @@ class WhatsAppConfigViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        config_obj = WhatsAppConfig.get_config()
+        if not config_obj.is_enabled:
+            return Response(
+                {'success': False, 'error': 'WhatsApp está deshabilitado en la configuración. Actívalo en la pestaña "Configuración" y guarda.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Enviar mensaje de prueba de forma síncrona para ver el resultado real
         result = whatsapp_service.send_message(
             phone=test_phone,
             message="🔔 Mensaje de prueba del sistema.\n\nSi recibiste este mensaje, la configuración de WhatsApp funciona correctamente. ✅",
             message_type='general',
-            recipient_name='Prueba'
+            recipient_name='Prueba',
+            use_celery=False,
         )
         
-        if result and result.status == 'sent':
+        if result is None:
+            return Response(
+                {'success': False, 'error': 'No se pudo enviar la prueba. Revisa que backend/.env tenga las credenciales de Twilio (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if result.status == 'sent':
             return Response({
                 'success': True,
                 'message': 'Mensaje de prueba enviado correctamente',
@@ -233,5 +253,5 @@ class WhatsAppConfigViewSet(viewsets.ModelViewSet):
         else:
             return Response({
                 'success': False,
-                'error': result.error_message if result else 'Error desconocido'
+                'error': result.error_message or 'No se pudo enviar el mensaje de prueba'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

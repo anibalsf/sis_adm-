@@ -9,6 +9,7 @@ Antes cada consumidor calculaba algo distinto (el KPI usaba
 hacía que los tres mostraran números diferentes.
 """
 import logging
+import unicodedata
 from decimal import Decimal
 
 from django.db.models import Count, DecimalField, IntegerField, Max, Subquery, Sum
@@ -35,6 +36,17 @@ def nivel_morosidad(dias_sin_pagar):
         if dias_sin_pagar > limite:
             return nombre
     return 'BAJO'
+
+
+def clave_nivel(nivel):
+    """
+    Clave normalizada (minúsculas y sin acentos) para agrupar/contar niveles.
+    Evita que 'CRÍTICO'.lower() ('crítico') no coincida con la clave 'critico'.
+    """
+    if not nivel:
+        return ''
+    descompuesto = unicodedata.normalize('NFKD', str(nivel))
+    return ''.join(c for c in descompuesto if not unicodedata.combining(c)).lower()
 
 
 def _deuda_queryset(periodo_limite=None):
@@ -182,7 +194,7 @@ def resumen_morosidad(periodo_limite=None, umbral_critico=0, top=5):
     if con_deuda:
         # Solo se materializan los deudores: son unos cientos, no millones.
         for item in _serializar(qs, hoy):
-            clave = item['nivel_morosidad'].lower()
+            clave = clave_nivel(item['nivel_morosidad'])
             if clave in por_nivel:
                 por_nivel[clave] += 1
             if item['ultimo_pago'] == 'Nunca':

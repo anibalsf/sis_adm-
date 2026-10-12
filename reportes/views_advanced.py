@@ -3,6 +3,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from sistema.permissions import IsSecretariaOrDirectivaOrSistemas
 from django.db.models import Sum, Count, Avg, Q, F
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
@@ -80,7 +81,7 @@ class RentabilidadRutasView(APIView):
     Reporte de rentabilidad por ruta
     Calcula ingresos vs costos operativos por cada ruta
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
     
     def get(self, request):
         try:
@@ -169,7 +170,7 @@ class KPIsEjecutivosView(APIView):
     Dashboard de KPIs ejecutivos
     Métricas clave para la toma de decisiones
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
     
     def get(self, request):
         hoy = timezone.now().date()
@@ -289,7 +290,7 @@ class TendenciasMensualesView(APIView):
     Análisis de tendencias mensuales
     Datos históricos de los últimos 12 meses
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
     
     def get(self, request):
         try:

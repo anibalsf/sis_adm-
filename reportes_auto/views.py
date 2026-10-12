@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from sistema.permissions import IsDirectivaOrSistemas
 from rest_framework.response import Response
 
 from .models import ConfiguracionReporte, ReporteGenerado
@@ -25,7 +26,7 @@ class ReporteGeneradoViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = ReporteGenerado.objects.all().order_by('-fecha_generacion')
     serializer_class = ReporteGeneradoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsDirectivaOrSistemas]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -284,7 +285,7 @@ class ConfiguracionReporteViewSet(viewsets.ModelViewSet):
     """
     queryset = ConfiguracionReporte.objects.all().order_by('tipo')
     serializer_class = ConfiguracionReporteSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsDirectivaOrSistemas]
 
     @action(detail=False, methods=['get'])
     def activas(self, request):

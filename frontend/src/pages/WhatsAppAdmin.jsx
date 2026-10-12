@@ -75,7 +75,7 @@ export default function WhatsAppAdmin() {
             await axios.put(`/api/whatsapp/config/${config.id}/`, cfgEdit);
             await loadAll();
             alert('✅ Configuración guardada correctamente');
-        } catch (err) {
+        } catch {
             alert('Error al guardar configuración');
         } finally {
             setCfgSaving(false);
@@ -140,7 +140,7 @@ export default function WhatsAppAdmin() {
                 <div 
                     className={`wa-status-pill ${config?.is_enabled ? 'enabled' : 'disabled'}`}
                     style={{ cursor: 'pointer' }}
-                    onClick={() => setActiveTab('config')}
+                    onClick={() => setTab('config')}
                     title="Click para configurar"
                 >
                     {config?.is_enabled ? '🟢 HABILITADO' : '🔴 DESACTIVADO'}
@@ -276,13 +276,30 @@ export default function WhatsAppAdmin() {
                     {tab === 'config' && cfgEdit && (
                         <div className="wa-section">
                             <div className="wa-info-box warning">
-                                <strong>⚙️ Requisitos para activar WhatsApp:</strong><br />
-                                1. Tener cuenta en <strong>Twilio.com</strong> (gratuita para pruebas)<br />
-                                2. Agregar al <strong>.env</strong> del backend:<br />
-                                <code>TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxx</code><br />
-                                <code>TWILIO_AUTH_TOKEN=tu_auth_token</code><br />
-                                <code>TWILIO_WHATSAPP_FROM=whatsapp:+14155238886</code><br />
-                                3. Activar el interruptor de abajo y guardar
+                                <strong>⚙️ Requisitos según el proveedor seleccionado:</strong><br />
+                                {cfgEdit.provider === 'twilio' && (<>
+                                    1. Cuenta en <strong>Twilio.com</strong> (gratuita para pruebas)<br />
+                                    2. En el <strong>.env</strong> de la raíz del proyecto:<br />
+                                    <code>TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxx</code><br />
+                                    <code>TWILIO_AUTH_TOKEN=tu_auth_token</code><br />
+                                    <code>TWILIO_WHATSAPP_FROM=whatsapp:+14155238886</code>
+                                </>)}
+                                {cfgEdit.provider === 'whatsapp_business' && (<>
+                                    1. App en <strong>developers.facebook.com</strong> con el producto WhatsApp<br />
+                                    2. En el <strong>.env</strong> de la raíz del proyecto:<br />
+                                    <code>WHATSAPP_CLOUD_TOKEN=EAAxxxxxxxx</code><br />
+                                    <code>WHATSAPP_PHONE_NUMBER_ID=1234567890</code><br />
+                                    <small>Oficial. Los mensajes que tú inicias fuera de la ventana de 24h requieren una plantilla aprobada por Meta.</small>
+                                </>)}
+                                {cfgEdit.provider === 'baileys' && (<>
+                                    1. Levanta el servidor <strong>WAHA</strong> (Docker): <code>docker run -p 3000:3000 devlikeapro/waha</code><br />
+                                    2. Escanea el QR una sola vez para vincular tu número<br />
+                                    3. En el <strong>.env</strong> de la raíz del proyecto:<br />
+                                    <code>WAHA_URL=http://localhost:3000</code><br />
+                                    <code>WAHA_API_KEY=</code> (si tu WAHA usa API key)<br />
+                                    <small>No oficial y gratis: usa tu número actual, sin costo por mensaje, pero con riesgo de bloqueo.</small>
+                                </>)}
+                                <br />Activa el interruptor de abajo y guarda.
                             </div>
 
                             <div className="cfg-grid">

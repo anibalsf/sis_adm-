@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 function PagosYEgresos() {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const puedeGestionar = !!user && (user.is_staff || ['Directiva', 'Secretaria', 'Sistemas'].includes(user.role));
     const [pagos, setPagos] = useState([]);
     const [egresos, setEgresos] = useState([]);
     const [countPagos, setCountPagos] = useState(0);
@@ -36,9 +37,6 @@ function PagosYEgresos() {
     const [pageEgresos, setPageEgresos] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [aplicarMulta, setAplicarMulta] = useState(true);
-    const [showNuevaCategoriaInput, setShowNuevaCategoriaInput] = useState(false);
-    const [nuevaCategoriaNombre, setNuevaCategoriaNombre] = useState('');
-    const [creandoCategoria, setCreandoCategoria] = useState(false);
     const [multasData, setMultasData] = useState(null);
     const [loadingMultas, setLoadingMultas] = useState(false);
     const [showCobroModal, setShowCobroModal] = useState(false);
@@ -47,27 +45,11 @@ function PagosYEgresos() {
     const [cobroMetodo, setCobroMetodo] = useState('efectivo');
     const [cobroError, setCobroError] = useState('');
     const [cobroSaving, setCobroSaving] = useState(false);
-
-    const handleCrearNuevaCategoria = async () => {
-        if (!nuevaCategoriaNombre.trim()) return;
-        try {
-            setCreandoCategoria(true);
-            const res = await api.createTipoPago({
-                nombre: nuevaCategoriaNombre.trim(),
-                tipo: activeTab === 'ingresos' ? 'ingreso' : 'egreso',
-                descripcion: `Categoría de ${activeTab === 'ingresos' ? 'ingreso' : 'egreso'}`
-            });
-            const nuevaCat = res.data;
-            setTiposPago(prev => [...prev, nuevaCat]);
-            setForm(prev => ({ ...prev, tipo_pago: String(nuevaCat.id) }));
-            setNuevaCategoriaNombre('');
-            setShowNuevaCategoriaInput(false);
-        } catch (err) {
-            alert('Error al crear la categoría: ' + (err.response?.data?.nombre?.[0] || err.message));
-        } finally {
-            setCreandoCategoria(false);
-        }
-    };
+    const [faltasAfiliado, setFaltasAfiliado] = useState([]);   // solo sanciones/faltas
+    const [aportesAfiliado, setAportesAfiliado] = useState([]);  // cuotas/aportes pendientes
+    const [selectedFaltas, setSelectedFaltas] = useState([]);
+    const [selectedAportes, setSelectedAportes] = useState([]);
+    const [loadingFaltas, setLoadingFaltas] = useState(false);
 
     const loadTableData = useCallback(async () => {
         try {
@@ -190,13 +172,21 @@ function PagosYEgresos() {
         setSubmitError('');
         setFieldErrors({});
         setAplicarMulta(true);
-        setShowNuevaCategoriaInput(false);
-        setNuevaCategoriaNombre('');
+        setFaltasAfiliado([]);
+        setAportesAfiliado([]);
+        setSelectedFaltas([]);
+        setSelectedAportes([]);
+        setLoadingFaltas(false);
         setShowModal(true);
     };
 
     const openEdit = (item) => {
         setModalMode('edit');
+        setFaltasAfiliado([]);
+        setAportesAfiliado([]);
+        setSelectedFaltas([]);
+        setSelectedAportes([]);
+        setLoadingFaltas(false);
         if (activeTab === 'ingresos') {
             setForm({
                 fecha_pago: item.fecha_pago || '',
@@ -251,6 +241,48 @@ function PagosYEgresos() {
             } else {
                 nextForm.vehiculo_id = '';
             }
+
+            // Consultar faltas y aportes pendientes del afiliado
+            if (value) {
+                setLoadingFaltas(true);
+                api.getFaltasAfiliado(value)
+                    .then(fRes => {
+                        const faltas = fRes.data?.faltas || [];
+                        const aportes = fRes.data?.aportes || [];
+                        setFaltasAfiliado(faltas);
+                        setAportesAfiliado(aportes);
+                        setSelectedFaltas(faltas.map(f => f.id));
+                        setSelectedAportes(aportes.map(a => a.id));
+                    })
+                    .catch(err => {
+                        console.error("Error consultando faltas del afiliado:", err);
+                        setFaltasAfiliado([]);
+                        setAportesAfiliado([]);
+                        setSelectedFaltas([]);
+                        setSelectedAportes([]);
+                    })
+                    .finally(() => setLoadingFaltas(false));
+            } else {
+                setFaltasAfiliado([]);
+                setAportesAfiliado([]);
+                setSelectedFaltas([]);
+                setSelectedAportes([]);
+            }
+        }
+
+        if (activeTab === 'ingresos' && name === 'tipo_pago' && nextForm.afiliado) {
+            setLoadingFaltas(true);
+            api.getFaltasAfiliado(nextForm.afiliado)
+                .then(fRes => {
+                    const faltas = fRes.data?.faltas || [];
+                    const aportes = fRes.data?.aportes || [];
+                    setFaltasAfiliado(faltas);
+                    setAportesAfiliado(aportes);
+                    setSelectedFaltas(faltas.map(f => f.id));
+                    setSelectedAportes(aportes.map(a => a.id));
+                })
+                .catch(err => console.error(err))
+                .finally(() => setLoadingFaltas(false));
         }
 
         if (name === 'monto') {
@@ -318,15 +350,21 @@ function PagosYEgresos() {
                 montoCalculado = parseFloat(multaInfo.monto_total);
             }
 
-            // Limpiar y preparar payload de forma segura
+            // Faltas y aportes seleccionados — aplica a CUALQUIER categoría de ingreso
+            const faltasSeleccionadasObjs = activeTab === 'ingresos' ? faltasAfiliado.filter(f => selectedFaltas.includes(f.id)) : [];
+            const aportesSeleccionadosObjs = activeTab === 'ingresos' ? aportesAfiliado.filter(a => selectedAportes.includes(a.id)) : [];
+            const totalFaltasSeleccionadas = faltasSeleccionadasObjs.reduce((acc, f) => acc + (parseFloat(f.monto) || 0), 0);
+            const totalAportesSeleccionados = aportesSeleccionadosObjs.reduce((acc, a) => acc + (parseFloat(a.monto) || 0), 0);
+            const totalObligaciones = totalFaltasSeleccionadas + totalAportesSeleccionados;
+
             console.log("Datos del formulario antes de procesar:", form);
 
             const saldoGestion = form.saldo_anterior_gestion == null || form.saldo_anterior_gestion === ''
                 ? 0
                 : parseFloat(form.saldo_anterior_gestion);
 
-            // Asegurarnos de que el monto sea el calculado si existe
-            const montoFinal = parseFloat(montoCalculado);
+            // Monto final = base + faltas seleccionadas + aportes seleccionados
+            const montoFinal = activeTab === 'ingresos' ? (montoCalculado + totalObligaciones) : montoCalculado;
 
             if (metodoPago === 'transferencia') {
                 if (!form.banco || !form.nro_operacion) {
@@ -335,11 +373,24 @@ function PagosYEgresos() {
                 }
             }
 
+            // Construir detalle completo de faltas + aportes
+            const detalleCompleto = [...faltasSeleccionadasObjs, ...aportesSeleccionadosObjs];
+
+            let obs = form.observaciones || '';
+            if (activeTab === 'ingresos' && detalleCompleto.length > 0) {
+                const detalleStr = `Cobros adicionales: ` + detalleCompleto.map(f => `${f.tipo} (Bs. ${Number(f.monto).toFixed(2)})`).join(', ');
+                obs = obs ? `${obs} | ${detalleStr}` : detalleStr;
+            }
+
             const payload = {
                 ...form,
                 monto: isNaN(montoFinal) ? 0 : montoFinal,
                 saldo_anterior_gestion: isNaN(saldoGestion) ? 0 : saldoGestion,
-                metodo_pago: metodoPago
+                observaciones: obs,
+                metodo_pago: metodoPago,
+                detalle_faltas: activeTab === 'ingresos' && detalleCompleto.length > 0 ? detalleCompleto : null,
+                sanciones_ids: activeTab === 'ingresos' && selectedFaltas.length > 0 ? selectedFaltas : [],
+                cuotas_ids: activeTab === 'ingresos' && selectedAportes.length > 0 ? selectedAportes : []
             };
 
             console.log("Payload a enviar:", payload);
@@ -407,21 +458,6 @@ function PagosYEgresos() {
         }
     };
 
-    const remove = async (id) => {
-        if (!window.confirm('¿Eliminar registro?')) return;
-        try {
-            if (activeTab === 'ingresos') {
-                await api.deletePago(id);
-            } else {
-                await api.deleteEgreso(id);
-            }
-            await loadTableData();
-        } catch (err) {
-            alert('Error al eliminar');
-            console.error(err);
-        }
-    };
-
     const verificarPago = async () => {
         if (!qrData) return;
         setVerificandoPago(true);
@@ -430,7 +466,10 @@ function PagosYEgresos() {
             const match = qrData.glosa.match(/ID: (\d+)/);
             const pagoId = match ? match[1] : null;
 
-            await api.verify_payment ? await api.verify_payment(qrData.transaction_id) : alert('Simulación: Pago Verificado');
+            const res = await api.verifyPagoQr(qrData.transaction_id);
+            if (res.data?.status !== 'ok') {
+                throw new Error(res.data?.message || 'El pago aún no se ha confirmado');
+            }
 
             alert('¡Pago verificado exitosamente!');
             setQrData(null);
@@ -531,41 +570,6 @@ function PagosYEgresos() {
             await loadTableData();
         } catch (err) {
             alert('Error al aprobar el egreso');
-            console.error(err);
-        }
-    };
-
-    const handleDescargarComprobanteEgreso = async (id) => {
-        try {
-            const response = await api.downloadComprobanteEgreso(id);
-            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `comprobante_egreso_${id}.pdf`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
-        } catch (err) {
-            alert('Error al descargar el comprobante');
-            console.error(err);
-        }
-    };
-
-    const handleDescargarRecibo = async (id, item) => {
-        try {
-            const response = await api.generarReciboPago(id);
-            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-            const link = document.createElement('a');
-            link.href = url;
-            const numeroRecibo = item?.nro_recibo ?? id;
-            link.setAttribute('download', `recibo_NRO-${String(numeroRecibo).padStart(6, '0')}.pdf`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
-        } catch (err) {
-            alert('Error al descargar el recibo');
             console.error(err);
         }
     };
@@ -694,8 +698,12 @@ function PagosYEgresos() {
                                                     {pago.estado !== 'anulado' && (
                                                         <>
                                                             <button className="btn-icon btn-print" onClick={() => navigate(`/recibo/ingreso/${pago.id}`)} title="Ver / Imprimir Recibo"><IconPrinter /></button>
-                                                            <button className="btn-icon btn-edit" onClick={() => openEdit(pago)} title="Editar"><IconPencil /></button>
-                                                            <button className="btn-icon btn-delete" onClick={() => handleAnularPago(pago.id)} title="Anular"><IconBan /></button>
+                                                            {puedeGestionar && (
+                                                                <button className="btn-icon btn-edit" onClick={() => openEdit(pago)} title="Editar"><IconPencil /></button>
+                                                            )}
+                                                            {puedeGestionar && (
+                                                                <button className="btn-icon btn-delete" onClick={() => handleAnularPago(pago.id)} title="Anular"><IconBan /></button>
+                                                            )}
                                                         </>
                                                     )}
                                                 </td>
@@ -775,8 +783,12 @@ function PagosYEgresos() {
                                                             {egreso.estado === 'pendiente_aprobacion' && ['Directiva', 'Secretaria', 'Sistemas'].includes(user?.role) && (
                                                                 <button className="btn-icon btn-success" onClick={() => handleAprobarEgreso(egreso.id)} title="Aprobar Egreso" style={{color: 'green'}}><IconCheck /></button>
                                                             )}
-                                                            <button className="btn-icon btn-edit" onClick={() => openEdit(egreso)} title="Editar"><IconPencil /></button>
-                                                            <button className="btn-icon btn-delete" onClick={() => handleAnularEgreso(egreso.id)} title="Anular"><IconBan /></button>
+                                                            {puedeGestionar && (
+                                                                <button className="btn-icon btn-edit" onClick={() => openEdit(egreso)} title="Editar"><IconPencil /></button>
+                                                            )}
+                                                            {puedeGestionar && (
+                                                                <button className="btn-icon btn-delete" onClick={() => handleAnularEgreso(egreso.id)} title="Anular"><IconBan /></button>
+                                                            )}
                                                         </>
                                                     )}
                                                 </td>
@@ -975,30 +987,16 @@ function PagosYEgresos() {
                                                     </select>
                                                 </div>
                                                 {(() => {
-                                                    const tpSel = tiposPago.find(t => String(t.id) === String(form.tipo_pago));
                                                     const esHojaRutaCaranavi = /caranavi/i.test(tpSel?.nombre || '');
-                                                    
                                                     if (!esHojaRutaCaranavi) return null;
-                                                    
                                                     return (
                                                         <div className="form-group" style={{ background: 'rgba(99, 102, 241, 0.05)', padding: '15px', borderRadius: '12px', border: '1px dashed #6366f1', marginBottom: '15px' }}>
                                                             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
                                                                 <span>🚨 ¿Aplicar multa de 50 Bs?</span>
                                                                 <div className="toggle-switch" style={{ position: 'relative', width: '50px', height: '26px' }}>
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={aplicarMulta}
-                                                                        onChange={(e) => handleToggleMulta(e.target.checked)}
-                                                                        style={{ opacity: 0, width: 0, height: 0 }}
-                                                                    />
-                                                                    <span className="slider" style={{
-                                                                        position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-                                                                        backgroundColor: aplicarMulta ? '#6366f1' : '#ccc', transition: '.4s', borderRadius: '34px'
-                                                                    }}>
-                                                                        <span style={{
-                                                                            position: 'absolute', height: '18px', width: '18px', left: aplicarMulta ? '28px' : '4px', bottom: '4px',
-                                                                            backgroundColor: 'white', transition: '.4s', borderRadius: '50%'
-                                                                        }}></span>
+                                                                    <input type="checkbox" checked={aplicarMulta} onChange={(e) => handleToggleMulta(e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+                                                                    <span className="slider" style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: aplicarMulta ? '#6366f1' : '#ccc', transition: '.4s', borderRadius: '34px' }}>
+                                                                        <span style={{ position: 'absolute', height: '18px', width: '18px', left: aplicarMulta ? '28px' : '4px', bottom: '4px', backgroundColor: 'white', transition: '.4s', borderRadius: '50%' }}></span>
                                                                     </span>
                                                                 </div>
                                                             </label>
@@ -1011,6 +1009,101 @@ function PagosYEgresos() {
                                             </>
                                         );
                                     })()}
+
+                                    {/* Faltas pendientes — visible para CUALQUIER categoría de ingreso cuando hay afiliado */}
+                                    {activeTab === 'ingresos' && modalMode === 'create' && (
+                                        <>
+                                            {loadingFaltas && (
+                                                <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: '10px', color: '#475569', fontSize: '0.85rem', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span className="spinner-border spinner-border-sm" role="status"></span>
+                                                    <span>Consultando obligaciones pendientes del afiliado...</span>
+                                                </div>
+                                            )}
+
+                                            {!loadingFaltas && form.afiliado && faltasAfiliado.length > 0 && (
+                                                <div style={{ background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)', border: '1.5px solid #fb923c', borderRadius: '12px', padding: '16px', marginBottom: '14px', boxShadow: '0 2px 8px rgba(234,88,12,0.08)' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                                                            <strong style={{ color: '#9a3412', fontSize: '0.93rem' }}>Faltas / Sanciones Pendientes ({faltasAfiliado.length})</strong>
+                                                        </div>
+                                                        <span style={{ background: '#ea580c', color: '#fff', padding: '3px 10px', borderRadius: '20px', fontWeight: 'bold', fontSize: '0.82rem' }}>
+                                                            Bs. {faltasAfiliado.filter(f => selectedFaltas.includes(f.id)).reduce((acc, f) => acc + (parseFloat(f.monto) || 0), 0).toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                    <p style={{ fontSize: '0.8rem', color: '#7c2d12', margin: '0 0 8px 0' }}>Marque las faltas a cobrar junto a este pago:</p>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                                                        {faltasAfiliado.map(f => {
+                                                            const isChecked = selectedFaltas.includes(f.id);
+                                                            return (
+                                                                <label key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', background: isChecked ? '#fff' : '#fef3c7', borderRadius: '8px', border: isChecked ? '1.5px solid #ea580c' : '1px solid #fcd34d', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                        <input type="checkbox" checked={isChecked}
+                                                                            onChange={(e) => {
+                                                                                if (e.target.checked) setSelectedFaltas(prev => [...prev, f.id]);
+                                                                                else setSelectedFaltas(prev => prev.filter(id => id !== f.id));
+                                                                            }}
+                                                                            style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#ea580c' }}
+                                                                        />
+                                                                        <div>
+                                                                            <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e293b' }}>{f.tipo}</div>
+                                                                            {(f.motivo || f.tema) && <div style={{ fontSize: '0.76rem', color: '#64748b' }}>{f.motivo || f.tema}{f.fecha ? ` · ${f.fecha}` : ''}</div>}
+                                                                        </div>
+                                                                    </div>
+                                                                    <span style={{ fontWeight: 800, color: '#c2410c', fontSize: '0.93rem', whiteSpace: 'nowrap' }}>Bs. {Number(f.monto).toFixed(2)}</span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {!loadingFaltas && form.afiliado && aportesAfiliado.length > 0 && (
+                                                <div style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', border: '1.5px solid #60a5fa', borderRadius: '12px', padding: '16px', marginBottom: '14px', boxShadow: '0 2px 8px rgba(59,130,246,0.08)' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span style={{ fontSize: '1.2rem' }}>💰</span>
+                                                            <strong style={{ color: '#1e40af', fontSize: '0.93rem' }}>Aportes / Cuotas Pendientes ({aportesAfiliado.length})</strong>
+                                                        </div>
+                                                        <span style={{ background: '#2563eb', color: '#fff', padding: '3px 10px', borderRadius: '20px', fontWeight: 'bold', fontSize: '0.82rem' }}>
+                                                            Bs. {aportesAfiliado.filter(a => selectedAportes.includes(a.id)).reduce((acc, a) => acc + (parseFloat(a.monto) || 0), 0).toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                    <p style={{ fontSize: '0.8rem', color: '#1e3a8a', margin: '0 0 8px 0' }}>Marque los aportes a cobrar junto a este pago:</p>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                                                        {aportesAfiliado.map(a => {
+                                                            const isChecked = selectedAportes.includes(a.id);
+                                                            return (
+                                                                <label key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', background: isChecked ? '#fff' : '#dbeafe', borderRadius: '8px', border: isChecked ? '1.5px solid #2563eb' : '1px solid #93c5fd', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                        <input type="checkbox" checked={isChecked}
+                                                                            onChange={(e) => {
+                                                                                if (e.target.checked) setSelectedAportes(prev => [...prev, a.id]);
+                                                                                else setSelectedAportes(prev => prev.filter(id => id !== a.id));
+                                                                            }}
+                                                                            style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#2563eb' }}
+                                                                        />
+                                                                        <div>
+                                                                            <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e293b' }}>{a.tipo}</div>
+                                                                            {a.motivo && <div style={{ fontSize: '0.76rem', color: '#64748b' }}>{a.motivo}</div>}
+                                                                        </div>
+                                                                    </div>
+                                                                    <span style={{ fontWeight: 800, color: '#1d4ed8', fontSize: '0.93rem', whiteSpace: 'nowrap' }}>Bs. {Number(a.monto).toFixed(2)}</span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {!loadingFaltas && form.afiliado && faltasAfiliado.length === 0 && aportesAfiliado.length === 0 && (
+                                                <div style={{ padding: '8px 12px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', color: '#065f46', fontSize: '0.82rem', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span>✅</span>
+                                                    <span>El afiliado no tiene faltas ni aportes pendientes.</span>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
 
                                     {/* Alerta de multa */}
                                     {multaInfo && multaInfo.tiene_multa && (
@@ -1129,6 +1222,49 @@ function PagosYEgresos() {
                                             {fieldErrors.saldo_anterior_gestion && <div className="error">{fieldErrors.saldo_anterior_gestion}</div>}
                                         </div>
                                     </div>
+
+                                    {/* Resumen Total — visible para CUALQUIER categoría de ingreso cuando hay obligaciones o saldo */}
+                                    {activeTab === 'ingresos' && modalMode === 'create' && (
+                                        (() => {
+                                            const totalFaltasCalc = faltasAfiliado.filter(f => selectedFaltas.includes(f.id)).reduce((acc, f) => acc + (parseFloat(f.monto) || 0), 0);
+                                            const totalAportesCalc = aportesAfiliado.filter(a => selectedAportes.includes(a.id)).reduce((acc, a) => acc + (parseFloat(a.monto) || 0), 0);
+                                            const montoBaseCalc = parseFloat(form.monto || '0') || 0;
+                                            const saldoGestionCalc = parseFloat(form.saldo_anterior_gestion || '0') || 0;
+                                            const totalCobro = montoBaseCalc + totalFaltasCalc + totalAportesCalc + saldoGestionCalc;
+                                            const tieneExtras = totalFaltasCalc > 0 || totalAportesCalc > 0 || saldoGestionCalc > 0;
+                                            if (!tieneExtras) return null;
+                                            return (
+                                                <div className="resumen-cobro-banner" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', border: '1.5px solid #cbd5e1', borderRadius: '12px', padding: '14px 18px', marginBottom: '18px' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#475569', marginBottom: '6px' }}>
+                                                        <span>Monto Base (Ingreso):</span>
+                                                        <strong>Bs. {montoBaseCalc.toFixed(2)}</strong>
+                                                    </div>
+                                                    {totalFaltasCalc > 0 && (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#c2410c', marginBottom: '6px' }}>
+                                                            <span>Faltas / Sanciones ({selectedFaltas.length}):</span>
+                                                            <strong>+ Bs. {totalFaltasCalc.toFixed(2)}</strong>
+                                                        </div>
+                                                    )}
+                                                    {totalAportesCalc > 0 && (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#1d4ed8', marginBottom: '6px' }}>
+                                                            <span>Aportes / Cuotas ({selectedAportes.length}):</span>
+                                                            <strong>+ Bs. {totalAportesCalc.toFixed(2)}</strong>
+                                                        </div>
+                                                    )}
+                                                    {saldoGestionCalc > 0 && (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', color: '#475569', marginBottom: '6px' }}>
+                                                            <span>Saldo Anterior Gestión:</span>
+                                                            <strong>+ Bs. {saldoGestionCalc.toFixed(2)}</strong>
+                                                        </div>
+                                                    )}
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed #94a3b8', paddingTop: '8px', marginTop: '8px' }}>
+                                                        <span style={{ fontWeight: 'bold', fontSize: '0.98rem', color: '#0f172a' }}>TOTAL A COBRAR EN RECIBO:</span>
+                                                        <span style={{ fontWeight: '800', fontSize: '1.25rem', color: '#059669' }}>Bs. {totalCobro.toFixed(2)}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()
+                                    )}
                                     
                                     {metodoPago === 'transferencia' && (
                                         <div style={{ display: 'flex', gap: '15px' }}>

@@ -1,3 +1,7 @@
+import hashlib
+import hmac
+
+from django.conf import settings
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -34,8 +38,13 @@ class QRTransactionViewSet(viewsets.ModelViewSet):
     def webhook(self, request):
         """
         Endpoint público para recibir callbacks del banco.
-        Simulación: { "transaction_id": "uuid..." }
+        Requiere la firma HMAC-SHA256 del cuerpo en el header X-QR-Signature,
+        calculada con QR_WEBHOOK_SECRET. En desarrollo (sin secreto y DEBUG=True)
+        se permite sin firma para poder simular.
         """
+        if not self._firma_valida(request):
+            return Response({'error': 'Firma inválida'}, status=status.HTTP_401_UNAUTHORIZED)
+
         transaction_id = request.data.get('transaction_id')
         if not transaction_id:
             return Response({'error': 'transaction_id missing'}, status=status.HTTP_400_BAD_REQUEST)
@@ -47,6 +56,32 @@ class QRTransactionViewSet(viewsets.ModelViewSet):
             return Response({'status': 'ok', 'message': msg})
         else:
             return Response({'status': 'error', 'message': msg}, status=status.HTTP_400_BAD_REQUEST)
+
+    @staticmethod
+    def _firma_valida(request):
+        secret = (getattr(settings, 'QR_WEBHOOK_SECRET', '') or '').strip()
+        if not secret:
+            # Sin secreto configurado: solo se permite en entorno de desarrollo.
+            return settings.DEBUG
+        signature = request.headers.get('X-QR-Signature', '')
+        expected = hmac.new(secret.encode('utf-8'), request.body, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(signature, expected)
+
+    @action(detail=False, methods=['post'])
+    def verify(self, request):
+        """
+        Verificación autenticada de un QR (botón "Verificar pago" del cajero).
+        Confirma con el banco y, si el pago se completó, marca el Pago y las
+        sanciones/cuotas vinculadas como pagadas.
+        """
+        transaction_id = request.data.get('transaction_id')
+        if not transaction_id:
+            return Response({'error': 'transaction_id requerido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        success, msg = QRService.verify_payment(transaction_id)
+        if success:
+            return Response({'status': 'ok', 'message': msg})
+        return Response({'status': 'error', 'message': msg}, status=status.HTTP_400_BAD_REQUEST)
             
     @action(detail=True, methods=['get'])
     def check_status(self, request, pk=None):

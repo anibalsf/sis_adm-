@@ -120,6 +120,10 @@ ADMIN_PHONE_NUMBER = config('ADMIN_PHONE_NUMBER', default='70000000')
 WHATSAPP_WEBHOOK_URL = None
 TWILIO_WEBHOOK_URL = None
 
+# Secreto compartido para validar la firma HMAC del webhook de cobros QR.
+# Si queda vacío, el webhook solo se acepta con DEBUG=True (desarrollo).
+QR_WEBHOOK_SECRET = config('QR_WEBHOOK_SECRET', default='')
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',

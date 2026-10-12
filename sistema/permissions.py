@@ -26,3 +26,16 @@ class IsDirectivaOrSistemas(BasePermission):
         if getattr(user, 'is_superuser', False):
             return True
         return user.groups.filter(name__in=['Directiva', 'Sistemas']).exists()
+
+class IsSecretariaOrDirectivaOrSistemas(BasePermission):
+    """
+    Permite acceso (cualquier metodo) solo a 'Secretaria', 'Directiva' y 'Sistemas'.
+    Pensado para reportes financieros/operativos que no deben ver otros roles.
+    """
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+            return True
+        return user.groups.filter(name__in=['Secretaria', 'Directiva', 'Sistemas']).exists()

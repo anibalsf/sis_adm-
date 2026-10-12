@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import SkeletonLoader from '../components/SkeletonLoader';
@@ -37,17 +37,40 @@ function Afiliados() {
   const [submitError, setSubmitError] = useState('');
   const [searchParams] = useSearchParams();
 
+  // Valores de búsqueda con debounce para no hacer peticiones en cada tecla
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedCi, setDebouncedCi] = useState('');
+  const debounceTimerRef = useRef(null);
+
+  // Debounce: espera 400ms después de que el usuario deje de escribir
+  useEffect(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setDebouncedCi(ciTerm);
+    }, 400);
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [searchTerm, ciTerm]);
+
+  // Cuando cambian los filtros de búsqueda, resetear a página 1
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, debouncedCi, filtroEstado]);
+
+  // Fetch afiliados cuando cambian los parámetros debounced o la página
   useEffect(() => {
     fetchAfiliados();
-  }, [searchTerm, filtroEstado, ciTerm, page, pageSize]);
+  }, [debouncedSearch, filtroEstado, debouncedCi, page, pageSize]);
 
   const fetchAfiliados = async () => {
     try {
       setLoading(true);
       const params = { page, page_size: pageSize };
-      if (searchTerm) params.search = searchTerm;
+      if (debouncedSearch) params.search = debouncedSearch;
       if (filtroEstado) params.estado = filtroEstado;
-      if (ciTerm) params.ci = ciTerm;
+      if (debouncedCi) params.ci = debouncedCi;
 
       const response = await api.getAfiliados(params);
       const list = response.data?.results || response.data || [];
