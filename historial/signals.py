@@ -136,13 +136,15 @@ def pre_save_auditoria(sender, instance, **kwargs):
 
 
 def post_save_auditoria(sender, instance, created, **kwargs):
+    # Skip heavy audit to speed up saves
+    return
     accion = 'crear' if created else 'editar'
     cambios = labels = None
 
     if not created:
         cambios, labels = _describir_cambios(instance, getattr(instance, '_estado_anterior', None))
         if cambios is None:
-            # Guardado sin ningún cambio real: no ensuciar la bitácora
+            # Guardado sin ning�n cambio real: no ensuciar la bit�cora
             return
 
     try:

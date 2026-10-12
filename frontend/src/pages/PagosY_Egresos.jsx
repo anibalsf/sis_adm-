@@ -404,8 +404,11 @@ function PagosYEgresos() {
             if (modalMode === 'create') {
                 if (activeTab === 'ingresos') {
                     console.log("Enviando createPago...");
+                    setLoading(true);
                     const res = await api.createPago(payload);
                     console.log("Respuesta createPago:", res);
+
+                    alert('Guardado exitosamente');
 
                     if (metodoPago === 'qr') {
                         // Generar cobro QR
@@ -413,23 +416,32 @@ function PagosYEgresos() {
                             const qrRes = await api.generarPagoQrIngreso(res.data.id);
                             setQrData(qrRes.data);
                             setShowModal(false); // Cerramos el de creación pero mantenemos el QR
+                            setLoading(false);
                             return; // No navegamos aún
                         } catch (err) {
                             console.error("Error generando QR:", err);
                             alert("Ingreso registrado pero hubo un error generando el QR.");
+                            setLoading(false);
                         }
                     }
+                    setLoading(false);
                     navigate(`/recibo/ingreso/${res.data.id}`);
                 } else {
+                    setLoading(true);
                     const res = await api.createEgreso(payload);
+                    alert('Guardado exitosamente');
+                    setLoading(false);
                     navigate(`/recibo/egreso/${res.data.id}`);
                 }
             } else {
+                setLoading(true);
                 if (activeTab === 'ingresos') {
                     await api.updatePago(editingId, payload);
                 } else {
                     await api.updateEgreso(editingId, payload);
                 }
+                alert('Guardado exitosamente');
+                setLoading(false);
             }
             setShowModal(false);
             await loadTableData();
@@ -1367,7 +1379,7 @@ function PagosYEgresos() {
                             )}
                             <div className="form-actions">
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary">Guardar</button>
+                                <button type="submit" className="btn btn-primary" disabled={cobroSaving || loading}>Guardar</button>
                             </div>
                         </form>
                     </div>

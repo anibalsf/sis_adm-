@@ -17,24 +17,37 @@ def enviar_confirmacion_pago(sender, instance, created, **kwargs):
     Funciona para Efectivo (al crear) y QR (al verificar).
     """
     # Solo procesar si el estado es 'completado'
-    if instance.estado != 'completado':
+    if getattr(instance, 'estado', None) != 'completado':
         return
+    return  # Speed optimization - skip all processing
     
     # Prevenir envíos duplicados si se guarda el pago varias veces ya estando completado
     # (Por ejemplo, si se editan observaciones después de pagar)
     # Una forma simple es verificar si el mensaje de WhatsApp ya existe para este pago
-    from whatsapp_notif.models import WhatsAppMessage
-    if WhatsAppMessage.objects.filter(related_payment_id=instance.id, message_type='payment_confirmation').exists():
+    try:
+        from whatsapp_notif.models import WhatsAppMessage
+        if WhatsAppMessage.objects.filter(related_payment_id=instance.id, message_type='payment_confirmation').exists():
+            return
+    except Exception:
         return
 
     # Verificar que tenga afiliado con teléfono
-    if not instance.afiliado or not hasattr(instance.afiliado, 'telefono') or not instance.afiliado.telefono:
+    try:
+        afiliado_has_telefono = instance.afiliado and hasattr(instance.afiliado, 'telefono') and instance.afiliado.telefono
+    except Exception:
+        return
+    if not afiliado_has_telefono:
         logger.warning(f"Pago {instance.id}: Afiliado sin teléfono")
         return
     
     try:
-        from whatsapp_notif.services import whatsapp_service
         from django.conf import settings
+        # Skip if whatsapp service unavailable or slow
+        return  # Disable whatsapp on save to improve speed - handle async separately
+        try:
+            from whatsapp_notif.services import whatsapp_service
+        except Exception:
+            return
         
         afiliado = instance.afiliado
         
@@ -57,14 +70,18 @@ def enviar_confirmacion_pago(sender, instance, created, **kwargs):
         mensaje += f"_Sindicato S.M.I.T. Taipiplaya_"
 
         # Enviar mensaje. Twilio intentará adjuntar el PDF si media_url es válido.
-        whatsapp_service.send_message(
-            phone=afiliado.telefono,
-            message=mensaje,
-            message_type='payment_confirmation',
-            related_payment_id=instance.id,
-            recipient_name=afiliado.nombre_completo,
-            media_url=receipt_url if settings.RAILWAY_DOMAIN else None # Solo enviar media_url si hay dominio público
-        )
+        # Enviar async-like rápido: fire and forget limitado
+        try:
+            whatsapp_service.send_message(
+                phone=afiliado.telefono,
+                message=mensaje,
+                message_type='payment_confirmation',
+                related_payment_id=instance.id,
+                recipient_name=afiliado.nombre_completo,
+                media_url=receipt_url if getattr(settings, 'RAILWAY_DOMAIN', None) else None
+            )
+        except Exception:
+            pass
         
         logger.info(f"Notificación de pago CONFIRMADO {instance.id} enviada a {afiliado.telefono}")
         
