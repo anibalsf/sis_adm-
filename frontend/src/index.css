@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
 @keyframes logo-float {
   0% {
     transform: translateY(0px) rotate(0deg);
@@ -204,6 +206,41 @@ img {
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* Espaciado (escala consistente usada en todo el sistema) */
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 0.75rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* Base */
+  --white: #ffffff;
+
+  /* Radios */
+  --radius-sm: 0.5rem;
+  --radius-xl: 1.25rem;
+  --radius-premium: 1.25rem;
+
+  /* Alias de compatibilidad (nombres antiguos usados por las páginas) */
+  --text-primary: var(--text-main);
+  --text-secondary: var(--text-muted);
+  --border-color: var(--border-main);
+  --primary-color: var(--primary);
+  --card-bg: var(--bg-surface);
+  --card-border: var(--border-subtle);
+  --card-color: var(--text-main);
+  --dashboard-bg: var(--bg-body);
+
+  /* Canales RGB para utilidades Tailwind con opacidad */
+  --body-rgb: 248 250 252;
+  --surface-rgb: 255 255 255;
+  --surface-alt-rgb: 241 245 249;
+  --main-rgb: 30 41 59;
+  --muted-rgb: 100 116 139;
+  --subtle-rgb: 226 232 240;
+  --inverse-rgb: 255 255 255;
 
   /* Glassmorphism Defaults */
   --glass-bg: rgba(255, 255, 255, 0.7);
@@ -272,6 +309,14 @@ img {
   --gray-800: #f8fafc;
   --gray-900: #ffffff;
 
+  --body-rgb: 15 23 42;
+  --surface-rgb: 30 41 59;
+  --surface-alt-rgb: 15 23 42;
+  --main-rgb: 241 245 249;
+  --muted-rgb: 148 163 184;
+  --subtle-rgb: 51 65 85;
+  --inverse-rgb: 15 23 42;
+
   --glass-bg: rgba(30, 41, 59, 0.7);
   --glass-border: rgba(255, 255, 255, 0.05);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
@@ -315,6 +360,39 @@ body {
   min-height: 100vh;
 }
 
+/* Tipografía base consistente */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--text-main);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+p {
+  color: var(--text-main);
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+/* Accesibilidad: foco visible coherente en todo el sistema */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(var(--primary-rgb), 0.25);
+  color: var(--text-main);
+}
+
 /* Scrollbar personalizado */
 ::-webkit-scrollbar {
   width: 8px;
@@ -347,19 +425,17 @@ body {
 .page-header h1 {
   margin: 0;
   font-weight: 800;
-  font-size: 2.25rem;
-  background: linear-gradient(to right, #059669, #10b981, #059669);
+  font-size: 1.875rem;
+  line-height: 1.25;
+  background: linear-gradient(120deg, var(--primary-dark), var(--primary), var(--primary-dark));
   background-size: 200% auto;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  color: var(--primary);
   display: inline-block;
-  overflow: hidden;
-  white-space: nowrap;
-  width: 0;
-  animation: typing-fast 1.8s steps(40, end) forwards, shine-text 5s linear infinite;
-  text-transform: uppercase;
   letter-spacing: -0.02em;
+  text-transform: uppercase;
 }
 
 .container {

@@ -1,9 +1,11 @@
 /* Common.css - Estilos compartidos */
 
 .page-container {
-    padding: 20px;
-    max-width: 1200px;
+    padding: var(--spacing-lg);
+    max-width: 1440px;
     margin: 0 auto;
+    width: 100%;
+    animation: fadeIn 0.4s ease forwards;
 }
 
 /* Page Header handled globally in index.css */
@@ -13,42 +15,71 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    gap: var(--spacing-md);
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-lg);
 }
 
 .table-wrapper {
     overflow-x: auto;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-sm);
+    -webkit-overflow-scrolling: touch;
 }
 
 .data-table {
     width: 100%;
     border-collapse: collapse;
+    font-size: 0.875rem;
 }
 
 .data-table th,
 .data-table td {
-    padding: 12px 15px;
+    padding: 0.875rem 1.25rem;
     text-align: left;
-    border-bottom: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: middle;
 }
 
 .data-table th {
-    background-color: var(--gray-50);
-    font-weight: 600;
-    color: var(--gray-700);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--bg-surface-alt);
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
 }
 
 .data-table td {
-    color: var(--gray-800);
+    color: var(--text-main);
+}
+
+.data-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.data-table tbody tr:nth-child(even) {
+    background-color: rgba(var(--primary-rgb), 0.02);
 }
 
 .data-table tr:hover {
-    background-color: var(--gray-100);
+    background-color: rgba(var(--primary-rgb), 0.06);
+}
+
+.data-table tbody tr:last-child td {
+    border-bottom: none;
 }
 
 .actions {
     display: flex;
     gap: 8px;
+    align-items: center;
 }
 
 .btn-action {
@@ -56,13 +87,18 @@
     border: none;
     cursor: pointer;
     font-size: 16px;
-    padding: 4px;
-    border-radius: 4px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
     transition: background 0.2s;
 }
 
 .btn-action:hover {
     background-color: var(--gray-200);
+}
+
+.data-table td.actions {
+    text-align: right;
+    justify-content: flex-end;
 }
 
 /* Modales Modernos */
