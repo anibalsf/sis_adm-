@@ -12,7 +12,8 @@ function resolverApiUrl() {
     const configurada = import.meta.env.VITE_API_URL || '/api';
     const host = typeof window !== 'undefined' ? window.location.hostname : '';
     const esLocal = host === 'localhost' || host === '127.0.0.1' || host === '';
-    if (configurada.startsWith('/') && !esLocal) {
+    const apuntaLocal = /(^|\/\/)(localhost|127\.0\.0\.1)(:|\/|$)/.test(configurada);
+    if ((configurada.startsWith('/') || apuntaLocal) && !esLocal) {
         return API_PROD;
     }
     return configurada;
@@ -81,7 +82,9 @@ export const api = {
     updateAfiliado: (id, data) => axios.put(`/afiliados/${id}/`, data),
     deleteAfiliado: (id) => axios.delete(`/afiliados/${id}/`),
     generarListaPunteros: () => axios.get('/afiliados/generar_lista_punteros/'),
+    generarListaPunterosSeleccion: (afiliadoIds) => axios.post('/afiliados/generar_lista_punteros_seleccion/', { afiliado_ids: afiliadoIds }, { responseType: 'blob' }),
     generarNominaAgentes: () => axios.get('/afiliados/generar_nomina_agentes/'),
+    generarListaAgentes: (afiliadoIds) => axios.post('/afiliados/generar_lista_agentes/', { afiliado_ids: afiliadoIds }, { responseType: 'blob' }),
     generarTurnos: () => axios.post('/afiliados/generar_turnos/'),
     getTurnoDelDia: (fecha) => axios.get(`/afiliados/turno_del_dia/?fecha=${fecha}`),
     generarPagoQrTotalAfiliado: (id) => axios.post(`/afiliados/${id}/generar_pago_qr_total/`),

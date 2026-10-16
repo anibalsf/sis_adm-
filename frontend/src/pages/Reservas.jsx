@@ -319,7 +319,7 @@ function Reservas() {
         <div className="reservas-container">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <div>
-                    <h1>Módulo de Reservas</h1>
+                    <h1 style={{ textDecoration: 'none' }}>Módulo de Reservas</h1>
                     <p>Selecciona una ruta para realizar tu reserva</p>
                 </div>
                 <Link to="/pizarra" style={{

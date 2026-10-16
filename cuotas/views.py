@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAuthenticated
 from rest_framework import filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -29,7 +29,7 @@ class CuotaViewSet(viewsets.ModelViewSet):
             if not user or not user.is_authenticated:
                 return False
             return user.groups.filter(name__in=['Secretaria', 'Directiva']).exists()
-    permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrReadOnly]
 
     def get_permissions(self):
         if getattr(self, 'action', None) == 'notificar':

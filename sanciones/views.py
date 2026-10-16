@@ -35,7 +35,7 @@ class SancionViewSet(viewsets.ModelViewSet):
                 return False
             return user.groups.filter(name__in=['Secretaria', 'Directiva']).exists()
 
-    permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrReadOnly]
 
     def get_queryset(self):
         """Permite filtrar por varios tipos de sanción con ?tipos=a,b,c"""

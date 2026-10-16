@@ -1,5 +1,5 @@
 from rest_framework import viewsets, filters
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.http import HttpResponse
@@ -31,7 +31,7 @@ class AsistenciaViewSet(viewsets.ModelViewSet):
                 return True
             return user.groups.filter(name__in=['Secretaria', 'Directiva']).exists()
 
-    permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrReadOnly]
 
     def get_queryset(self):
         """Filtrar asistencias por reunion_id si se proporciona"""

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { api } from '../services/api'
+import { api, API_URL } from '../services/api'
 import { useNavigate } from 'react-router-dom'
 import SancionesAlert from '../components/SancionesAlert'
 import YapeQRModal from '../components/YapeQRModal'
@@ -37,6 +37,7 @@ function HojasRuta() {
   const [searchAgentes, setSearchAgentes] = useState('')
   const [pageAgentes, setPageAgentes] = useState(1)
   const [totalAgentes, setTotalAgentes] = useState(0)
+  const [selectedAgentes, setSelectedAgentes] = useState([]) // IDs de afiliados seleccionados para la lista
   const [afiliadosConVehiculo, setAfiliadosConVehiculo] = useState([]) // Afiliados con vehículo apto para La Paz
 
   // Sanciones Alert State
@@ -55,24 +56,38 @@ function HojasRuta() {
   const [horasTurno, setHorasTurno] = useState({})
 
   useEffect(() => {
-    if (activeTab === 'designaciones') {
-      load()
-    } else if (activeTab === 'asignacion-la-paz') {
-      loadLaPaz()
-    } else if (activeTab === 'asignacion-caranavi') {
-      loadCaranavi()
-    } else if (activeTab === 'turno-la-paz') {
-      loadListaTurnoLaPaz()
-    } else {
-      loadAgentes()
-    }
+    if (activeTab === 'turno-la-paz') loadListaTurnoLaPaz()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
+
+  // Listado de Agentes: recarga al cambiar de página, tamaño de página o búsqueda
+  useEffect(() => {
+    if (activeTab === 'agentes') loadAgentes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, pageAgentes, pageSize, searchAgentes])
+
+  // Designaciones
+  useEffect(() => {
+    if (activeTab === 'designaciones') load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, page, pageSize, search, filtroRuta, desde, hasta])
+
+  // Asignación La Paz
+  useEffect(() => {
+    if (activeTab === 'asignacion-la-paz') loadLaPaz()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, page, pageSize, search, desde, hasta])
+
+  // Asignación Caranavi
+  useEffect(() => {
+    if (activeTab === 'asignacion-caranavi') loadCaranavi()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, page, pageSize, search, desde, hasta])
 
   const loadAgentes = useCallback(async () => {
     try {
       setLoadingAgentes(true)
-      const params = { page: pageAgentes, page_size: pageSize, para_agente_parada: 'true' }
+      const params = { page: pageAgentes, page_size: pageSize, para_agente_parada: 'true', incluir_turno: 'true' }
       if (searchAgentes) params.search = searchAgentes
       const res = await api.getAfiliados(params)
       const list = res.data?.results || res.data || []
@@ -568,7 +583,7 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
       if (res.data?.archivo_url) {
         let url = res.data.archivo_url;
         if (url.startsWith('/')) {
-          const baseUrl = 'http://localhost:8000';
+          const baseUrl = API_URL.startsWith('http') ? new URL(API_URL).origin : window.location.origin;
           url = `${baseUrl}${url}`;
         }
         window.open(url, '_blank')
@@ -582,18 +597,27 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
   }
 
   const handleGenerarListaPunteros = async () => {
+    if (selectedAgentes.length === 0) {
+      alert('Seleccione al menos un afiliado para generar la lista de punteros')
+      return
+    }
     try {
-      const res = await api.generarListaPunteros()
-      if (res.data) {
-        // Si el backend devuelve un blob directamente
-        const blob = new Blob([res.data], { type: 'application/pdf' })
-        const url = window.URL.createObjectURL(blob)
-        window.open(url, '_blank')
-      } else {
-        alert('Lista de punteros generada')
-      }
+      const res = await api.generarListaPunterosSeleccion(selectedAgentes)
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      window.open(url, '_blank')
     } catch (err) {
-      alert('Error al generar lista de punteros')
+      let msg = 'Error al generar la lista de punteros'
+      const data = err?.response?.data
+      if (data instanceof Blob) {
+        try {
+          const parsed = JSON.parse(await data.text())
+          msg = parsed.detail || msg
+        } catch { /* respuesta no-JSON */ }
+      } else if (data?.detail) {
+        msg = data.detail
+      }
+      alert(msg)
       console.error(err)
     }
   }
@@ -690,6 +714,57 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
     }
   }
 
+  const formatFechaTurno = (fecha) => {
+    if (!fecha) return 'Sin turno'
+    const [y, m, d] = String(fecha).split('-')
+    return `${d}/${m}/${y}`
+  }
+
+  const toggleAgente = (id) => {
+    setSelectedAgentes(prev => (
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    ))
+  }
+
+  const toggleAllAgentes = () => {
+    const idsPagina = listaAgentes.map(a => a.id)
+    const todosSeleccionados = idsPagina.length > 0 && idsPagina.every(id => selectedAgentes.includes(id))
+    setSelectedAgentes(prev => (
+      todosSeleccionados
+        ? prev.filter(id => !idsPagina.includes(id))
+        : [...new Set([...prev, ...idsPagina])]
+    ))
+  }
+
+  const handleGenerarListaAgentes = async () => {
+    if (selectedAgentes.length === 0) {
+      alert('Seleccione al menos un afiliado para generar la lista')
+      return
+    }
+    try {
+      const res = await api.generarListaAgentes(selectedAgentes)
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      loadAgentes()
+    } catch (err) {
+      let msg = 'Error al generar la lista de agentes de parada'
+      const data = err?.response?.data
+      if (data instanceof Blob) {
+        try {
+          const parsed = JSON.parse(await data.text())
+          msg = parsed.detail || parsed.detalle || msg
+        } catch { /* respuesta no-JSON */ }
+      } else if (data?.detail) {
+        msg = data.detail
+      } else if (err?.message) {
+        msg = err.message
+      }
+      alert(msg)
+      console.error(err)
+    }
+  }
+
   const handleExportExcel = async () => {
     const params = {}
     if (search) params.search = search
@@ -706,7 +781,7 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
   return (
     <div className="afiliados-container">
       <div className="page-header">
-        <h1>Módulo Agentes de Parada</h1>
+        <h1 style={{ textDecoration: 'none' }}>Módulo Agentes de Parada</h1>
       </div>
 
       <div className="tabs" style={{ marginBottom: '20px' }}>
@@ -768,8 +843,9 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
             <button
               className="btn btn-primary"
               onClick={handleGenerarListaPunteros}
+              disabled={selectedAgentes.length === 0}
               style={{
-                backgroundColor: '#2E7D32',
+                backgroundColor: selectedAgentes.length === 0 ? '#9e9e9e' : '#2E7D32',
                 color: 'white',
                 padding: '8px 16px',
                 fontSize: '0.9rem',
@@ -778,12 +854,12 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
                 gap: '8px',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: 'pointer',
+                cursor: selectedAgentes.length === 0 ? 'not-allowed' : 'pointer',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 fontWeight: '500'
               }}
             >
-              <span style={{ fontSize: '1.1rem' }}>📋</span> Imprimir Lista de Punteros
+              <span style={{ fontSize: '1.1rem' }}>📋</span> Imprimir Lista de Punteros ({selectedAgentes.length})
             </button>
             <button
               className="btn btn-primary"
@@ -805,6 +881,27 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
             >
               <span style={{ fontSize: '1.1rem' }}>📄</span> Nómina de Agentes
             </button>
+            <button
+              className="btn btn-primary"
+              onClick={handleGenerarListaAgentes}
+              disabled={selectedAgentes.length === 0}
+              style={{
+                backgroundColor: selectedAgentes.length === 0 ? '#9e9e9e' : '#C62828',
+                color: 'white',
+                padding: '8px 16px',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: selectedAgentes.length === 0 ? 'not-allowed' : 'pointer',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                fontWeight: '500'
+              }}
+            >
+              <span style={{ fontSize: '1.1rem' }}>🖨️</span> Generar Lista Agentes de Parada ({selectedAgentes.length})
+            </button>
           </div>
 
           {loadingAgentes ? (<div className="loading">Cargando agentes...</div>) : (
@@ -812,23 +909,40 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
               <table className="afiliados-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '40px' }}>
+                      <input
+                        type="checkbox"
+                        checked={listaAgentes.length > 0 && listaAgentes.every(a => selectedAgentes.includes(a.id))}
+                        onChange={toggleAllAgentes}
+                        title="Seleccionar todos"
+                      />
+                    </th>
                     <th>Nombre Completo</th>
                     <th>CI</th>
                     <th>Teléfono</th>
                     <th>Dirección</th>
+                    <th>Fecha Turno</th>
                     <th>Estado</th>
                     <th>Fecha Ingreso</th>
                   </tr>
                 </thead>
                 <tbody>
                   {listaAgentes.length === 0 ? (
-                    <tr><td colSpan="6" className="no-data">No se encontraron agentes</td></tr>
+                    <tr><td colSpan="8" className="no-data">No se encontraron agentes</td></tr>
                   ) : listaAgentes.map(agente => (
-                    <tr key={agente.id}>
+                    <tr key={agente.id} style={selectedAgentes.includes(agente.id) ? { backgroundColor: '#e8f5e9' } : undefined}>
+                      <td data-label="Sel.">
+                        <input
+                          type="checkbox"
+                          checked={selectedAgentes.includes(agente.id)}
+                          onChange={() => toggleAgente(agente.id)}
+                        />
+                      </td>
                       <td data-label="Nombre Completo"><span className="afiliado-name">{agente.apellidos} {agente.nombres}</span></td>
                       <td data-label="CI">{agente.ci}</td>
                       <td data-label="Teléfono">{agente.telefono || '-'}</td>
                       <td data-label="Dirección">{agente.direccion || '-'}</td>
+                      <td data-label="Fecha Turno" style={{ fontWeight: 'bold', color: agente.proximo_turno ? '#2E7D32' : '#999' }}>{formatFechaTurno(agente.proximo_turno)}</td>
                       <td data-label="Estado"><span className={`badge badge-${agente.estado}`}>{agente.estado}</span></td>
                       <td data-label="Fecha Ingreso">{agente.fecha_ingreso}</td>
                     </tr>

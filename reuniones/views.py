@@ -1,7 +1,7 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAuthenticated
 
 from .models import Reunion
 from .serializers import ReunionSerializer
@@ -71,4 +71,4 @@ class ReunionViewSet(viewsets.ModelViewSet):
             # Permitir a superusuarios, Secretaria, Directiva y Sistemas
             return user.is_superuser or user.groups.filter(name__in=['Secretaria', 'Directiva', 'Sistemas']).exists()
 
-    permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrReadOnly]

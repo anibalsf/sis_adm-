@@ -11,13 +11,75 @@ from hojasruta.models import HojaRuta
 from tesoreria.models import Pago
 from django.utils import timezone
 
+
+def _generar_turnos_agentes(dias_a_generar=365):
+    """
+    Genera la rotación de turnos de Agente de Parada a partir del último turno
+    (o desde hoy si no existe ninguno). Devuelve la cantidad de turnos creados.
+    Excluye afiliados de La Paz (Ipsum/Minibus con placa) y de Convenio Caranavi.
+    """
+    from datetime import datetime, timedelta
+    from django.db.models import Q
+    from .models import TurnoAgente
+
+    ultimo_turno = TurnoAgente.objects.order_by('-fecha').first()
+    if ultimo_turno:
+        fecha_inicio = ultimo_turno.fecha + timedelta(days=1)
+    else:
+        fecha_inicio = datetime.now().date()
+
+    la_paz_ids = Afiliado.objects.filter(
+        Q(vehiculos__tipo__iexact='IPSUM') | Q(vehiculos__tipo__iexact='MINIBUS'),
+        vehiculos__indocumentado=False
+    ).values_list('id', flat=True)
+
+    convenio_ids = Afiliado.objects.filter(
+        vehiculos__es_convenio_caranavi=True
+    ).values_list('id', flat=True)
+
+    afiliados = list(Afiliado.objects.filter(
+        estado='activo',
+        is_active=True
+    ).exclude(id__in=la_paz_ids).exclude(id__in=convenio_ids).distinct().order_by('apellidos', 'nombres'))
+
+    if not afiliados:
+        return 0
+
+    idx_actual = TurnoAgente.objects.count() % len(afiliados)
+    creados = 0
+    dias_generados = 0
+    dia_offset = 0
+
+    while dias_generados < dias_a_generar:
+        fecha = fecha_inicio + timedelta(days=dia_offset)
+        dia_offset += 1
+
+        if fecha.weekday() >= 5:
+            continue
+
+        TurnoAgente.objects.create(
+            fecha=fecha,
+            afiliado=afiliados[idx_actual % len(afiliados)]
+        )
+        dias_generados += 1
+        idx_actual += 1
+        creados += 1
+
+    return creados
+
+
 class AfiliadoViewSet(viewsets.ModelViewSet):
     queryset = Afiliado.objects.all()
     serializer_class = AfiliadoSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['ci', 'apellidos', 'nombres', 'telefono', 'direccion']
     ordering_fields = ['apellidos', 'nombres', 'ci', 'fecha_ingreso']
-    permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated, IsSecretariaOrDirectivaOrReadOnly]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['incluir_turno'] = self.request.query_params.get('incluir_turno') == 'true'
+        return context
 
     def get_queryset(self):
         queryset = Afiliado.objects.all()
@@ -286,77 +348,121 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
         buffer.seek(0)
         return FileResponse(buffer, as_attachment=True, filename='lista_punteros.pdf')
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def generar_lista_punteros_seleccion(self, request):
+        """Genera la lista de punteros (PDF) a partir de los afiliados seleccionados.
+        Asigna 1er, 2do y 3er puntero para cada día laborable (30 días)."""
+        import io
+        from datetime import datetime, timedelta
+        from django.http import FileResponse
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.lib.enums import TA_CENTER
+
+        afiliado_ids = request.data.get('afiliado_ids') or []
+        if not isinstance(afiliado_ids, (list, tuple)) or len(afiliado_ids) == 0:
+            return Response({'detail': 'Debe seleccionar al menos un afiliado'}, status=400)
+
+        afiliados = list(Afiliado.objects.filter(
+            id__in=afiliado_ids, estado='activo', is_active=True
+        ).order_by('apellidos', 'nombres'))
+
+        if not afiliados:
+            return Response({'detail': 'No se encontraron afiliados activos para los seleccionados'}, status=400)
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch,
+                                leftMargin=0.5*inch, rightMargin=0.5*inch)
+        elements = []
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            textColor=colors.HexColor('#2E7D32'),
+            spaceAfter=12,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold'
+        )
+        elements.append(Paragraph("SINDICATO MIXTO INTEGRACIÓN TAIPIPLAYA", title_style))
+        elements.append(Paragraph("LISTA DE PUNTEROS - PROGRAMACIÓN DE TURNOS", title_style))
+        elements.append(Spacer(1, 15))
+
+        data = [[
+            Paragraph('<b>FECHA</b>', styles['Normal']),
+            Paragraph('<b>1er PUNTERO</b>', styles['Normal']),
+            Paragraph('<b>2do PUNTERO</b>', styles['Normal']),
+            Paragraph('<b>3er PUNTERO</b>', styles['Normal']),
+        ]]
+
+        fecha_actual = datetime.now().date()
+        dias_laborables = 30
+        dias_generados = 0
+        dia_offset = 0
+        idx = 0
+        total = len(afiliados)
+
+        while dias_generados < dias_laborables:
+            fecha = fecha_actual + timedelta(days=dia_offset)
+            dia_offset += 1
+            if fecha.weekday() >= 5:
+                continue
+            nombres = []
+            for _ in range(3):
+                af = afiliados[idx % total]
+                nombres.append(f"{af.apellidos} {af.nombres}".upper())
+                idx += 1
+            data.append([fecha.strftime('%d/%m/%Y'), nombres[0], nombres[1], nombres[2]])
+            dias_generados += 1
+
+        col_widths = [1.1*inch, 1.9*inch, 1.9*inch, 1.9*inch]
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#FFD700')),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+            ('ALIGN', (1, 1), (-1, -1), 'LEFT'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ]))
+        elements.append(table)
+
+        elements.append(Spacer(1, 15))
+        nota_style = ParagraphStyle('Nota', parent=styles['Normal'], fontSize=8, textColor=colors.grey)
+        elements.append(Paragraph(
+            "<b>Nota:</b> los tres punteros deben estar en la parada a las 4:00 a.m. Se otorgan 15 minutos de tolerancia; el puntero que no se presente en ese tiempo pierde su turno.",
+            nota_style
+        ))
+
+        doc.build(elements)
+        buffer.seek(0)
+        return FileResponse(buffer, as_attachment=True, filename='lista_punteros.pdf')
+
     @action(detail=False, methods=['post'])
     def generar_turnos(self, request):
         """
         Genera turnos para Agentes de Parada y los guarda en base de datos.
         """
-        from datetime import datetime, timedelta
         from .models import TurnoAgente
-
-        # 1. Determinar fecha de inicio
-        # Si ya hay turnos, empezar después del último. Si no, empezar hoy.
-        ultimo_turno = TurnoAgente.objects.order_by('-fecha').first()
-        if ultimo_turno:
-            fecha_inicio = ultimo_turno.fecha + timedelta(days=1)
-        else:
-            fecha_inicio = datetime.now().date()
-            
-        # 2. Obtener afiliados activos
-        # EXCLUIR: 
-        # - Los que van a La Paz (Ipsum/Minibus con placa)
-        # - Los de Convenio Integración Caranavi
-        from django.db.models import Q
-        
-        la_paz_ids = Afiliado.objects.filter(
-            Q(vehiculos__tipo__iexact='IPSUM') | Q(vehiculos__tipo__iexact='MINIBUS'),
-            vehiculos__indocumentado=False
-        ).values_list('id', flat=True)
-        
-        convenio_ids = Afiliado.objects.filter(
-            vehiculos__es_convenio_caranavi=True
-        ).values_list('id', flat=True)
-
-        afiliados = list(Afiliado.objects.filter(
-            estado='activo', 
-            is_active=True
-        ).exclude(id__in=la_paz_ids).exclude(id__in=convenio_ids).distinct().order_by('apellidos', 'nombres'))
-        
-        if not afiliados:
+        creados = _generar_turnos_agentes(365)
+        if creados == 0:
             return Response({'detail': 'No hay afiliados disponibles para Agente de Parada (la mayoría están en La Paz o Convenio)'}, status=400)
-
-        # 3. Calcular índice de rotación
-        # Si continuamos, debemos saber a quién le toca.
-        # Una forma simple: (total_turnos_historicos) % total_afiliados
-        total_historico = TurnoAgente.objects.count()
-        idx_actual = total_historico % len(afiliados)
-        
-        # 4. Generar turnos para 365 días laborables (aprox un año calendario)
-        turnos_creados = []
-        dias_a_generar = 365
-        dias_generados = 0
-        dia_offset = 0
-        
-        while dias_generados < dias_a_generar:
-            fecha = fecha_inicio + timedelta(days=dia_offset)
-            dia_offset += 1
-            
-            # Excluir fin de semana (5=Sab, 6=Dom)
-            if fecha.weekday() >= 5:
-                continue
-                
-            afiliado_toca = afiliados[idx_actual % len(afiliados)]
-            
-            TurnoAgente.objects.create(
-                fecha=fecha,
-                afiliado=afiliado_toca
-            )
-            turnos_creados.append(f"{fecha}: {afiliado_toca}")
-            
-            dias_generados += 1
-            idx_actual += 1
-            
-        return Response({'detail': f'Se generaron {len(turnos_creados)} turnos nuevos.', 'muestra': turnos_creados[:5]})
+        muestra = [
+            f"{t.fecha}: {t.afiliado}"
+            for t in TurnoAgente.objects.order_by('-fecha')[:5]
+        ]
+        return Response({'detail': f'Se generaron {creados} turnos nuevos.', 'muestra': muestra})
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
     def turno_del_dia(self, request):
@@ -482,6 +588,122 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
         doc.build(elements)
         buffer.seek(0)
         return FileResponse(buffer, as_attachment=True, filename='nomina_agentes.pdf')
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def generar_lista_agentes(self, request):
+        """Genera la lista de Agentes de Parada (PDF) a partir de los afiliados seleccionados."""
+        import io
+        from django.http import FileResponse
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.lib.enums import TA_CENTER
+        from datetime import date
+
+        afiliado_ids = request.data.get('afiliado_ids') or []
+        if not isinstance(afiliado_ids, (list, tuple)) or len(afiliado_ids) == 0:
+            return Response({'detail': 'Debe seleccionar al menos un afiliado'}, status=400)
+
+        afiliados = list(Afiliado.objects.filter(
+            id__in=afiliado_ids,
+            estado='activo',
+            is_active=True
+        ).order_by('apellidos', 'nombres'))
+
+        if not afiliados:
+            return Response({'detail': 'No se encontraron afiliados activos para los seleccionados'}, status=400)
+
+        # Fecha de la próxima designación como Agente de Parada por afiliado
+        from datetime import date as _date
+        from .models import TurnoAgente
+        # Si aún no hay turnos programados, generarlos una sola vez para poder mostrar fechas
+        if not TurnoAgente.objects.filter(fecha__gte=_date.today()).exists():
+            _generar_turnos_agentes(365)
+        turnos = TurnoAgente.objects.filter(
+            afiliado__in=afiliados, fecha__gte=_date.today()
+        ).order_by('fecha')
+        fecha_turno = {}
+        for t in turnos:
+            if t.afiliado_id not in fecha_turno:
+                fecha_turno[t.afiliado_id] = t.fecha
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch,
+                                leftMargin=0.5*inch, rightMargin=0.5*inch)
+        elements = []
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            textColor=colors.black,
+            spaceAfter=12,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold'
+        )
+        elements.append(Paragraph("SINDICATO MIXTO INTEGRACIÓN TAIPIPLAYA", title_style))
+        elements.append(Paragraph(f"LISTA DE AGENTE DE PARADA {date.today().year}", title_style))
+        elements.append(Spacer(1, 15))
+
+        data = [[
+            Paragraph('<b>Nº</b>', styles['Normal']),
+            Paragraph('<b>NOMBRE Y APELLIDO</b>', styles['Normal']),
+            Paragraph('<b>CI</b>', styles['Normal']),
+            Paragraph('<b>TELÉFONO</b>', styles['Normal']),
+            Paragraph('<b>FECHA TURNO</b>', styles['Normal']),
+            Paragraph('<b>DIRECCIÓN</b>', styles['Normal']),
+        ]]
+        for idx, afiliado in enumerate(afiliados, 1):
+            fecha = fecha_turno.get(afiliado.id)
+            data.append([
+                str(idx),
+                f"{afiliado.apellidos} {afiliado.nombres}".upper(),
+                afiliado.ci_completo,
+                afiliado.telefono or '-',
+                fecha.strftime('%d/%m/%Y') if fecha else '-',
+                afiliado.direccion or '-',
+            ])
+
+        col_widths = [0.4*inch, 2.1*inch, 0.9*inch, 0.9*inch, 1.0*inch, 1.6*inch]
+        table = Table(data, colWidths=col_widths)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#FFD700')),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+            ('ALIGN', (2, 1), (3, -1), 'CENTER'),
+            ('ALIGN', (4, 1), (4, -1), 'CENTER'),
+            ('ALIGN', (1, 1), (1, -1), 'LEFT'),
+            ('ALIGN', (5, 1), (5, -1), 'LEFT'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ]))
+        elements.append(table)
+
+        elements.append(Spacer(1, 15))
+        nota_style = ParagraphStyle('Nota', parent=styles['Normal'], fontSize=8, textColor=colors.grey)
+        elements.append(Paragraph(
+            "<b>Nota:</b> el agente de turno debe estar en la parada a horas 4 a.m., anotarse a las 6 a.m. y entrar en carril a las 7 a.m.",
+            nota_style
+        ))
+        elements.append(Spacer(1, 5))
+        elements.append(Paragraph(
+            "<b>AFILIADO QUE NO CUMPLA SERÁ SANCIONADO CON 50 BS.</b>",
+            nota_style
+        ))
+
+        doc.build(elements)
+        buffer.seek(0)
+        return FileResponse(buffer, as_attachment=True, filename='lista_agentes_parada.pdf')
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def mi_perfil(self, request):

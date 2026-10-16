@@ -603,7 +603,7 @@ function PagosYEgresos() {
 
     return (
         <div className="pagos-y-egresos-container">
-            <h1>Módulo de Pagos y Egresos</h1>
+            <h1 style={{ textDecoration: 'none' }}>Módulo de Pagos y Egresos</h1>
             <p>Aquí podrás gestionar todos los ingresos y egresos económicos del sindicato.</p>
 
             <div className="card">

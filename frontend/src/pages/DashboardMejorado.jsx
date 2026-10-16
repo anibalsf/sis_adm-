@@ -451,21 +451,22 @@ const DashboardMejorado = () => {
                     </div>
                 </Link>
                 <Link to="/reservas" className="quick-card-link" style={{
-                    background: 'white',
-                    border: '1px solid #e2e8f0',
-                    color: '#1e293b',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
                     padding: '1rem 1.5rem',
                     borderRadius: '12px',
                     textDecoration: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.75rem',
+                    boxShadow: 'var(--shadow-sm)',
                     minWidth: '220px'
                 }}>
                     <span style={{ fontSize: '1.5rem' }}>📅</span>
                     <div>
                         <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Gestión Reservas</div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Admin. reservas internas</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Admin. reservas internas</div>
                     </div>
                 </Link>
                 <a 

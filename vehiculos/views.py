@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAuthenticated
 from rest_framework import filters
 from .models import Vehiculo
 from .serializers import VehiculoSerializer
@@ -21,7 +21,7 @@ class VehiculoViewSet(viewsets.ModelViewSet):
             if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
                 return True
             return user.groups.filter(name__in=['Secretaria', 'Sistemas']).exists()
-    permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrReadOnly]
 
     from rest_framework.decorators import action
     @action(detail=False, methods=['get'])

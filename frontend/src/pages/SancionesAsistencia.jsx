@@ -267,14 +267,16 @@ function SancionesAsistencia() {
         if (!qrData) return;
         setVerificandoPago(true);
         try {
-            // El backend ya tiene un endpoint para verificar si queremos, por ahora simulamos éxito
-            // o llamamos si existe
+            const res = await api.verifyPagoQr(qrData.transaction_id);
+            if (res.data?.status !== 'ok') {
+                throw new Error(res.data?.message || 'El pago aún no se ha confirmado');
+            }
             alert('¡Pago verificado exitosamente!');
             setQrData(null);
             loadData();
         } catch (err) {
             console.error(err);
-            alert('Error al verificar pago');
+            alert('Aún no se ha detectado el pago. Por favor intenta de nuevo en unos momentos.');
         } finally {
             setVerificandoPago(false);
         }

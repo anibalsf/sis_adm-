@@ -3,10 +3,23 @@ from .models import Afiliado
 import re
 
 class AfiliadoSerializer(serializers.ModelSerializer):
+    proximo_turno = serializers.SerializerMethodField()
+
     class Meta:
         model = Afiliado
-        fields = ['id', 'user', 'nombres', 'apellidos', 'nombre_completo', 'ci', 'ci_exp', 'telefono', 'email', 'direccion', 'estado', 'fecha_ingreso', 'is_active', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'nombre_completo']
+        fields = ['id', 'user', 'nombres', 'apellidos', 'nombre_completo', 'ci', 'ci_exp', 'telefono', 'email', 'direccion', 'estado', 'fecha_ingreso', 'is_active', 'created_at', 'updated_at', 'proximo_turno']
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'nombre_completo', 'proximo_turno']
+
+    def get_proximo_turno(self, obj):
+        """Fecha de la próxima designación como Agente de Parada (solo si se solicita)."""
+        if not self.context.get('incluir_turno'):
+            return None
+        from datetime import date
+        from .models import TurnoAgente
+        turno = TurnoAgente.objects.filter(
+            afiliado=obj, fecha__gte=date.today()
+        ).order_by('fecha').first()
+        return turno.fecha if turno else None
 
     def validate_ci(self, value):
         """Validar formato CI boliviano (6-10 dígitos)"""

@@ -95,7 +95,7 @@
 
 #html5-qrcode-anchor-scan-type-change {
     color: var(--primary) !important;
-    text-decoration: underline !important;
+    text-decoration: none !important;
     cursor: pointer !important;
     display: block !important;
     margin-top: 15px !important;

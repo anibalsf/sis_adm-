@@ -1,5 +1,5 @@
 from rest_framework import viewsets, filters
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAuthenticated
 from .models import Ruta
 from .serializers import RutaSerializer
 
@@ -25,4 +25,4 @@ class RutaViewSet(viewsets.ModelViewSet):
                 user.groups.filter(name__in=['Secretaria', 'Directiva', 'Sistemas']).exists()
             )
 
-    permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrReadOnly]

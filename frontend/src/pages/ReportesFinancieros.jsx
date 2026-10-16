@@ -298,7 +298,7 @@ function ReportesFinancieros() {
 
     return (
         <div className="reportes-container">
-            <h1>Módulo de Reportes Financieros</h1>
+            <h1 style={{ textDecoration: 'none' }}>Módulo de Reportes Financieros</h1>
             <p>Visualización de datos financieros con gráficos interactivos</p>
 
             {/* Filtros */}

@@ -74,7 +74,7 @@ const NotificationBell = () => {
                         {count > 0 && (
                             <button 
                                 onClick={markAllAsRead}
-                                className="text-xs font-semibold text-primary hover:underline"
+                                className="text-xs font-semibold text-primary hover:no-underline"
                             >
                                 Marcar todas como leídas
                             </button>
@@ -110,7 +110,7 @@ const NotificationBell = () => {
                                                 {notif.link && (
                                                     <Link 
                                                         to={notif.link} 
-                                                        className="text-[10px] font-bold text-primary hover:underline"
+                                                        className="text-[10px] font-bold text-primary hover:no-underline"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             markAsRead(notif.id);

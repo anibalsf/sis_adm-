@@ -1,5 +1,5 @@
 from rest_framework import viewsets, permissions, filters
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
@@ -34,7 +34,7 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
     search_fields = ['nro', 'afiliado__ci', 'afiliado__apellidos', 'afiliado__nombres', 'ruta__nombre', 'vehiculo__placa', 'agente_parada']
     ordering_fields = ['fecha_emision', 'fecha_salida', 'nro', 'precio']
     
-    permission_classes = [IsSecretariaOrDirectivaOrReadOnly]
+    permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrReadOnly]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -332,7 +332,7 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
             import logging
             logging.getLogger(__name__).error(f"Error enviando WhatsApp admin: {e}")
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
     def disponibles_hoy(self, request):
         """
         Retorna hojas de ruta disponibles para hoy y próximos días
