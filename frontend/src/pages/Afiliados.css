@@ -105,6 +105,15 @@
   color: var(--text-secondary, #555);
 }
 
+.afiliados-table th.col-num,
+.afiliados-table td.col-num {
+  width: 56px;
+  text-align: center;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .afiliado-name {
   font-weight: 600;
   color: var(--text-primary, #333);

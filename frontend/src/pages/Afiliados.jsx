@@ -219,6 +219,7 @@ function Afiliados() {
         <table className="afiliados-table">
           <thead>
             <tr>
+              <th className="col-num">#</th>
               <th>Nombre Completo</th>
               <th>CI</th>
               <th>Teléfono</th>
@@ -230,12 +231,13 @@ function Afiliados() {
             {loading ? (
               Array.from({ length: pageSize }).map((_, i) => (
                 <tr key={`skeleton-${i}`}>
-                  <td colSpan="5"><SkeletonLoader type="table-row" /></td>
+                  <td colSpan="6"><SkeletonLoader type="table-row" /></td>
                 </tr>
               ))
             ) : (
-              afiliados.map((afiliado) => (
+              afiliados.map((afiliado, index) => (
                 <tr key={afiliado.id}>
+                  <td data-label="#" className="col-num">{(page - 1) * pageSize + index + 1}</td>
                   <td data-label="Nombre Completo">{afiliado.apellidos} {afiliado.nombres}</td>
                   <td data-label="CI">{afiliado.ci} {afiliado.ci_exp}</td>
                   <td data-label="Teléfono">{afiliado.telefono || '-'}</td>
@@ -275,7 +277,7 @@ function Afiliados() {
             )}
             {!loading && afiliados.length === 0 && (
               <tr>
-                <td colSpan="5" className="no-data">No se encontraron afiliados</td>
+                <td colSpan="6" className="no-data">No se encontraron afiliados</td>
               </tr>
             )}
           </tbody>

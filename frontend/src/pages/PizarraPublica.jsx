@@ -218,7 +218,7 @@ function PizarraPublica() {
                                 letterSpacing: '0.1em',
                                 marginBottom: '0.8rem'
                             }}>
-                                📍 SOCIOS ASIGNADOS HOY — La Paz | Para reservar su pasaje contacte a:
+                                📍 SOCIOS ASIGNADOS — La Paz | Para reservar su pasaje contacte a:
                             </div>
 
                             {cargandoTurno ? (
@@ -312,7 +312,7 @@ function PizarraPublica() {
                                 </div>
                             ) : (
                                 <div style={{ color: '#b7e4c7', fontSize: '1rem', fontStyle: 'italic' }}>
-                                    No hay socios asignados programados para hoy a La Paz. Comuníquese con la oficina.
+                                    No hay socios asignados para La Paz. Comuníquese con la oficina.
                                 </div>
                             )}
                         </div>

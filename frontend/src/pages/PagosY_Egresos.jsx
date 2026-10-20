@@ -50,6 +50,12 @@ function PagosYEgresos() {
     const [selectedFaltas, setSelectedFaltas] = useState([]);
     const [selectedAportes, setSelectedAportes] = useState([]);
     const [loadingFaltas, setLoadingFaltas] = useState(false);
+    // ── Modal de éxito premium ──
+    const [successModal, setSuccessModal] = useState({ open: false, message: '' });
+
+    const showSuccess = (message) => {
+        setSuccessModal({ open: true, message });
+    };
 
     const loadTableData = useCallback(async () => {
         try {
@@ -134,17 +140,14 @@ function PagosYEgresos() {
         const tipo = (vehiculoSelected?.tipo || '').toLowerCase();
         const esHojaRutaCaranavi = /caranavi/i.test(tp?.nombre || '');
 
-        if (rutaSelected) {
-            if (nom.includes('la paz')) {
-                if (vehiculoSelected) {
-                    if (tipo.includes('ipsum')) targetMonto = '0.00';
-                    else if (tipo.includes('minibus') || tipo.includes('minibús')) targetMonto = '0.00';
-                    else targetMonto = '0.00';
-                } else {
-                    targetMonto = '0.00';
-                }
-            } else if (nom.includes('caranavi')) {
-                targetMonto = '0.00';
+        // Sugerir el monto desde la tarifa base de la ruta (Caranavi / La Paz),
+        // tanto para minibus como para ipsum. El usuario puede editarlo.
+        const tarifa = parseFloat(rutaSelected?.tarifa_base);
+        if (rutaSelected && !isNaN(tarifa) && tarifa > 0) {
+            targetMonto = tarifa.toFixed(2);
+            if (nom.includes('la paz') && vehiculoSelected && !(tipo.includes('ipsum') || tipo.includes('minibus') || tipo.includes('minibús'))) {
+                // Vehículo no habilitado para La Paz: mantener tarifa como referencia
+                targetMonto = tarifa.toFixed(2);
             }
         }
 
@@ -230,6 +233,7 @@ function PagosYEgresos() {
                     if (rLP) nextForm.ruta_id = rLP.id;
                 }
                 nextForm.monto = '0.00'; // Default with leading zero for accounting
+                nextForm._autoSet = false; // Permite recalcular el monto sugerido (tarifa de ruta)
             }
         }
 
@@ -407,31 +411,37 @@ function PagosYEgresos() {
                     setLoading(true);
                     const res = await api.createPago(payload);
                     console.log("Respuesta createPago:", res);
-
-                    alert('Guardado exitosamente');
+                    setLoading(false);
+                    setShowModal(false);
 
                     if (metodoPago === 'qr') {
                         // Generar cobro QR
                         try {
                             const qrRes = await api.generarPagoQrIngreso(res.data.id);
                             setQrData(qrRes.data);
-                            setShowModal(false); // Cerramos el de creación pero mantenemos el QR
-                            setLoading(false);
-                            return; // No navegamos aún
+                            // Recargar en segundo plano
+                            loadTableData();
+                            return;
                         } catch (err) {
                             console.error("Error generando QR:", err);
-                            alert("Ingreso registrado pero hubo un error generando el QR.");
-                            setLoading(false);
+                            showSuccess('Ingreso registrado. Hubo un error generando el QR.');
+                            loadTableData();
                         }
+                    } else {
+                        // Navegar inmediatamente al recibo — la tabla se recarga en background
+                        loadTableData();
+                        navigate(`/recibo/ingreso/${res.data.id}`);
                     }
-                    setLoading(false);
-                    navigate(`/recibo/ingreso/${res.data.id}`);
+                    return;
                 } else {
                     setLoading(true);
                     const res = await api.createEgreso(payload);
-                    alert('Guardado exitosamente');
                     setLoading(false);
+                    setShowModal(false);
+                    // Navegar inmediatamente — recarga en background
+                    loadTableData();
                     navigate(`/recibo/egreso/${res.data.id}`);
+                    return;
                 }
             } else {
                 setLoading(true);
@@ -440,11 +450,13 @@ function PagosYEgresos() {
                 } else {
                     await api.updateEgreso(editingId, payload);
                 }
-                alert('Guardado exitosamente');
                 setLoading(false);
+                setShowModal(false);
+                showSuccess('¡Registro actualizado exitosamente!');
+                // Recargar en background sin bloquear
+                loadTableData();
+                return;
             }
-            setShowModal(false);
-            await loadTableData();
         } catch (err) {
             const data = err.response?.data;
             console.error("Error detallado:", data); // Log para debugging
@@ -483,13 +495,14 @@ function PagosYEgresos() {
                 throw new Error(res.data?.message || 'El pago aún no se ha confirmado');
             }
 
-            alert('¡Pago verificado exitosamente!');
+            showSuccess('¡Pago verificado exitosamente!');
             setQrData(null);
             if (pagoId) {
                 navigate(`/recibo/ingreso/${pagoId}`);
             }
-            await loadTableData();
-            await loadMultas();
+            // Recargar en background
+            loadTableData();
+            loadMultas();
         } catch (err) {
             console.error(err);
             alert('Aún no se ha detectado el pago. Por favor intenta de nuevo en unos momentos.');
@@ -603,7 +616,87 @@ function PagosYEgresos() {
 
     return (
         <div className="pagos-y-egresos-container">
+
+            {/* ══════════════════════════════════════════
+                MODAL DE ÉXITO PREMIUM
+            ══════════════════════════════════════════ */}
+            {successModal.open && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 9999,
+                    background: 'rgba(0,0,0,0.45)',
+                    backdropFilter: 'blur(6px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    animation: 'fadeIn 0.2s ease'
+                }}>
+                    <div style={{
+                        background: '#fff',
+                        borderRadius: '20px',
+                        padding: '2.5rem 2rem',
+                        maxWidth: '340px',
+                        width: '90%',
+                        textAlign: 'center',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+                        animation: 'slideUp 0.25s cubic-bezier(0.34,1.56,0.64,1)',
+                        border: '1px solid #e5e7eb'
+                    }}>
+                        {/* Círculo con checkmark animado */}
+                        <div style={{
+                            width: '72px', height: '72px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            margin: '0 auto 1.25rem',
+                            boxShadow: '0 8px 24px rgba(16,185,129,0.35)',
+                            animation: 'popIn 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.1s both'
+                        }}>
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                        </div>
+                        <h3 style={{
+                            margin: '0 0 0.5rem',
+                            fontSize: '1.1rem',
+                            fontWeight: 800,
+                            color: '#111827',
+                            letterSpacing: '-0.01em'
+                        }}>¡Listo!</h3>
+                        <p style={{
+                            margin: '0 0 1.75rem',
+                            color: '#6b7280',
+                            fontSize: '0.925rem',
+                            lineHeight: 1.5
+                        }}>{successModal.message || 'La información se guardó exitosamente.'}</p>
+                        <button
+                            onClick={() => setSuccessModal({ open: false, message: '' })}
+                            style={{
+                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '50px',
+                                padding: '0.65rem 2.5rem',
+                                fontSize: '0.9rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 14px rgba(16,185,129,0.35)',
+                                transition: 'transform 0.15s, box-shadow 0.15s',
+                                letterSpacing: '0.02em'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                        >
+                            Aceptar
+                        </button>
+                    </div>
+                    <style>{`
+                        @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+                        @keyframes slideUp { from { opacity:0; transform:translateY(30px) scale(0.95) } to { opacity:1; transform:translateY(0) scale(1) } }
+                        @keyframes popIn { from { transform:scale(0.5); opacity:0 } to { transform:scale(1); opacity:1 } }
+                    `}</style>
+                </div>
+            )}
+
             <h1 style={{ textDecoration: 'none' }}>Módulo de Pagos y Egresos</h1>
+
             <p>Aquí podrás gestionar todos los ingresos y egresos económicos del sindicato.</p>
 
             <div className="card">
@@ -1207,7 +1300,7 @@ function PagosYEgresos() {
                                                         onFocus={(e) => { if(e.target.value === '0' || e.target.value === '0.00') setForm(prev => ({...prev, monto: ''})) }}
                                                         onBlur={(e) => { if(e.target.value === '') setForm(prev => ({...prev, monto: '0.00'})) }}
                                                         required
-                                                        title={isHojaRuta ? 'Ingrese el monto manualmente' : undefined}
+                                                        title={isHojaRuta ? 'Monto sugerido desde la tarifa de la ruta (Caranavi / La Paz); puede editarlo' : undefined}
                                                     />
                                                 );
                                             })()}

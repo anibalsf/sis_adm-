@@ -323,4 +323,42 @@
     background: linear-gradient(135deg, #047857 0%, #065f46 100%);
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(5, 150, 105, 0.3);
-}
+}
+
+/* Estado de Cuentas: Sub-pestañas y badges */
+.deudas-subtabs {
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid #e2e8f0;
+    padding: 0 0.5rem;
+}
+
+.badge-al-dia {
+    background-color: #38a169 !important;
+    color: #ffffff !important;
+    font-weight: 700;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    display: inline-block;
+    box-shadow: 0 2px 4px rgba(56, 161, 105, 0.25);
+}
+
+.deudas-kpis-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+}
+
+@media (max-width: 992px) {
+    .deudas-kpis-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .deudas-kpis-grid {
+        grid-template-columns: 1fr;
+    }
+}
+

@@ -873,6 +873,9 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
         if not ruta_la_paz:
             return Response({'found': False, 'detail': 'No existe la ruta a La Paz configurada'})
 
+        # Intentar buscar hojas para la fecha solicitada; si no existen,
+        # buscar la próxima asignación (fecha_salida >= hoy) para no dejar
+        # vacío el panel público al escanear el QR cuando es para mañana.
         hojas = list(HojaRuta.objects.select_related(
             'afiliado', 'vehiculo', 'ruta'
         ).filter(
@@ -887,6 +890,37 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
             Q(vehiculo__tipo__iexact='ipsum') |
             Q(vehiculo__tipo__iexact='minibus')
         ).order_by('hora_salida', 'id'))
+
+        if not hojas and not fecha_str:
+            # Buscar la próxima fecha con asignación (hoy en adelante)
+            proxima = HojaRuta.objects.filter(
+                ruta=ruta_la_paz,
+                fecha_salida__gte=fecha,
+                estado__in=['emitida', 'notificada', 'pagada'],
+                afiliado__estado='activo',
+                afiliado__is_active=True,
+                vehiculo__estado='activo',
+                vehiculo__indocumentado=False,
+            ).filter(
+                Q(vehiculo__tipo__iexact='ipsum') |
+                Q(vehiculo__tipo__iexact='minibus')
+            ).order_by('fecha_salida', 'hora_salida').first()
+            if proxima:
+                fecha = proxima.fecha_salida
+                hojas = list(HojaRuta.objects.select_related(
+                    'afiliado', 'vehiculo', 'ruta'
+                ).filter(
+                    ruta=ruta_la_paz,
+                    fecha_salida=fecha,
+                    estado__in=['emitida', 'notificada', 'pagada'],
+                    afiliado__estado='activo',
+                    afiliado__is_active=True,
+                    vehiculo__estado='activo',
+                    vehiculo__indocumentado=False,
+                ).filter(
+                    Q(vehiculo__tipo__iexact='ipsum') |
+                    Q(vehiculo__tipo__iexact='minibus')
+                ).order_by('hora_salida', 'id'))
 
         # Mantener compatibilidad con la programación anterior cuando aún no
         # existe una hoja de ruta para la fecha consultada.
@@ -1009,10 +1043,10 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
     def qr_lapaz(self, request):
         """
         Genera el QR de la oficina para pasajeros.
-        Al escanearlo abre /reservas (módulo de reservas), que sin sesión
-        muestra las movilidades asignadas a La Paz (ipsum y minibus):
-        nombre del afiliado designado, placa, color de la movilidad y
-        hora de salida.
+        Al escanearlo abre /pizarra (tablero público de salidas y reservas),
+        donde el pasajero ve las movilidades asignadas a La Paz (ipsum y minibus)
+        — nombre del afiliado designado, placa, color, hora de salida — y puede
+        reservar su pasaje.
         """
         import qrcode
         from io import BytesIO
@@ -1020,7 +1054,7 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
         from django.http import HttpResponse
 
         base_url = (getattr(settings, 'FRONTEND_URL', '') or '').rstrip('/')
-        url = f"{base_url}/reservas"
+        url = f"{base_url}/pizarra"
 
         qr = qrcode.QRCode(
             version=None,

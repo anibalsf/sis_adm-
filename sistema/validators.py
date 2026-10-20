@@ -55,6 +55,10 @@ def validate_placa_vehiculo(value):
     # Limpiar espacios
     cleaned = str(value).replace(' ', '').upper()
     
+    # Referencia temporal para vehículos indocumentados (sin placa registrada)
+    if re.match(r'^S/P-?[A-Z0-9]{4,12}$', cleaned):
+        return
+    
     # Formato antiguo: ABC-1234
     # Formato nuevo: 1234-ABC
     pattern = r'^([A-Z]{3}-?\d{4}|\d{4}-?[A-Z]{3})$'

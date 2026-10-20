@@ -161,6 +161,37 @@ def _serializar(qs, hoy):
     return serializar_filas(qs.values(*CAMPOS_MOROSO), hoy)
 
 
+def al_dia_queryset(periodo_limite=None):
+    """
+    Queryset de afiliados activos sin deuda (cero cuotas y cero sanciones pendientes),
+    anotados con su último pago y ordenados por apellidos y nombres.
+    """
+    from afiliados.models import Afiliado
+    from reportes.query_helpers import INGRESO_ESTADOS_VALIDOS
+    from tesoreria.models import Pago
+    from django.db.models import OuterRef, Subquery, Max
+
+    activos = Afiliado.objects.filter(estado='activo', is_active=True)
+    deudores_ids = _deuda_queryset(periodo_limite=periodo_limite).values('id')
+
+    ultimo_pago_agg = (
+        Pago.objects.filter(estado__in=INGRESO_ESTADOS_VALIDOS)
+        .values('afiliado_id')
+        .annotate(ultimo_pago=Max('fecha_pago'))
+    )
+
+    return activos.exclude(id__in=deudores_ids).annotate(
+        ultimo_pago=Subquery(
+            ultimo_pago_agg.filter(afiliado_id=OuterRef('pk')).values('ultimo_pago')
+        )
+    ).order_by('apellidos', 'nombres')
+
+
+def contar_al_dia(periodo_limite=None):
+    """Número de afiliados activos sin deuda, sin materializar filas."""
+    return al_dia_queryset(periodo_limite=periodo_limite).count()
+
+
 def contar_morosos(periodo_limite=None):
     """
     Número de afiliados activos con deuda, sin materializar filas.
@@ -169,13 +200,36 @@ def contar_morosos(periodo_limite=None):
     return _deuda_queryset(periodo_limite=periodo_limite).count()
 
 
+CAMPOS_AL_DIA = (
+    'id', 'nombres', 'apellidos', 'ci', 'telefono', 'ultimo_pago',
+)
+
+
+def serializar_filas_al_dia(filas, hoy):
+    """Convierte filas de afiliados al día al formato de la API."""
+    for fila in filas:
+        ultimo_pago = fila['ultimo_pago']
+        dias = (hoy - ultimo_pago).days if ultimo_pago else None
+        nombres = (fila.get('nombres') or '').strip()
+        apellidos = (fila.get('apellidos') or '').strip()
+        yield {
+            'afiliado_id': fila['id'],
+            'nombre_completo': f"{nombres} {apellidos}".strip(),
+            'ci': fila['ci'],
+            'telefono': fila['telefono'],
+            'ultimo_pago': str(ultimo_pago) if ultimo_pago else 'Nunca',
+            'dias_desde_ultimo_pago': dias,
+        }
+
+
 def resumen_morosidad(periodo_limite=None, umbral_critico=0, top=5):
     """
     Resumen agregado de morosidad, sin materializar toda la lista.
 
-    Devuelve: {con_deuda, deuda_total, por_nivel, top_deudores, sin_pago}
+    Devuelve: {total_activos, sin_deuda, porcentaje_al_dia, con_deuda, deuda_total, por_nivel, top_deudores, sin_pago}
     """
     from django.utils import timezone
+    from afiliados.models import Afiliado
 
     hoy = timezone.localdate()
     qs = _deuda_queryset(periodo_limite=periodo_limite)
@@ -186,6 +240,10 @@ def resumen_morosidad(periodo_limite=None, umbral_critico=0, top=5):
     )
     con_deuda = totales['con_deuda'] or 0
     deuda_total = float(totales['deuda_total'] or 0)
+
+    total_activos = Afiliado.objects.filter(estado='activo', is_active=True).count()
+    sin_deuda = max(0, total_activos - con_deuda)
+    porcentaje_al_dia = round((sin_deuda / total_activos * 100), 1) if total_activos > 0 else 0.0
 
     por_nivel = {'critico': 0, 'alto': 0, 'moderado': 0, 'bajo': 0}
     top_deudores = []
@@ -206,9 +264,13 @@ def resumen_morosidad(periodo_limite=None, umbral_critico=0, top=5):
         top_deudores = top_deudores[:top]
 
     return {
+        'total_activos': total_activos,
+        'sin_deuda': sin_deuda,
+        'porcentaje_al_dia': porcentaje_al_dia,
         'con_deuda': con_deuda,
         'deuda_total': deuda_total,
         'por_nivel': por_nivel,
         'top_deudores': top_deudores,
         'sin_pago': sin_pago,
     }
+

@@ -660,6 +660,51 @@ class PagoViewSet(viewsets.ModelViewSet):
         })
 
     @action(detail=False, methods=['get'])
+    def reporte_gestion(self, request):
+        """Resumen económico de una gestión (por fechas) para el acta de transferencia.
+
+        No altera la base de datos: los movimientos se asocian a la gestión por
+        su fecha. Incluye el nro_recibo actual como constancia de que la
+        numeración continúa tras el cambio de directorio.
+        """
+        from datetime import date
+        from django.db.models import Max
+
+        def _f(v):
+            try:
+                return date.fromisoformat(v) if v else None
+            except ValueError:
+                return None
+
+        desde = _f(request.query_params.get('desde'))
+        hasta = _f(request.query_params.get('hasta'))
+        if not desde or not hasta:
+            return Response({'detail': 'Parámetros desde y hasta (YYYY-MM-DD) son requeridos'}, status=400)
+
+        total_ingresos = (
+            Pago.objects.filter(fecha_pago__gte=desde, fecha_pago__lte=hasta)
+            .exclude(estado__in=['anulado', 'cancelado'])
+            .aggregate(t=Sum('monto'))['t'] or 0
+        )
+        total_egresos = (
+            Egreso.objects.filter(fecha__gte=desde, fecha__lte=hasta)
+            .exclude(estado='anulado')
+            .aggregate(t=Sum('monto'))['t'] or 0
+        )
+        nro_recibo_actual = (
+            Pago.objects.filter(nro_recibo__isnull=False).aggregate(m=Max('nro_recibo'))['m'] or 0
+        )
+        return Response({
+            'desde': desde,
+            'hasta': hasta,
+            'total_ingresos': total_ingresos,
+            'total_egresos': total_egresos,
+            'saldo': total_ingresos - total_egresos,
+            'nro_recibo_actual': nro_recibo_actual,
+            'nota_numeracion': 'La numeración de recibos continúa sin reiniciarse.',
+        })
+
+    @action(detail=False, methods=['get'])
     def export_excel(self, request):
         """Exportar lista de pagos a Excel"""
         from openpyxl import Workbook

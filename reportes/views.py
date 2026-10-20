@@ -219,23 +219,38 @@ def _resumen_categoria(Pago, tipo_pago, total_activos, fecha_inicio=None, fecha_
 
 class AfiliadosMorososView(APIView):
     """
-    Reporte de afiliados con pagos pendientes.
-    URL: GET /api/reportes/afiliados-morosos/?meses=3
+    Reporte de estado de cuentas por afiliado: deudores vs. afiliados al día (cancelaron).
+    URL: GET /api/reportes/afiliados-morosos/?meses=0&lista=deudores|cancelaron
     """
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         from dateutil.relativedelta import relativedelta
+        from afiliados.models import Afiliado
 
         from reportes_auto.morosidad import (
-            CAMPOS_MOROSO, _deuda_queryset, clave_nivel, nivel_morosidad, serializar_filas,
+            CAMPOS_MOROSO, CAMPOS_AL_DIA, _deuda_queryset, al_dia_queryset,
+            clave_nivel, nivel_morosidad, serializar_filas, serializar_filas_al_dia,
         )
 
-        try:
-            meses_atras = max(1, min(int(request.GET.get('meses', 3)), 36))
-        except (TypeError, ValueError):
-            meses_atras = 3
-        fecha_limite = datetime.now().date() - relativedelta(months=meses_atras)
+        lista = request.GET.get('lista', 'deudores')
+
+        # Soporte para meses=0 o meses=todos -> periodo_limite=None (toda la deuda pendiente)
+        meses_param = request.GET.get('meses', '3')
+        if str(meses_param).strip().lower() in ('0', 'todos', 'all'):
+            fecha_limite = None
+            meses_analizados = 0
+        else:
+            try:
+                meses_atras = max(0, min(int(meses_param), 36))
+            except (TypeError, ValueError):
+                meses_atras = 3
+            if meses_atras == 0:
+                fecha_limite = None
+                meses_analizados = 0
+            else:
+                fecha_limite = datetime.now().date() - relativedelta(months=meses_atras)
+                meses_analizados = meses_atras
 
         try:
             page = max(1, int(request.GET.get('page', 1)))
@@ -246,21 +261,45 @@ class AfiliadosMorososView(APIView):
         except (TypeError, ValueError):
             page_size = 20
 
-        # La deuda se agrega en SQL (subqueries) en vez de una consulta por
-        # afiliado, y el nivel se clasifica con la misma regla que usan el
-        # KPI de morosos y la alerta semanal.
-        morosos_qs = _deuda_queryset(periodo_limite=fecha_limite).order_by('-deuda_total')
-
         hoy = datetime.now().date()
-        total_items = morosos_qs.count()
+        morosos_qs = _deuda_queryset(periodo_limite=fecha_limite).order_by('-deuda_total')
+        total_deudores = morosos_qs.count()
         deuda_total = morosos_qs.aggregate(total=Sum('deuda_total'))['total'] or 0
 
-        # Solo se trae la página pedida a memoria.
+        total_activos = Afiliado.objects.filter(estado='activo', is_active=True).count()
+        total_cancelaron = max(0, total_activos - total_deudores)
+        porcentaje_al_dia = round((total_cancelaron / total_activos * 100), 1) if total_activos > 0 else 0.0
+
+        resumen = {
+            'total_activos': total_activos,
+            'total_deudores': total_deudores,
+            'total_cancelaron': total_cancelaron,
+            'porcentaje_al_dia': porcentaje_al_dia,
+            'monto_por_cobrar': float(deuda_total),
+        }
+
+        if lista == 'cancelaron':
+            al_dia_qs = al_dia_queryset(periodo_limite=fecha_limite)
+            count_cancelaron = al_dia_qs.count()
+            filas = al_dia_qs.values(*CAMPOS_AL_DIA)[(page - 1) * page_size: page * page_size]
+            cancelaron = list(serializar_filas_al_dia(filas, hoy))
+
+            return Response({
+                'count': count_cancelaron,
+                'total_pages': (count_cancelaron + page_size - 1) // page_size if count_cancelaron > 0 else 1,
+                'current_page': page,
+                'page_size': page_size,
+                'deuda_total_sistema': float(deuda_total),
+                'meses_analizados': meses_analizados,
+                'cancelaron': cancelaron,
+                'morosos': [],
+                'resumen': resumen,
+            })
+
+        # Por defecto lista=deudores
         filas = morosos_qs.values(*CAMPOS_MOROSO)[(page - 1) * page_size: page * page_size]
         morosos = list(serializar_filas(filas, hoy))
 
-        # El resumen por nivel se cuenta sobre toda la lista, no solo la página,
-        # para que los badges reflejen el total real.
         niveles = {'critico': 0, 'alto': 0, 'moderado': 0, 'bajo': 0}
         for ultimo in morosos_qs.values_list('ultimo_pago', flat=True):
             dias = (hoy - ultimo).days if ultimo else None
@@ -269,102 +308,252 @@ class AfiliadosMorososView(APIView):
                 niveles[clave] += 1
 
         return Response({
-            'count': total_items,
-            'total_pages': (total_items + page_size - 1) // page_size,
+            'count': total_deudores,
+            'total_pages': (total_deudores + page_size - 1) // page_size if total_deudores > 0 else 1,
             'current_page': page,
             'page_size': page_size,
             'deuda_total_sistema': float(deuda_total),
-            'meses_analizados': meses_atras,
+            'meses_analizados': meses_analizados,
             'morosos': morosos,
             'resumen_por_nivel': niveles,
+            'resumen': resumen,
         })
 
 
 class AfiliadosMorososPDFView(APIView):
     """
-    Genera PDF de afiliados morosos.
+    Genera PDF del Estado de Cuentas: deudores vs. afiliados al día (cancelaron).
     URL: GET /api/reportes/afiliados-morosos/pdf/
     """
     permission_classes = [IsAuthenticated, IsSecretariaOrDirectivaOrSistemas]
 
     def get(self, request):
-        import io
-        from django.http import HttpResponse
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.pagesizes import A4, landscape
-        from reportlab.lib import colors
-        from reportlab.platypus import Table, TableStyle
+        from dateutil.relativedelta import relativedelta
+        from reportes_auto.morosidad import (
+            _deuda_queryset, al_dia_queryset, CAMPOS_MOROSO, CAMPOS_AL_DIA,
+            serializar_filas, serializar_filas_al_dia,
+        )
         from afiliados.models import Afiliado
-        from tesoreria.models import Pago
-        
-        # Logica similar a AfiliadosMorososView para obtener datos
-        afiliados = Afiliado.objects.filter(estado='activo', is_active=True)
-        morosos = []
-        for afiliado in afiliados:
+
+        meses_param = request.GET.get('meses', '0')
+        if str(meses_param).strip().lower() in ('0', 'todos', 'all'):
+            fecha_limite = None
+        else:
             try:
-                deuda_cuotas = afiliado.cuotas.filter(estado='pendiente').aggregate(total=Sum('monto'))['total'] or 0
-                deuda_sanciones = afiliado.sanciones.filter(estado='pendiente').aggregate(total=Sum('monto'))['total'] or 0
-                deuda_total = deuda_cuotas + deuda_sanciones
-                cantidad_faltas = afiliado.asistencias.filter(estado='falta').count()
-                
-                if deuda_total > 0 or cantidad_faltas > 0: # Incluir si tiene deudas O faltas
-                    morosos.append({
-                        'nombre': afiliado.nombre_completo,
-                        'ci': afiliado.ci,
-                        'cuotas': deuda_cuotas,
-                        'sanciones': deuda_sanciones,
-                        'total': deuda_total,
-                        'faltas': cantidad_faltas
-                    })
-            except Exception as e:
-                pass
-                
-        morosos.sort(key=lambda x: x['total'], reverse=True)
-        
-        # Generar PDF
+                meses_atras = max(0, min(int(meses_param), 36))
+            except (TypeError, ValueError):
+                meses_atras = 0
+            fecha_limite = datetime.now().date() - relativedelta(months=meses_atras) if meses_atras > 0 else None
+
+        hoy = datetime.now().date()
+        total_activos = Afiliado.objects.filter(estado='activo', is_active=True).count()
+        morosos_qs = _deuda_queryset(periodo_limite=fecha_limite).order_by('-deuda_total')
+        deudores_filas = list(serializar_filas(morosos_qs.values(*CAMPOS_MOROSO), hoy))
+
+        al_dia_qs = al_dia_queryset(periodo_limite=fecha_limite)
+        al_dia_filas = list(serializar_filas_al_dia(al_dia_qs.values(*CAMPOS_AL_DIA), hoy))
+
+        total_deudores = len(deudores_filas)
+        total_al_dia = len(al_dia_filas)
+        total_cuotas = sum(d['deuda_cuotas'] for d in deudores_filas)
+        total_sanciones = sum(d['deuda_sanciones'] for d in deudores_filas)
+        total_deuda = sum(d['deuda_total'] for d in deudores_filas)
+        porcentaje_al_dia = round((total_al_dia / total_activos * 100), 1) if total_activos > 0 else 0.0
+
         buffer = io.BytesIO()
-        c = canvas.Canvas(buffer, pagesize=landscape(A4))
-        width, height = landscape(A4)
-        
-        # Título
-        c.setFont("Helvetica-Bold", 16)
-        c.drawCentredString(width/2, height - 50, "REPORTE DE ESTADO DE CUENTAS POR AFILIADO")
-        c.setFont("Helvetica", 10)
-        c.drawCentredString(width/2, height - 70, f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-        
-        # Tabla
-        data = [['AFILIADO', 'CARNET', 'FALTAS', 'DEUDA CUOTAS', 'DEUDA MULTAS', 'TOTAL DEUDA']]
-        for m in morosos:
-            data.append([
-                m['nombre'],
-                m['ci'],
-                str(m['faltas']),
-                f"{m['cuotas']:.2f}",
-                f"{m['sanciones']:.2f}",
-                f"{m['total']:.2f}"
-            ])
-            
-        table = Table(data, colWidths=[250, 80, 60, 100, 100, 100])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('ALIGN', (0, 1), (0, -1), 'LEFT'), # Alinear nombres a la izquierda
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            leftMargin=1.5 * cm,
+            rightMargin=1.5 * cm,
+            topMargin=1.2 * cm,
+            bottomMargin=1.2 * cm,
+        )
+        elements = []
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle(
+            'TituloPrincipal',
+            parent=styles['Title'],
+            fontSize=16,
+            leading=20,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor('#1a202c'),
+            spaceAfter=4,
+        )
+        subtitle_style = ParagraphStyle(
+            'Subtitulo',
+            parent=styles['Normal'],
+            fontSize=11,
+            leading=14,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor('#4a5568'),
+            spaceAfter=12,
+        )
+        section_heading_red = ParagraphStyle(
+            'SeccionRoja',
+            parent=styles['Heading2'],
+            fontSize=12,
+            leading=16,
+            textColor=colors.HexColor('#9b2c2c'),
+            spaceBefore=14,
+            spaceAfter=8,
+            keepWithNext=True,
+        )
+        section_heading_green = ParagraphStyle(
+            'SeccionVerde',
+            parent=styles['Heading2'],
+            fontSize=12,
+            leading=16,
+            textColor=colors.HexColor('#22543d'),
+            spaceBefore=16,
+            spaceAfter=8,
+            keepWithNext=True,
+        )
+        cell_style = ParagraphStyle(
+            'CeldaTexto',
+            parent=styles['Normal'],
+            fontSize=8.5,
+            leading=10,
+        )
+        cell_bold = ParagraphStyle(
+            'CeldaTextoBold',
+            parent=cell_style,
+            fontName='Helvetica-Bold',
+        )
+
+        elements.append(Paragraph("SINDICATO MIXTO DE TRANSPORTISTAS", title_style))
+        elements.append(Paragraph(f"ESTADO DE CUENTAS POR AFILIADO — {datetime.now().strftime('%d/%m/%Y %H:%M')}", subtitle_style))
+
+        # ── TABLA RESUMEN GENERAL ──
+        resumen_data = [
+            ['Total Activos', 'Deudores (Pendientes)', 'Al Día (Cancelaron)', '% Al Día', 'Monto Total por Cobrar'],
+            [
+                str(total_activos),
+                str(total_deudores),
+                str(total_al_dia),
+                f"{porcentaje_al_dia}%",
+                f"Bs. {total_deuda:,.2f}",
+            ]
+        ]
+        tabla_resumen = Table(resumen_data, colWidths=[5 * cm, 5.5 * cm, 5.5 * cm, 3.5 * cm, 6 * cm])
+        tabla_resumen.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2b6cb0')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#edf2f7')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e0')),
+            ('TEXTCOLOR', (4, 1), (4, 1), colors.HexColor('#c53030')),
+            ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
         ]))
-        
-        # Dibujar tabla
-        table.wrapOn(c, width, height)
-        table.drawOn(c, 50, height - 120 - (len(data) * 18))
-        
-        c.showPage()
-        c.save()
-        
+        elements.append(tabla_resumen)
+        elements.append(Spacer(1, 10))
+
+        # ── SECCIÓN 1: DEUDORES — MONTO POR COBRAR ──
+        elements.append(Paragraph(f"1. DEUDORES — MONTO POR COBRAR ({total_deudores} afiliados)", section_heading_red))
+        data_deudores = [
+            ['AFILIADO', 'CARNET', 'FALTAS', 'DEUDA CUOTAS', 'DEUDA MULTAS', 'TOTAL DEUDA', 'NIVEL']
+        ]
+        if deudores_filas:
+            for d in deudores_filas:
+                data_deudores.append([
+                    Paragraph(d['nombre_completo'], cell_bold),
+                    d['ci'] or '-',
+                    str(d['cantidad_faltas']),
+                    f"Bs. {d['deuda_cuotas']:.2f}",
+                    f"Bs. {d['deuda_sanciones']:.2f}",
+                    f"Bs. {d['deuda_total']:.2f}",
+                    d['nivel_morosidad'],
+                ])
+            # Fila TOTAL
+            data_deudores.append([
+                'TOTAL POR COBRAR',
+                '',
+                '',
+                f"Bs. {total_cuotas:.2f}",
+                f"Bs. {total_sanciones:.2f}",
+                f"Bs. {total_deuda:.2f}",
+                '',
+            ])
+        else:
+            data_deudores.append(['No se registran afiliados con deuda pendiente.', '', '', '', '', '', ''])
+
+        tabla_deudores = Table(data_deudores, colWidths=[7.5 * cm, 2.5 * cm, 2 * cm, 3.8 * cm, 3.8 * cm, 3.8 * cm, 2.5 * cm], repeatRows=1)
+        estilos_deudores = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#742a2a')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8.5),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+            ('ALIGN', (3, 1), (5, -2 if len(deudores_filas) > 0 else -1), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]
+        if deudores_filas:
+            estilos_deudores.extend([
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#fff5f5')]),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#fed7d7')),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#742a2a')),
+                ('ALIGN', (0, -1), (0, -1), 'LEFT'),
+                ('ALIGN', (3, -1), (5, -1), 'RIGHT'),
+            ])
+        tabla_deudores.setStyle(TableStyle(estilos_deudores))
+        elements.append(tabla_deudores)
+        elements.append(Spacer(1, 12))
+
+        # ── SECCIÓN 2: AFILIADOS QUE CANCELARON (AL DÍA) ──
+        elements.append(Paragraph(f"2. AFILIADOS QUE CANCELARON (AL DÍA) ({total_al_dia} afiliados)", section_heading_green))
+        data_al_dia = [
+            ['AFILIADO', 'CARNET', 'TELÉFONO', 'ÚLTIMO PAGO', 'ESTADO']
+        ]
+        if al_dia_filas:
+            for a in al_dia_filas:
+                data_al_dia.append([
+                    Paragraph(a['nombre_completo'], cell_bold),
+                    a['ci'] or '-',
+                    a['telefono'] or '-',
+                    a['ultimo_pago'],
+                    'Al día',
+                ])
+        else:
+            data_al_dia.append(['No se encontraron afiliados al día.', '', '', '', ''])
+
+        tabla_al_dia = Table(data_al_dia, colWidths=[8 * cm, 3.5 * cm, 4 * cm, 5.5 * cm, 4.5 * cm], repeatRows=1)
+        estilos_al_dia = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#22543d')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8.5),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]
+        if al_dia_filas:
+            estilos_al_dia.extend([
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0fff4')]),
+                ('TEXTCOLOR', (4, 1), (4, -1), colors.HexColor('#276749')),
+                ('FONTNAME', (4, 1), (4, -1), 'Helvetica-Bold'),
+            ])
+        tabla_al_dia.setStyle(TableStyle(estilos_al_dia))
+        elements.append(tabla_al_dia)
+
+        doc.build(elements)
         buffer.seek(0)
-        return HttpResponse(buffer, content_type='application/pdf')
+        return HttpResponse(buffer.getvalue(), content_type='application/pdf')
 
 
 class RutasRentablesView(APIView):

@@ -20,7 +20,7 @@ function Vehiculos() {
   const [modalMode, setModalMode] = useState('create')
   const [submitError, setSubmitError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-  const [form, setForm] = useState({ placa: '', tipo: '', color: '', capacidad: '', estado: 'activo', afiliado: '' })
+  const [form, setForm] = useState({ placa: '', tipo: '', color: '', capacidad: '', estado: 'activo', afiliado: '', indocumentado: false, es_convenio_caranavi: false })
   const [editingId, setEditingId] = useState(null)
 
   useEffect(() => { load() }, [search, filtroEstado, page, pageSize])
@@ -47,7 +47,7 @@ function Vehiculos() {
 
   const openCreate = () => {
     setModalMode('create')
-    setForm({ placa: '', tipo: '', capacidad: '', estado: 'activo', afiliado: '' })
+    setForm({ placa: '', tipo: '', capacidad: '', color: '', estado: 'activo', afiliado: '', indocumentado: false, es_convenio_caranavi: false })
     setSubmitError('')
     setFieldErrors({})
     setShowModal(true)
@@ -55,7 +55,11 @@ function Vehiculos() {
 
   const openEdit = (v) => {
     setModalMode('edit')
-    setForm({ placa: v.placa || '', tipo: v.tipo || '', color: v.color || '', capacidad: String(v.capacidad || ''), estado: v.estado || 'activo', afiliado: v.afiliado || v.afiliado_id || '' })
+    setForm({
+      placa: v.placa || '', tipo: v.tipo || '', color: v.color || '', capacidad: String(v.capacidad || ''),
+      estado: v.estado || 'activo', afiliado: v.afiliado || v.afiliado_id || '',
+      indocumentado: !!v.indocumentado, es_convenio_caranavi: !!v.es_convenio_caranavi,
+    })
     setSubmitError('')
     setFieldErrors({})
     setEditingId(v.id)
@@ -63,8 +67,13 @@ function Vehiculos() {
   }
 
   const onChange = (e) => {
-    const { name, value } = e.target
-    setForm(prev => ({ ...prev, [name]: value }))
+    const { name, value, type, checked } = e.target
+    setForm(prev => {
+      const next = { ...prev, [name]: type === 'checkbox' ? checked : value }
+      if (type === 'checkbox' && name === 'indocumentado' && checked) next.es_convenio_caranavi = false
+      if (type === 'checkbox' && name === 'es_convenio_caranavi' && checked) next.indocumentado = false
+      return next
+    })
   }
 
   const save = async (e) => {
@@ -72,7 +81,16 @@ function Vehiculos() {
     try {
       setSubmitError('')
       setFieldErrors({})
-      const payload = { placa: form.placa, tipo: form.tipo, color: form.color || '', capacidad: parseInt(form.capacidad || '0', 10), estado: form.estado, afiliado: form.afiliado || null }
+      const payload = {
+        placa: form.placa || '',
+        tipo: form.tipo,
+        color: form.color || '',
+        capacidad: parseInt(form.capacidad || '0', 10),
+        estado: form.estado,
+        afiliado: form.afiliado || null,
+        indocumentado: !!form.indocumentado,
+        es_convenio_caranavi: !!form.es_convenio_caranavi,
+      }
       if (modalMode === 'create') {
         await api.createVehiculo(payload)
         toast.success('Vehículo registrado correctamente')
@@ -175,7 +193,12 @@ function Vehiculos() {
                 <tr><td colSpan="6" className="no-data">Sin vehículos</td></tr>
               ) : vehiculos.map(v => (
                 <tr key={v.id}>
-                  <td data-label="Placa"><span style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>{v.placa}</span></td>
+                  <td data-label="Placa">
+                    <span style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>{v.placa}</span>
+                    {v.indocumentado && (
+                      <span className="badge badge-inactivo" style={{ marginLeft: '6px' }} title="Vehículo indocumentado (solo Caranavi)">Sin placa</span>
+                    )}
+                  </td>
                   <td data-label="Tipo" style={{ textTransform: 'capitalize' }}>{v.tipo}</td>
                   <td data-label="Color">
                     {v.color ? (
@@ -217,7 +240,7 @@ function Vehiculos() {
             <form onSubmit={save} className="afiliado-form">
               <div className="form-row">
                 <div className="form-group">
-                  <label htmlFor="placa">Placa *</label>
+                  <label htmlFor="placa">Placa {form.indocumentado ? '(opcional)' : '*'}</label>
                   <input
                     id="placa"
                     name="placa"
@@ -225,6 +248,8 @@ function Vehiculos() {
                     value={form.placa}
                     onChange={onChange}
                     className={fieldErrors.placa ? 'error' : ''}
+                    placeholder={form.indocumentado ? 'Sin placa (se asignará una referencia)' : 'Ej: 1234ABC'}
+                    disabled={form.indocumentado}
                   />
                   {fieldErrors.placa && <div className="error-message">{Array.isArray(fieldErrors.placa) ? fieldErrors.placa[0] : String(fieldErrors.placa)}</div>}
                 </div>
@@ -252,6 +277,37 @@ function Vehiculos() {
                     <option value="otros">Otros</option>
                   </select>
                   {fieldErrors.tipo && <div className="error">{Array.isArray(fieldErrors.tipo) ? fieldErrors.tipo[0] : String(fieldErrors.tipo)}</div>}
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      name="indocumentado"
+                      checked={!!form.indocumentado}
+                      onChange={onChange}
+                    />
+                    Vehículo indocumentado (sin placa)
+                  </label>
+                  <small style={{ color: '#888', display: 'block', marginTop: '2px' }}>
+                    Solo puede realizar el servicio a <strong>Caranavi</strong>.
+                  </small>
+                </div>
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      name="es_convenio_caranavi"
+                      checked={!!form.es_convenio_caranavi}
+                      onChange={onChange}
+                    />
+                    Convenio Caranavi
+                  </label>
+                  <small style={{ color: '#888', display: 'block', marginTop: '2px' }}>
+                    Solo puede realizar el servicio a <strong>La Paz</strong>.
+                  </small>
                 </div>
               </div>
               <div className="form-row">

@@ -252,8 +252,9 @@ function HojasRuta() {
           api.getRutas({ page_size: 200 }),
         ])
         setAfiliados(afRes.data?.results || afRes.data || [])
-        const vehiculosDoc = (veRes.data?.results || veRes.data || []).filter(v => !v.indocumentado)
-        setVehiculos(vehiculosDoc)
+        // Caranavi admite indocumentados; se excluyen los de Convenio Caranavi (solo La Paz)
+        const vehiculosCaranavi = (veRes.data?.results || veRes.data || []).filter(v => !v.es_convenio_caranavi)
+        setVehiculos(vehiculosCaranavi)
         setRutas(ruRes.data?.results || ruRes.data || [])
       }
       setError('')

@@ -122,6 +122,9 @@ export const api = {
     createMiembroDirectorio: (data) => axios.post('/directorio/', data),
     updateMiembroDirectorio: (id, data) => axios.put(`/directorio/${id}/`, data),
     deleteMiembroDirectorio: (id) => axios.delete(`/directorio/${id}/`),
+    getDirectorioVigente: () => axios.get('/directorio/vigente/'),
+    getGestionesDirectorio: () => axios.get('/directorio/gestiones/'),
+    cambioGestionDirectorio: (data) => axios.post('/directorio/cambio_gestion/', data),
 
     // Rutas
     getRutas: (params) => axios.get('/rutas/', { params }),
@@ -138,6 +141,8 @@ export const api = {
     deleteHojaRuta: (id) => axios.delete(`/hojas-ruta/${id}/`),
     generarPdfHoja: (id) => axios.post(`/hojas-ruta/${id}/generar_pdf/`),
     generarPlanillaLaPaz: (id) => axios.get(`/hojas-ruta/${id}/generar_planilla_la_paz/`, { responseType: 'blob' }),
+    // La planilla es la misma para minibus e ipsum; el backend la distingue por el vehículo
+    generarPdfIpsum: (id) => axios.get(`/hojas-ruta/${id}/generar_planilla_la_paz/`, { responseType: 'blob' }),
     enviarHojaWhatsapp: (id, data) => axios.post(`/hojas-ruta/${id}/notificar/`, data),
     validarQr: (id) => axios.get(`/hojas-ruta/${id}/validar_qr/`),
     getPunteroHoy: () => axios.get('/hojas-ruta/puntero_hoy/'),
@@ -336,11 +341,14 @@ export const api = {
     downloadVehiculosReporte: async () => {
         return await downloadFile('/vehiculos/reporte/', 'vehiculos.pdf');
     },
-    downloadDirectorioReporte: async () => {
-        return await downloadFile('/directorio/reporte/', 'directorio.pdf');
+    downloadDirectorioReporte: async (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return await downloadFile(`/directorio/reporte/${q ? '?' + q : ''}`, 'directorio.pdf');
     },
-    downloadAfiliadosMorososPdf: async () => {
-        return await downloadFile('/reportes/afiliados-morosos/pdf/', 'estado_cuentas.pdf');
+    getReporteGestion: (params) => axios.get('/pagos/reporte_gestion/', { params }),
+    downloadAfiliadosMorososPdf: async (params = {}) => {
+        const q = new URLSearchParams(params).toString();
+        return await downloadFile(`/reportes/afiliados-morosos/pdf/${q ? '?' + q : ''}`, 'estado_cuentas.pdf');
     },
     // Excel Exports
     downloadAfiliadosExcel: async (params = {}) => {

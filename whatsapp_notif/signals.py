@@ -46,60 +46,75 @@ except ImportError:
     HOJA_MODEL_AVAILABLE = False
 
 
+import threading
+
+def _run_async(func, *args, **kwargs):
+    """Ejecuta una función en segundo plano para no demorar la respuesta HTTP."""
+    try:
+        t = threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True)
+        t.start()
+    except Exception as e:
+        logger.error(f"Error iniciando hilo asíncrono: {e}")
+
+
 if PAGO_MODEL_AVAILABLE:
     @receiver(post_save, sender=Pago)
     def send_payment_notification(sender, instance, created, **kwargs):
         """
-        Enviar notificación automática cuando se registra un pago
+        Enviar notificación automática cuando se registra un pago (en segundo plano)
         """
         if not created:
             return
         
-        try:
-            # Obtener teléfono del afiliado
-            if hasattr(instance, 'afiliado') and instance.afiliado:
-                phone = instance.afiliado.telefono
-                name = instance.afiliado.nombre_completo
-                
-                whatsapp_service.send_payment_confirmation(
-                    phone=phone,
-                    recipient_name=name,
-                    amount=float(instance.monto),
-                    payment_type=instance.tipo_pago.nombre if hasattr(instance, 'tipo_pago') else 'Pago',
-                    payment_id=instance.id
-                )
-                logger.info(f"Notificación de pago enviada a {name}")
-        
-        except Exception as e:
-            logger.error(f"Error al enviar notificación de pago: {str(e)}")
+        def _do_send():
+            try:
+                # Obtener teléfono del afiliado
+                if hasattr(instance, 'afiliado') and instance.afiliado:
+                    phone = instance.afiliado.telefono
+                    name = instance.afiliado.nombre_completo
+                    
+                    whatsapp_service.send_payment_confirmation(
+                        phone=phone,
+                        recipient_name=name,
+                        amount=float(instance.monto),
+                        payment_type=instance.tipo_pago.nombre if hasattr(instance, 'tipo_pago') else 'Pago',
+                        payment_id=instance.id
+                    )
+                    logger.info(f"Notificación de pago enviada a {name}")
+            except Exception as e:
+                logger.error(f"Error al enviar notificación de pago: {str(e)}")
+
+        _run_async(_do_send)
 
 
 if SANCION_MODEL_AVAILABLE:
     @receiver(post_save, sender=Sancion)
     def send_sanction_notification(sender, instance, created, **kwargs):
         """
-        Enviar notificación automática cuando se aplica una sanción
+        Enviar notificación automática cuando se aplica una sanción (en segundo plano)
         """
         if not created:
             return
         
-        try:
-            # Obtener teléfono del afiliado
-            if hasattr(instance, 'afiliado') and instance.afiliado:
-                phone = instance.afiliado.telefono
-                name = instance.afiliado.nombre_completo
-                
-                whatsapp_service.send_sanction_notice(
-                    phone=phone,
-                    recipient_name=name,
-                    sanction_type=instance.descripcion if hasattr(instance, 'descripcion') else 'Sanción',
-                    amount=float(instance.monto),
-                    sanction_id=instance.id
-                )
-                logger.info(f"Notificación de sanción enviada a {name}")
-        
-        except Exception as e:
-            logger.error(f"Error al enviar notificación de sanción: {str(e)}")
+        def _do_send():
+            try:
+                # Obtener teléfono del afiliado
+                if hasattr(instance, 'afiliado') and instance.afiliado:
+                    phone = instance.afiliado.telefono
+                    name = instance.afiliado.nombre_completo
+                    
+                    whatsapp_service.send_sanction_notice(
+                        phone=phone,
+                        recipient_name=name,
+                        sanction_type=instance.descripcion if hasattr(instance, 'descripcion') else 'Sanción',
+                        amount=float(instance.monto),
+                        sanction_id=instance.id
+                    )
+                    logger.info(f"Notificación de sanción enviada a {name}")
+            except Exception as e:
+                logger.error(f"Error al enviar notificación de sanción: {str(e)}")
+
+        _run_async(_do_send)
 
 
 if RESERVA_MODEL_AVAILABLE:

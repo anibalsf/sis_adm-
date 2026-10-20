@@ -473,3 +473,131 @@ def test_reporte_egresos_por_categoria(authenticated_client, tipo_egreso):
     assert response.data['resumen']['total_egresos'] == 300.0
     assert response.data['resumen']['count_egresos'] == 1
     assert len(response.data['egresos']) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Estado de Cuentas: quiénes cancelaron vs. deudores con monto por cobrar
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.django_db
+def test_al_dia_queryset_excluye_afiliados_con_deuda(afiliado, otro_afiliado):
+    from cuotas.models import Cuota
+    from sanciones.models import Sancion
+    from reportes_auto.morosidad import al_dia_queryset, _deuda_queryset
+
+    tercer_afiliado = Afiliado.objects.create(
+        nombres='Carlos', apellidos='Al Dia', ci='99887766',
+        fecha_ingreso=date(2026, 1, 1), estado='activo',
+    )
+
+    # afiliado tiene cuota pendiente
+    Cuota.objects.create(
+        afiliado=afiliado, periodo=date(2026, 9, 1), monto=100, estado='pendiente'
+    )
+    # otro_afiliado tiene sanción pendiente
+    Sancion.objects.create(
+        afiliado=otro_afiliado, tipo='Falta', monto=50, estado='pendiente'
+    )
+
+    deudores_ids = set(_deuda_queryset().values_list('id', flat=True))
+    assert afiliado.id in deudores_ids
+    assert otro_afiliado.id in deudores_ids
+    assert tercer_afiliado.id not in deudores_ids
+
+    al_dia_ids = list(al_dia_queryset().values_list('id', flat=True))
+    assert tercer_afiliado.id in al_dia_ids
+    assert afiliado.id not in al_dia_ids
+    assert otro_afiliado.id not in al_dia_ids
+
+
+@pytest.mark.django_db
+def test_resumen_morosidad_incluye_sin_deuda(afiliado, otro_afiliado):
+    from cuotas.models import Cuota
+    from reportes_auto.morosidad import resumen_morosidad
+
+    # Solo afiliado tiene deuda
+    Cuota.objects.create(
+        afiliado=afiliado, periodo=date(2026, 9, 1), monto=100, estado='pendiente'
+    )
+
+    res = resumen_morosidad()
+    assert res['total_activos'] >= 2
+    assert res['con_deuda'] == 1
+    assert res['sin_deuda'] == res['total_activos'] - 1
+    assert res['porcentaje_al_dia'] > 0
+
+
+@pytest.mark.django_db
+def test_vista_lista_cancelaron(authenticated_client, afiliado, otro_afiliado):
+    from cuotas.models import Cuota
+
+    # afiliado debe, otro_afiliado está al día
+    Cuota.objects.create(
+        afiliado=afiliado, periodo=date(2026, 9, 1), monto=100, estado='pendiente'
+    )
+
+    response = authenticated_client.get('/api/reportes/afiliados-morosos/?lista=cancelaron&meses=0')
+    assert response.status_code == 200
+    data = response.data
+
+    assert 'cancelaron' in data
+    assert 'resumen' in data
+    assert data['resumen']['total_deudores'] == 1
+    assert data['resumen']['total_cancelaron'] >= 1
+    assert any(c['afiliado_id'] == otro_afiliado.id for c in data['cancelaron'])
+    assert not any(c['afiliado_id'] == afiliado.id for c in data['cancelaron'])
+
+
+@pytest.mark.django_db
+def test_meses_cero_sin_limite_de_periodo(authenticated_client, afiliado):
+    from cuotas.models import Cuota
+
+    # Cuota del mes actual
+    hoy_primer_dia = date.today().replace(day=1)
+    Cuota.objects.create(
+        afiliado=afiliado, periodo=hoy_primer_dia, monto=80, estado='pendiente'
+    )
+
+    # Con meses=0 debe figurar como deudor (sin límite de fecha)
+    response = authenticated_client.get('/api/reportes/afiliados-morosos/?meses=0')
+    assert response.status_code == 200
+    morosos_ids = [m['afiliado_id'] for m in response.data['morosos']]
+    assert afiliado.id in morosos_ids
+    assert response.data['resumen']['monto_por_cobrar'] >= 80.0
+
+
+@pytest.mark.django_db
+def test_vista_sigue_devolviendo_morosos_por_defecto(authenticated_client, afiliado):
+    from cuotas.models import Cuota
+
+    Cuota.objects.create(
+        afiliado=afiliado, periodo=date(2026, 1, 1), monto=100, estado='pendiente'
+    )
+
+    response = authenticated_client.get('/api/reportes/afiliados-morosos/')
+    assert response.status_code == 200
+    data = response.data
+
+    # Campos esperados por DashboardMejorado y ChatbotWidget
+    assert 'morosos' in data
+    assert 'count' in data
+    assert 'deuda_total_sistema' in data
+    assert 'resumen_por_nivel' in data
+    assert 'resumen' in data
+    assert data['count'] >= 1
+
+
+@pytest.mark.django_db
+def test_pdf_estado_cuentas_se_genera_con_deudores_y_cancelaron(
+    authenticated_client, afiliado, otro_afiliado
+):
+    from cuotas.models import Cuota
+
+    Cuota.objects.create(
+        afiliado=afiliado, periodo=date(2026, 9, 1), monto=100, estado='pendiente'
+    )
+
+    response = authenticated_client.get('/api/reportes/afiliados-morosos/pdf/?meses=0')
+    assert response.status_code == 200
+    assert response['Content-Type'] == 'application/pdf'
+    assert response.content.startswith(b'%PDF')

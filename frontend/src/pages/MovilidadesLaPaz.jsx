@@ -153,7 +153,9 @@ export default function MovilidadesLaPaz() {
                 {!loading && !error && data && data.found && (
                     <>
                         <div className="mlp-fecha-badge">
-                            📅 Turnos del día:{' '}
+                            📅 {new Date(data.fecha + 'T12:00:00').toDateString() === new Date().toDateString()
+                                ? 'Turnos del día: '
+                                : 'Próxima salida programada: '}
                             {new Date(data.fecha + 'T12:00:00').toLocaleDateString('es-BO', {
                                 weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
                             })}
