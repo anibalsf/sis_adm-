@@ -3,7 +3,7 @@ Cálculo de morosidad compartido entre el reporte de estado de cuentas
 (`/api/reportes/afiliados-morosos/`), el KPI de morosos y la alerta
 semanal por WhatsApp.
 
-Definición de deuda: cuotas pendientes + sanciones pendientes.
+Definición de deuda: cuotas pendientes + sanciones pendientes/notificadas.
 Antes cada consumidor calculaba algo distinto (el KPI usaba
 `estado='pasivo'`, la alerta solo sanciones con umbral 200 Bs), lo que
 hacía que los tres mostraran números diferentes.
@@ -16,6 +16,16 @@ from django.db.models import Count, DecimalField, IntegerField, Max, Subquery, S
 from django.db.models.functions import Coalesce
 
 logger = logging.getLogger(__name__)
+
+# Estados que representan una sanción aún no cancelada
+SANCION_ESTADOS_PENDIENTES = ['pendiente', 'notificada']
+
+ETIQUETAS_TIPO_CUOTA = {
+    'mensual': 'Cuota Mensual',
+    'anual': 'Cuota Anual',
+    'afiliacion': 'Afiliación',
+    'aporte': 'Aporte',
+}
 
 # Umbrales en días desde el último pago válido
 NIVELES = (
@@ -49,6 +59,81 @@ def clave_nivel(nivel):
     return ''.join(c for c in descompuesto if not unicodedata.combining(c)).lower()
 
 
+def etiqueta_tipo_cuota(tipo):
+    """Nombre legible para el tipo de cuota/aporte (mensual, afiliación, etc.)."""
+    clave = (tipo or '').strip().lower()
+    if clave in ETIQUETAS_TIPO_CUOTA:
+        return ETIQUETAS_TIPO_CUOTA[clave]
+    return f"Aporte / Cuota {(tipo or '').capitalize()}"
+
+
+def detalle_deuda_afiliados(afiliado_ids, periodo_limite=None):
+    """
+    Detalle de todos los conceptos pendientes (aportes/cuotas y sanciones)
+    por afiliado, para el estado de cuentas.
+    """
+    from cuotas.models import Cuota
+    from sanciones.models import Sancion
+
+    ids = list(afiliado_ids)
+    detalle = {aid: {'aportes': [], 'sanciones': []} for aid in ids}
+
+    cuotas = Cuota.objects.filter(afiliado_id__in=ids, estado='pendiente')
+    if periodo_limite is not None:
+        cuotas = cuotas.filter(periodo__lt=periodo_limite)
+    for c in cuotas.order_by('periodo', 'tipo'):
+        detalle[c.afiliado_id]['aportes'].append({
+            'id': c.id,
+            'tipo': c.tipo,
+            'etiqueta': etiqueta_tipo_cuota(c.tipo),
+            'periodo': c.periodo.strftime('%m/%Y') if c.periodo else '',
+            'fecha_periodo': c.periodo.isoformat() if c.periodo else None,
+            'monto': float(c.monto),
+        })
+
+    sanciones = Sancion.objects.filter(
+        afiliado_id__in=ids, estado__in=SANCION_ESTADOS_PENDIENTES
+    )
+    for s in sanciones.order_by('-created_at'):
+        fecha = s.created_at.date() if s.created_at else None
+        detalle[s.afiliado_id]['sanciones'].append({
+            'id': s.id,
+            'tipo': s.tipo,
+            'motivo': s.motivo or '',
+            'fecha': fecha.isoformat() if fecha else None,
+            'monto': float(s.monto),
+        })
+
+    return detalle
+
+
+def resumen_aportes_por_tipo(periodo_limite=None):
+    """
+    Totales pendientes agrupados por tipo de cuota/aporte, solo afiliados activos.
+    """
+    from cuotas.models import Cuota
+
+    cuotas = Cuota.objects.filter(
+        estado='pendiente',
+        afiliado__estado='activo',
+        afiliado__is_active=True,
+    )
+    if periodo_limite is not None:
+        cuotas = cuotas.filter(periodo__lt=periodo_limite)
+
+    return [
+        {
+            'tipo': fila['tipo'],
+            'etiqueta': etiqueta_tipo_cuota(fila['tipo']),
+            'cantidad': fila['cantidad'],
+            'monto': float(fila['monto'] or 0),
+        }
+        for fila in cuotas.values('tipo')
+        .annotate(cantidad=Count('id'), monto=Sum('monto'))
+        .order_by('-monto')
+    ]
+
+
 def _deuda_queryset(periodo_limite=None):
     """
     Queryset de afiliados activos anotado con su deuda y último pago.
@@ -77,7 +162,7 @@ def _deuda_queryset(periodo_limite=None):
         )
     )
     sanciones_agg = (
-        Sancion.objects.filter(estado='pendiente')
+        Sancion.objects.filter(estado__in=SANCION_ESTADOS_PENDIENTES)
         .values('afiliado_id')
         .annotate(
             deuda_sanciones=Sum('monto'),

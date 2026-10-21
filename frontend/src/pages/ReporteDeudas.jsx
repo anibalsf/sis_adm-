@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import YapeQRModal from '../components/YapeQRModal';
 import { Pie } from 'react-chartjs-2';
@@ -10,6 +10,7 @@ import {
     Legend
 } from 'chart.js';
 import './ReportesFinancieros.css'; // Reutilizamos estilos
+import '../css/Common.css'; // Modales
 
 ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
 
@@ -28,26 +29,39 @@ function ReporteDeudas() {
         total_deudores: 0,
         total_cancelaron: 0,
         porcentaje_al_dia: 0,
-        monto_por_cobrar: 0
+        monto_por_cobrar: 0,
+        monto_cuotas: 0,
+        monto_sanciones: 0,
+        aportes_por_tipo: []
     });
 
     // QR States
     const [qrData, setQrData] = useState(null);
     const [verificandoPago, setVerificandoPago] = useState(false);
 
+    // Detalle de deuda (aportes/cuotas y multas)
+    const [detalleAfiliado, setDetalleAfiliado] = useState(null);
+
+    // Identifica la última petición para descartar respuestas viejas al cambiar de pestaña
+    const requestIdRef = useRef(0);
+
     useEffect(() => {
         loadData(pagina, subTab);
     }, [pagina, subTab]);
 
     const loadData = async (page = 1, currentSubTab = subTab) => {
+        const requestId = ++requestIdRef.current;
         try {
             setLoading(true);
             const res = await api.getAfiliadosMorosos({
                 page,
                 page_size: 20,
                 lista: currentSubTab,
-                meses: 0 // Toda la deuda pendiente para Estado de Cuentas
+                meses: 0, // Toda la deuda pendiente para Estado de Cuentas
+                incluir_detalle: 'true'
             });
+
+            if (requestId !== requestIdRef.current) return;
 
             if (res.data) {
                 if (currentSubTab === 'cancelaron') {
@@ -57,17 +71,18 @@ function ReporteDeudas() {
                 }
 
                 if (res.data.resumen) {
-                    setResumen(res.data.resumen);
+                    setResumen(prev => ({ ...prev, ...res.data.resumen }));
                 }
                 setPaginasTotales(res.data.total_pages || 1);
                 setTotalItems(res.data.count || 0);
             }
             setError('');
         } catch (err) {
+            if (requestId !== requestIdRef.current) return;
             setError('Error al cargar reporte de estado de cuentas');
             console.error(err);
         } finally {
-            setLoading(false);
+            if (requestId === requestIdRef.current) setLoading(false);
         }
     };
 
@@ -76,6 +91,7 @@ function ReporteDeudas() {
         setSubTab(newTab);
         setPagina(1);
         setSearchTerm('');
+        setAfiliados([]);
     };
 
     const handlePagarTotal = async (afiliado) => {
@@ -131,6 +147,11 @@ function ReporteDeudas() {
         return nombre.includes(term) || ci.includes(term) || telf.includes(term);
     });
 
+    const detalleAportes = detalleAfiliado?.detalle_aportes || [];
+    const detalleSanciones = detalleAfiliado?.detalle_sanciones || [];
+    const totalDetalleAportes = detalleAportes.reduce((sum, a) => sum + a.monto, 0);
+    const totalDetalleSanciones = detalleSanciones.reduce((sum, s) => sum + s.monto, 0);
+
     if (loading && afiliados.length === 0) {
         return <div className="loading">Cargando estado de cuentas...</div>;
     }
@@ -142,7 +163,7 @@ function ReporteDeudas() {
             <div className="report-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '1rem' }}>
                 <div>
                     <h1>Estado de Cuentas por Afiliado</h1>
-                    <p>Quiénes cancelaron vs. deudores con monto total por cobrar.</p>
+                    <p>Quiénes cancelaron vs. deudores, con el detalle de todos sus aportes, cuotas y multas pendientes.</p>
                 </div>
                 <button className="btn btn-primary" onClick={handleDownloadPdf}>
                     📄 Descargar Reporte PDF
@@ -158,7 +179,9 @@ function ReporteDeudas() {
                         <div className="metric-value" style={{ color: '#e53e3e', fontSize: '1.45rem' }}>
                             Bs. {resumen.monto_por_cobrar.toFixed(2)}
                         </div>
-                        <p style={{ fontSize: '0.85rem', color: '#718096' }}>Total adeudado en cuotas y multas</p>
+                        <p style={{ fontSize: '0.85rem', color: '#718096' }}>
+                            Aportes/Cuotas: Bs. {resumen.monto_cuotas.toFixed(2)} · Multas: Bs. {resumen.monto_sanciones.toFixed(2)}
+                        </p>
                     </div>
 
                     <div className="metric-card" style={{ borderLeft: '4px solid #dd6b20' }}>
@@ -262,6 +285,28 @@ function ReporteDeudas() {
                 </div>
             </div>
 
+            {/* Resumen de aportes/cuotas pendientes por tipo */}
+            {subTab === 'deudores' && resumen.aportes_por_tipo.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', margin: '0 0 0.5rem' }}>
+                    {resumen.aportes_por_tipo.map(t => (
+                        <div
+                            key={t.tipo}
+                            style={{
+                                background: '#fff5f5',
+                                border: '1px solid #feb2b2',
+                                borderRadius: '8px',
+                                padding: '0.4rem 0.75rem',
+                                fontSize: '0.85rem',
+                                color: '#742a2a'
+                            }}
+                        >
+                            {t.etiqueta}: <strong>Bs. {t.monto.toFixed(2)}</strong>
+                            <span style={{ color: '#975a5a' }}> ({t.cantidad} pend.)</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Tabla de Resultados */}
             <div className="table-container" style={{ marginTop: '10px' }}>
                 {subTab === 'deudores' ? (
@@ -302,14 +347,14 @@ function ReporteDeudas() {
                                         </td>
                                         <td>
                                             {a.deuda_cuotas > 0 && <div style={{ fontSize: '0.85em', color: '#666' }}>{a.cantidad_cuotas_pendientes} pendientes</div>}
-                                            Bs. {a.deuda_cuotas.toFixed(2)}
+                                            Bs. {Number(a.deuda_cuotas || 0).toFixed(2)}
                                         </td>
                                         <td>
                                             {a.deuda_sanciones > 0 && <div style={{ fontSize: '0.85em', color: '#666' }}>{a.cantidad_sanciones_pendientes} pendientes</div>}
-                                            Bs. {a.deuda_sanciones.toFixed(2)}
+                                            Bs. {Number(a.deuda_sanciones || 0).toFixed(2)}
                                         </td>
                                         <td style={{ fontWeight: 'bold', color: a.deuda_total > 500 ? '#c53030' : 'inherit' }}>
-                                            Bs. {a.deuda_total.toFixed(2)}
+                                            Bs. {Number(a.deuda_total || 0).toFixed(2)}
                                         </td>
                                         <td>
                                             <span className="badge" style={{
@@ -323,16 +368,26 @@ function ReporteDeudas() {
                                             </span>
                                         </td>
                                         <td>
-                                            {a.deuda_total > 0 && (
+                                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
                                                 <button
                                                     className="btn btn-action"
-                                                    title="Pagar Todo con Yape (QR)"
-                                                    onClick={() => handlePagarTotal(a)}
+                                                    title="Ver detalle de aportes, cuotas y multas"
+                                                    onClick={() => setDetalleAfiliado(a)}
                                                     style={{ fontSize: '1.2rem', padding: '5px' }}
                                                 >
-                                                    📱
+                                                    🔍
                                                 </button>
-                                            )}
+                                                {a.deuda_total > 0 && (
+                                                    <button
+                                                        className="btn btn-action"
+                                                        title="Pagar Todo con Yape (QR)"
+                                                        onClick={() => handlePagarTotal(a)}
+                                                        style={{ fontSize: '1.2rem', padding: '5px' }}
+                                                    >
+                                                        📱
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -434,6 +489,120 @@ function ReporteDeudas() {
                     (Total: {totalItems})
                 </span>
             </div>
+
+            {/* Detalle de deuda del afiliado: aportes, cuotas y multas */}
+            {detalleAfiliado && (
+                <div className="modal-overlay" onClick={() => setDetalleAfiliado(null)}>
+                    <div className="modal-content" style={{ maxWidth: '820px', width: '96%' }} onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div>
+                                <h2 style={{ margin: 0 }}>Estado de Cuenta</h2>
+                                <div style={{ color: '#4a5568', fontSize: '0.95rem', marginTop: '4px' }}>
+                                    {detalleAfiliado.nombre_completo} · CI {detalleAfiliado.ci || '-'}
+                                </div>
+                            </div>
+                            <button className="modal-close" onClick={() => setDetalleAfiliado(null)}>✕</button>
+                        </div>
+
+                        <h3 style={{ fontSize: '1rem', color: '#2d3748', margin: '0 0 8px' }}>
+                            Aportes y Cuotas Pendientes ({detalleAportes.length})
+                        </h3>
+                        <div className="table-container" style={{ marginBottom: '1.25rem' }}>
+                            <table className="vehiculos-table">
+                                <thead>
+                                    <tr>
+                                        <th>Concepto</th>
+                                        <th>Período</th>
+                                        <th style={{ textAlign: 'right' }}>Monto</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {detalleAportes.length === 0 ? (
+                                        <tr><td colSpan="3" className="no-data">Sin aportes o cuotas pendientes</td></tr>
+                                    ) : detalleAportes.map(a => (
+                                        <tr key={`aporte-${a.id}`}>
+                                            <td>{a.etiqueta}</td>
+                                            <td>{a.periodo || '-'}</td>
+                                            <td style={{ textAlign: 'right' }}>Bs. {a.monto.toFixed(2)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                {detalleAportes.length > 0 && (
+                                    <tfoot>
+                                        <tr style={{ background: '#fff5f5' }}>
+                                            <td colSpan="2" style={{ textAlign: 'right', fontWeight: 'bold' }}>Total aportes/cuotas:</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#c53030' }}>Bs. {totalDetalleAportes.toFixed(2)}</td>
+                                        </tr>
+                                    </tfoot>
+                                )}
+                            </table>
+                        </div>
+
+                        <h3 style={{ fontSize: '1rem', color: '#2d3748', margin: '0 0 8px' }}>
+                            Multas Pendientes ({detalleSanciones.length})
+                        </h3>
+                        <div className="table-container" style={{ marginBottom: '1.25rem' }}>
+                            <table className="vehiculos-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Motivo</th>
+                                        <th>Fecha</th>
+                                        <th style={{ textAlign: 'right' }}>Monto</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {detalleSanciones.length === 0 ? (
+                                        <tr><td colSpan="4" className="no-data">Sin multas pendientes</td></tr>
+                                    ) : detalleSanciones.map(s => (
+                                        <tr key={`sancion-${s.id}`}>
+                                            <td>{s.tipo}</td>
+                                            <td>{s.motivo || '-'}</td>
+                                            <td>{s.fecha ? s.fecha.split('-').reverse().join('/') : '-'}</td>
+                                            <td style={{ textAlign: 'right' }}>Bs. {s.monto.toFixed(2)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                {detalleSanciones.length > 0 && (
+                                    <tfoot>
+                                        <tr style={{ background: '#fff5f5' }}>
+                                            <td colSpan="3" style={{ textAlign: 'right', fontWeight: 'bold' }}>Total multas:</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#c53030' }}>Bs. {totalDetalleSanciones.toFixed(2)}</td>
+                                        </tr>
+                                    </tfoot>
+                                )}
+                            </table>
+                        </div>
+
+                        <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '0.9rem 1rem', background: '#fff5f5', borderRadius: '10px',
+                            border: '1px solid #feb2b2', flexWrap: 'wrap', gap: '0.75rem'
+                        }}>
+                            <div style={{ fontSize: '1rem', fontWeight: '700', color: '#742a2a' }}>
+                                DEUDA TOTAL: Bs. {(totalDetalleAportes + totalDetalleSanciones).toFixed(2)}
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button className="btn btn-secondary" onClick={() => setDetalleAfiliado(null)}>
+                                    Cerrar
+                                </button>
+                                {detalleAfiliado.deuda_total > 0 && (
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={() => {
+                                            const afiliado = detalleAfiliado;
+                                            setDetalleAfiliado(null);
+                                            handlePagarTotal(afiliado);
+                                        }}
+                                    >
+                                        📱 Pagar todo con QR
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal de Pago QR (Yape) Reutilizable */}
             <YapeQRModal

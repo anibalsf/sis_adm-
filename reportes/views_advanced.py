@@ -17,7 +17,7 @@ from hojasruta.models import HojaRuta
 from afiliados.models import Afiliado
 from vehiculos.models import Vehiculo
 from rutas.models import Ruta
-from reservas.models import Reserva
+from reservas.models import Reserva, ESTADOS_ACTIVOS
 
 # Porcentaje estimado de costo operativo sobre la tarifa base, usado como fallback
 # cuando la ruta no tiene un costo real configurado.
@@ -111,7 +111,8 @@ class RentabilidadRutasView(APIView):
             reservas_asientos = Reserva.objects.filter(
                 ruta=ruta,
                 fecha_viaje__gte=fecha_inicio,
-                fecha_viaje__lte=fecha_fin
+                fecha_viaje__lte=fecha_fin,
+                estado__in=ESTADOS_ACTIVOS
             ).aggregate(total=Sum('cantidad'))['total'] or 0
             ingresos_reservas = float(reservas_asientos) * float(ruta.tarifa_base or 0)
             
@@ -135,7 +136,8 @@ class RentabilidadRutasView(APIView):
             asientos_ocupados = Reserva.objects.filter(
                 ruta=ruta,
                 fecha_viaje__gte=fecha_inicio,
-                fecha_viaje__lte=fecha_fin
+                fecha_viaje__lte=fecha_fin,
+                estado__in=ESTADOS_ACTIVOS
             ).aggregate(total=Sum('cantidad'))['total'] or 0
             
             ocupacion = (asientos_ocupados / total_asientos * 100) if total_asientos > 0 else 0
@@ -184,7 +186,8 @@ class KPIsEjecutivosView(APIView):
         )['total'] or (hojas_mes.count() * 15)
         
         reservas_mes = Reserva.objects.filter(
-            fecha_viaje__gte=inicio_mes
+            fecha_viaje__gte=inicio_mes,
+            estado__in=ESTADOS_ACTIVOS
         ).aggregate(total=Sum('cantidad'))['total'] or 0
         
         tasa_ocupacion = (reservas_mes / total_asientos * 100) if total_asientos > 0 else 0

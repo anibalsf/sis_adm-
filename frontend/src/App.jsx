@@ -50,7 +50,7 @@ const PageLoader = () => (
     </div>
 );
 
-function MainLayout() {
+function MainLayout({ children = null }) {
     const { user, isAuthenticated, loading } = useAuth();
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -79,6 +79,7 @@ function MainLayout() {
                 <div className="content">
                     <ErrorBoundary>
                         <Suspense fallback={<PageLoader />}>
+                            {children || (
                             <Routes>
                                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                                 <Route path="/dashboard" element={<DashboardMejorado />} />
@@ -104,6 +105,7 @@ function MainLayout() {
                                 <Route path="/encomiendas" element={<Encomiendas />} />
                                 <Route path="/whatsapp" element={<WhatsAppAdmin />} />
                             </Routes>
+                            )}
                         </Suspense>
                     </ErrorBoundary>
                 </div>
@@ -121,9 +123,10 @@ function ReservasEntry() {
         return <PageLoader />;
     }
 
-    // El QR debe abrir /reservas sin exigir una cuenta. El personal autenticado
-    // conserva el módulo interno de gestión en la misma dirección.
-    return isAuthenticated ? <MainLayout /> : <MovilidadesLaPaz />;
+    // El QR público debe abrir la pizarra de salidas. Se mantiene /reservas
+    // como redirección para los QR impresos anteriormente. El personal
+    // autenticado conserva el módulo interno de gestión en esta dirección.
+    return isAuthenticated ? <MainLayout><Reservas /></MainLayout> : <Navigate to="/pizarra" replace />;
 }
 
 function Home() {

@@ -470,8 +470,8 @@ const DashboardMejorado = () => {
                     </div>
                 </Link>
                 <a 
-                    href="/QR_RESERVAS_TAIPIPLAYA.png" 
-                    download="QR_RESERVAS_TAIPIPLAYA.png"
+                    href="/QR_PIZARRA_LA_PAZ.png"
+                    download="QR_PIZARRA_LA_PAZ.png"
                     className="quick-card-link" 
                     style={{
                         background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
@@ -490,8 +490,8 @@ const DashboardMejorado = () => {
                 >
                     <span style={{ fontSize: '1.5rem' }}>⬇️</span>
                     <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Descargar QR Reservas</div>
-                        <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>Para imprimir y colocar en oficina</div>
+                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Descargar QR La Paz</div>
+                        <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>Abre la pizarra con el socio asignado</div>
                     </div>
                 </a>
                 <a 

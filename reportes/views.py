@@ -231,9 +231,13 @@ class AfiliadosMorososView(APIView):
         from reportes_auto.morosidad import (
             CAMPOS_MOROSO, CAMPOS_AL_DIA, _deuda_queryset, al_dia_queryset,
             clave_nivel, nivel_morosidad, serializar_filas, serializar_filas_al_dia,
+            detalle_deuda_afiliados, resumen_aportes_por_tipo,
         )
 
         lista = request.GET.get('lista', 'deudores')
+        incluir_detalle = str(request.GET.get('incluir_detalle', '')).strip().lower() in (
+            '1', 'true', 'si', 'sí', 'yes'
+        )
 
         # Soporte para meses=0 o meses=todos -> periodo_limite=None (toda la deuda pendiente)
         meses_param = request.GET.get('meses', '3')
@@ -264,7 +268,14 @@ class AfiliadosMorososView(APIView):
         hoy = datetime.now().date()
         morosos_qs = _deuda_queryset(periodo_limite=fecha_limite).order_by('-deuda_total')
         total_deudores = morosos_qs.count()
-        deuda_total = morosos_qs.aggregate(total=Sum('deuda_total'))['total'] or 0
+        totales = morosos_qs.aggregate(
+            cuotas=Sum('deuda_cuotas'),
+            sanciones=Sum('deuda_sanciones'),
+            total=Sum('deuda_total'),
+        )
+        deuda_total = totales['total'] or 0
+        monto_cuotas = totales['cuotas'] or 0
+        monto_sanciones = totales['sanciones'] or 0
 
         total_activos = Afiliado.objects.filter(estado='activo', is_active=True).count()
         total_cancelaron = max(0, total_activos - total_deudores)
@@ -276,6 +287,9 @@ class AfiliadosMorososView(APIView):
             'total_cancelaron': total_cancelaron,
             'porcentaje_al_dia': porcentaje_al_dia,
             'monto_por_cobrar': float(deuda_total),
+            'monto_cuotas': float(monto_cuotas),
+            'monto_sanciones': float(monto_sanciones),
+            'aportes_por_tipo': resumen_aportes_por_tipo(periodo_limite=fecha_limite),
         }
 
         if lista == 'cancelaron':
@@ -299,6 +313,15 @@ class AfiliadosMorososView(APIView):
         # Por defecto lista=deudores
         filas = morosos_qs.values(*CAMPOS_MOROSO)[(page - 1) * page_size: page * page_size]
         morosos = list(serializar_filas(filas, hoy))
+
+        if incluir_detalle and morosos:
+            detalles = detalle_deuda_afiliados(
+                [m['afiliado_id'] for m in morosos], periodo_limite=fecha_limite
+            )
+            for m in morosos:
+                det = detalles.get(m['afiliado_id'], {'aportes': [], 'sanciones': []})
+                m['detalle_aportes'] = det['aportes']
+                m['detalle_sanciones'] = det['sanciones']
 
         niveles = {'critico': 0, 'alto': 0, 'moderado': 0, 'bajo': 0}
         for ultimo in morosos_qs.values_list('ultimo_pago', flat=True):
@@ -332,6 +355,7 @@ class AfiliadosMorososPDFView(APIView):
         from reportes_auto.morosidad import (
             _deuda_queryset, al_dia_queryset, CAMPOS_MOROSO, CAMPOS_AL_DIA,
             serializar_filas, serializar_filas_al_dia,
+            detalle_deuda_afiliados, resumen_aportes_por_tipo,
         )
         from afiliados.models import Afiliado
 
@@ -349,6 +373,10 @@ class AfiliadosMorososPDFView(APIView):
         total_activos = Afiliado.objects.filter(estado='activo', is_active=True).count()
         morosos_qs = _deuda_queryset(periodo_limite=fecha_limite).order_by('-deuda_total')
         deudores_filas = list(serializar_filas(morosos_qs.values(*CAMPOS_MOROSO), hoy))
+        detalle_deudores = detalle_deuda_afiliados(
+            [d['afiliado_id'] for d in deudores_filas], periodo_limite=fecha_limite
+        )
+        aportes_por_tipo = resumen_aportes_por_tipo(periodo_limite=fecha_limite)
 
         al_dia_qs = al_dia_queryset(periodo_limite=fecha_limite)
         al_dia_filas = list(serializar_filas_al_dia(al_dia_qs.values(*CAMPOS_AL_DIA), hoy))
@@ -511,8 +539,108 @@ class AfiliadosMorososPDFView(APIView):
         elements.append(tabla_deudores)
         elements.append(Spacer(1, 12))
 
-        # ── SECCIÓN 2: AFILIADOS QUE CANCELARON (AL DÍA) ──
-        elements.append(Paragraph(f"2. AFILIADOS QUE CANCELARON (AL DÍA) ({total_al_dia} afiliados)", section_heading_green))
+        # ── SECCIÓN 2: RESUMEN DE APORTES/CUOTAS PENDIENTES POR TIPO ──
+        elements.append(Paragraph("2. APORTES Y CUOTAS PENDIENTES POR TIPO", section_heading_red))
+        data_tipos = [['TIPO DE APORTE / CUOTA', 'CANTIDAD', 'MONTO PENDIENTE']]
+        if aportes_por_tipo:
+            for t in aportes_por_tipo:
+                data_tipos.append([
+                    t['etiqueta'],
+                    str(t['cantidad']),
+                    f"Bs. {t['monto']:.2f}",
+                ])
+            data_tipos.append(['TOTAL APORTES Y CUOTAS', '', f"Bs. {total_cuotas:.2f}"])
+        else:
+            data_tipos.append(['No se registran aportes o cuotas pendientes.', '', ''])
+
+        tabla_tipos = Table(data_tipos, colWidths=[10 * cm, 4 * cm, 6 * cm], repeatRows=1)
+        estilos_tipos = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#9b2c2c')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]
+        if aportes_por_tipo:
+            estilos_tipos.extend([
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#fffaf0')]),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#feebc8')),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ])
+        tabla_tipos.setStyle(TableStyle(estilos_tipos))
+        elements.append(tabla_tipos)
+        elements.append(Spacer(1, 12))
+
+        # ── SECCIÓN 3: DETALLE DE DEUDAS POR AFILIADO ──
+        elements.append(Paragraph("3. DETALLE DE DEUDAS POR AFILIADO (APORTES, CUOTAS Y MULTAS)", section_heading_red))
+        data_detalle = [['AFILIADO', 'CARNET', 'CONCEPTO', 'PERÍODO / FECHA', 'MONTO']]
+        for d in deudores_filas:
+            det = detalle_deudores.get(d['afiliado_id'], {'aportes': [], 'sanciones': []})
+            for a in det['aportes']:
+                data_detalle.append([
+                    Paragraph(d['nombre_completo'], cell_bold),
+                    d['ci'] or '-',
+                    a['etiqueta'],
+                    a['periodo'] or '-',
+                    f"Bs. {a['monto']:.2f}",
+                ])
+            for s in det['sanciones']:
+                fecha_sancion = '-'
+                if s.get('fecha'):
+                    try:
+                        fecha_sancion = datetime.strptime(s['fecha'], '%Y-%m-%d').strftime('%d/%m/%Y')
+                    except (ValueError, TypeError):
+                        fecha_sancion = s['fecha']
+                concepto = 'Multa'
+                if s.get('tipo'):
+                    concepto = f"Multa: {s['tipo']}"
+                data_detalle.append([
+                    Paragraph(d['nombre_completo'], cell_bold),
+                    d['ci'] or '-',
+                    concepto,
+                    fecha_sancion,
+                    f"Bs. {s['monto']:.2f}",
+                ])
+        if len(data_detalle) > 1:
+            data_detalle.append([
+                'TOTAL DEUDA', '', '', '', f"Bs. {total_deuda:.2f}"
+            ])
+        else:
+            data_detalle.append(['No se registran deudas pendientes.', '', '', '', ''])
+
+        tabla_detalle = Table(data_detalle, colWidths=[7 * cm, 2.6 * cm, 7 * cm, 3.5 * cm, 4 * cm], repeatRows=1)
+        estilos_detalle = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#742a2a')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('ALIGN', (0, 1), (2, -1), 'LEFT'),
+            ('ALIGN', (3, 1), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]
+        if len(data_detalle) > 1:
+            estilos_detalle.extend([
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#fff5f5')]),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#fed7d7')),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#742a2a')),
+            ])
+        tabla_detalle.setStyle(TableStyle(estilos_detalle))
+        elements.append(tabla_detalle)
+        elements.append(Spacer(1, 12))
+
+        # ── SECCIÓN 4: AFILIADOS QUE CANCELARON (AL DÍA) ──
+        elements.append(Paragraph(f"4. AFILIADOS QUE CANCELARON (AL DÍA) ({total_al_dia} afiliados)", section_heading_green))
         data_al_dia = [
             ['AFILIADO', 'CARNET', 'TELÉFONO', 'ÚLTIMO PAGO', 'ESTADO']
         ]
@@ -594,10 +722,11 @@ class RutasRentablesView(APIView):
             
             # Obtener reservas asociadas a estas hojas
             try:
-                from reservas.models import Reserva
+                from reservas.models import Reserva, ESTADOS_ACTIVOS
                 total_reservas = Reserva.objects.filter(
                     ruta=ruta,
-                    fecha_viaje__gte=fecha_inicio
+                    fecha_viaje__gte=fecha_inicio,
+                    estado__in=ESTADOS_ACTIVOS
                 ).count()
             except:
                 total_reservas = 0
@@ -656,9 +785,10 @@ class OcupacionHistoricaView(APIView):
         ).order_by('mes')
         
         # Pre-cargar todas las reservas en el período para evitar N+1
-        from reservas.models import Reserva
+        from reservas.models import Reserva, ESTADOS_ACTIVOS
         reservas_por_mes = Reserva.objects.filter(
-            fecha_viaje__gte=fecha_inicio
+            fecha_viaje__gte=fecha_inicio,
+            estado__in=ESTADOS_ACTIVOS
         ).annotate(
             mes=TruncMonth('fecha_viaje')
         ).values('mes').annotate(
@@ -1055,7 +1185,7 @@ class FinanzasView(APIView):
         from afiliados.models import Afiliado
         from sanciones.models import Sancion
         from hojasruta.models import HojaRuta
-        from reservas.models import Reserva
+        from reservas.models import Reserva, ESTADOS_ACTIVOS
         from rutas.models import Ruta
         from django.utils.timezone import now
         from datetime import timedelta
@@ -1103,7 +1233,7 @@ class FinanzasView(APIView):
         hojas_hoy = HojaRuta.objects.filter(fecha_emision=hoy).count()
         hojas_mes = HojaRuta.objects.filter(fecha_emision__gte=inicio_mes).count()
         rutas_activas = HojaRuta.objects.filter(fecha_emision__gte=inicio_mes).values('ruta').distinct().count()
-        reservas_activas = Reserva.objects.filter(estado='pendiente').count()
+        reservas_activas = Reserva.objects.filter(estado__in=ESTADOS_ACTIVOS).count()
         
         # 6. Datos históricos (7 días)
         siete_dias = hoy - timedelta(days=7)

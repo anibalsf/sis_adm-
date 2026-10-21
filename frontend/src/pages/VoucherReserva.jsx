@@ -29,7 +29,7 @@ function VoucherReserva() {
     if (loading) return <div className="voucher-loader">Generando Boleto Digital...</div>;
     if (error) return <div className="voucher-error">{error}</div>;
 
-    const fechaFormateada = new Date(reserva.fecha_viaje).toLocaleDateString('es-ES', {
+    const fechaFormateada = new Date(`${reserva.fecha_viaje}T12:00:00`).toLocaleDateString('es-ES', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
 
@@ -55,6 +55,7 @@ function VoucherReserva() {
                     <div className="status-banner" data-status={reserva.estado}>
                         {reserva.estado === 'confirmada' ? '✅ CONFIRMADA' :
                          reserva.estado === 'pendiente' ? '⏳ PENDIENTE' :
+                         reserva.estado === 'cancelada' ? '❌ CANCELADA' :
                          reserva.estado.toUpperCase()}
                     </div>
 
@@ -93,6 +94,10 @@ function VoucherReserva() {
                             <label>Cantidad de Pasajes:</label>
                             <span className="value">{reserva.cantidad}</span>
                         </div>
+                        <div className="info-group">
+                            <label>Total:</label>
+                            <span className="value">Bs. {reserva.monto_total || '–'}</span>
+                        </div>
                     </div>
 
                     {/* Separador punteado */}
@@ -127,12 +132,6 @@ function VoucherReserva() {
                                 <span className="value" style={{ textTransform: 'capitalize' }}>
                                     {reserva.vehiculo_tipo}
                                 </span>
-                            </div>
-                        )}
-                        {reserva.afiliado_direccion && (
-                            <div className="info-group">
-                                <label>Dirección:</label>
-                                <span className="value">{reserva.afiliado_direccion}</span>
                             </div>
                         )}
                     </div>

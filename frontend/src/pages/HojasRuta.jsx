@@ -6,6 +6,12 @@ import YapeQRModal from '../components/YapeQRModal'
 import '../css/Common.css'
 import { IconPencil, IconFile, IconBus, IconPrinter, IconWhatsApp, IconTrash } from '../components/Icons'
 
+const hoyLocal = () => {
+  const d = new Date()
+  const offset = d.getTimezoneOffset() * 60000
+  return new Date(d - offset).toISOString().slice(0, 10)
+}
+
 function HojasRuta() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('agentes') // 'agentes' | 'designaciones' | 'asignacion-la-paz'
@@ -35,6 +41,7 @@ function HojasRuta() {
   const [listaAgentes, setListaAgentes] = useState([])
   const [loadingAgentes, setLoadingAgentes] = useState(false)
   const [searchAgentes, setSearchAgentes] = useState('')
+  const [fechaAgentes, setFechaAgentes] = useState(hoyLocal)
   const [pageAgentes, setPageAgentes] = useState(1)
   const [totalAgentes, setTotalAgentes] = useState(0)
   const [selectedAgentes, setSelectedAgentes] = useState([]) // IDs de afiliados seleccionados para la lista
@@ -64,7 +71,7 @@ function HojasRuta() {
   useEffect(() => {
     if (activeTab === 'agentes') loadAgentes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, pageAgentes, pageSize, searchAgentes])
+  }, [activeTab, pageAgentes, pageSize, searchAgentes, fechaAgentes])
 
   // Designaciones
   useEffect(() => {
@@ -89,6 +96,7 @@ function HojasRuta() {
       setLoadingAgentes(true)
       const params = { page: pageAgentes, page_size: pageSize, para_agente_parada: 'true', incluir_turno: 'true' }
       if (searchAgentes) params.search = searchAgentes
+      if (fechaAgentes) params.fecha_turno = fechaAgentes
       const res = await api.getAfiliados(params)
       const list = res.data?.results || res.data || []
       setListaAgentes(list)
@@ -98,7 +106,7 @@ function HojasRuta() {
     } finally {
       setLoadingAgentes(false)
     }
-  }, [pageAgentes, pageSize, searchAgentes])
+  }, [pageAgentes, pageSize, searchAgentes, fechaAgentes])
 
   const loadListaTurnoLaPaz = async () => {
     try {
@@ -603,7 +611,7 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
       return
     }
     try {
-      const res = await api.generarListaPunterosSeleccion(selectedAgentes)
+      const res = await api.generarListaPunterosSeleccion(selectedAgentes, fechaAgentes)
       const blob = new Blob([res.data], { type: 'application/pdf' })
       const url = window.URL.createObjectURL(blob)
       window.open(url, '_blank')
@@ -701,7 +709,7 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
       await api.generarTurnos();
 
       // 2. Luego generar el PDF
-      const res = await api.generarNominaAgentes()
+      const res = await api.generarNominaAgentes(fechaAgentes)
       if (res.data) {
         const blob = new Blob([res.data], { type: 'application/pdf' })
         const url = window.URL.createObjectURL(blob)
@@ -743,7 +751,7 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
       return
     }
     try {
-      const res = await api.generarListaAgentes(selectedAgentes)
+      const res = await api.generarListaAgentes(selectedAgentes, fechaAgentes)
       const blob = new Blob([res.data], { type: 'application/pdf' })
       const url = window.URL.createObjectURL(blob)
       window.open(url, '_blank')
@@ -830,6 +838,16 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
                 placeholder="Buscar por nombre, CI..."
                 value={searchAgentes}
                 onChange={e => { setSearchAgentes(e.target.value); setPageAgentes(1) }}
+              />
+            </div>
+            <div className="filter-box" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label htmlFor="fecha-agentes" style={{ fontSize: '14px', color: '#555', whiteSpace: 'nowrap' }}>Desde</label>
+              <input
+                id="fecha-agentes"
+                type="date"
+                value={fechaAgentes}
+                onChange={e => { setFechaAgentes(e.target.value); setPageAgentes(1) }}
+                title="Fecha desde la cual se calculan los turnos"
               />
             </div>
             <div className="filter-box">

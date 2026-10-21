@@ -12,6 +12,13 @@ import React from 'react';
 const YapeQRModal = ({ qrData, onVerify, onClose, verifying }) => {
     if (!qrData) return null;
 
+    const vencimiento = qrData.expires_at
+        ? new Date(qrData.expires_at).toLocaleString('es-BO', {
+            day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        })
+        : '24 horas';
+    const reservas = qrData.reserva_ids || [];
+
     return (
         <div className="modal-overlay" style={{ zIndex: 2000 }}>
             <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center', padding: '0', overflow: 'hidden', borderRadius: '25px', border: 'none' }}>
@@ -64,11 +71,20 @@ const YapeQRModal = ({ qrData, onVerify, onClose, verifying }) => {
                     </div>
 
                     <div style={{ color: '#666', fontSize: '0.95rem', marginBottom: '8px' }}>Escanea este QR para pagar a:</div>
-                    <h3 style={{ margin: '0 0 15px 0', fontSize: '1.6rem', color: '#333', fontWeight: 'bold' }}>Anibal Choque Aguirre</h3>
+                    <h3 style={{ margin: '0 0 15px 0', fontSize: '1.6rem', color: '#333', fontWeight: 'bold' }}>
+                        {qrData.titular || 'Anibal Choque Aguirre'}
+                    </h3>
+
+                    {reservas.length > 0 && (
+                        <div style={{ color: '#666', fontSize: '0.9rem', marginBottom: '10px' }}>
+                            Reserva(s): {reservas.map(id => `RES-${String(id).padStart(6, '0')}`).join(', ')}
+                            {qrData.cantidad_total ? ` · ${qrData.cantidad_total} pasaje(s)` : ''}
+                        </div>
+                    )}
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#888', fontSize: '0.9rem' }}>
                         <span style={{ fontSize: '1.2rem' }}>🗓️</span>
-                        <span>Vencimiento: {new Date().toLocaleDateString('es-BO', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                        <span>Vencimiento: {vencimiento}</span>
                     </div>
 
                     <div style={{ marginTop: '25px', fontSize: '2.2rem', fontWeight: 'bold', color: '#333' }}>
@@ -97,6 +113,27 @@ const YapeQRModal = ({ qrData, onVerify, onClose, verifying }) => {
                     >
                         {verifying ? '🕒 Verificando...' : 'Confirmar Pago'}
                     </button>
+                    {qrData.voucher_url && (
+                        <a
+                            href={qrData.voucher_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                display: 'block',
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                textAlign: 'center',
+                                background: '#f3e5f5',
+                                color: '#7B1FA2',
+                                padding: '12px',
+                                fontWeight: 'bold',
+                                borderRadius: '12px',
+                                textDecoration: 'none'
+                            }}
+                        >
+                            🎫 Ver boleto digital
+                        </a>
+                    )}
                     <button
                         className="btn"
                         onClick={onClose}

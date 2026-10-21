@@ -14,10 +14,18 @@ class AfiliadoSerializer(serializers.ModelSerializer):
         """Fecha de la próxima designación como Agente de Parada (solo si se solicita)."""
         if not self.context.get('incluir_turno'):
             return None
-        from datetime import date
+        from datetime import date, datetime
         from .models import TurnoAgente
+        desde = self.context.get('fecha_turno')
+        if isinstance(desde, str):
+            try:
+                desde = datetime.strptime(desde, '%Y-%m-%d').date()
+            except ValueError:
+                desde = None
+        if not desde:
+            desde = date.today()
         turno = TurnoAgente.objects.filter(
-            afiliado=obj, fecha__gte=date.today()
+            afiliado=obj, fecha__gte=desde
         ).order_by('fecha').first()
         return turno.fecha if turno else None
 

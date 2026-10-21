@@ -3,10 +3,10 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 
 def generate_taipiplaya_qr():
-    # Página pública de reservas y asignaciones a La Paz.
-    url_reservas = "https://administracion.sindicatointegracion.com/reservas"
+    # Página pública de la pizarra con las movilidades asignadas a La Paz.
+    url_pizarra = "https://administracion.sindicatointegracion.com/pizarra"
     
-    print(f"Generando QR para la oficina de TAIPIPLAYA: {url_reservas}")
+    print(f"Generando QR para la oficina de TAIPIPLAYA: {url_pizarra}")
     
     # Configurar el QR con alta corrección de errores para poder poner el logo
     qr = qrcode.QRCode(
@@ -15,7 +15,7 @@ def generate_taipiplaya_qr():
         box_size=15,
         border=4,
     )
-    qr.add_data(url_reservas)
+    qr.add_data(url_pizarra)
     qr.make(fit=True)
 
     # Crear la imagen del QR (Verde Estético del Sindicato)
@@ -43,14 +43,14 @@ def generate_taipiplaya_qr():
         print(f"Nota: No se pudo integrar el logo ({e}). Se generó el QR estándar.")
 
     # Guardar el archivo final
-    filename = "QR_RESERVAS_TAIPIPLAYA.png"
+    filename = "QR_PIZARRA_LA_PAZ.png"
     qr_img.save(filename)
     print(f"\n[OK] ¡EXITO! Se ha generado el archivo: {filename}")
     print("--------------------------------------------------")
     print("Instrucciones para la oficina:")
     print("1. Imprime este código en tamaño grande.")
     print("2. Colócalo en la ventanilla o pared de la oficina de Taipiplaya.")
-    print("3. Funciona para reservar tanto en IPSUM (6 asientos) como en MINIBUS (15 asientos).")
+    print("3. Muestra el socio designado a La Paz y permite reservar en IPSUM (6 asientos) o MINIBUS (15 asientos).")
 
 if __name__ == "__main__":
     generate_taipiplaya_qr()

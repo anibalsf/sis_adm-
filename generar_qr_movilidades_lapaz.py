@@ -10,9 +10,9 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 
 def generate_qr_movilidades():
-    # URL pública exacta para el QR de la oficina: módulo de reservas.
+    # URL pública exacta para el QR de la oficina: pizarra de salidas.
     base_url = "https://administracion.sindicatointegracion.com"
-    url = f"{base_url}/reservas"
+    url = f"{base_url}/pizarra"
 
     print(f"Generando QR para: {url}")
 
@@ -89,7 +89,7 @@ def generate_qr_movilidades():
     print(f"\n[OK] QR generado: '{output_path}'")
     print(f"     URL: {url}")
     print("\nPega este QR en la oficina para que los pasajeros escaneen y")
-    print("entren al módulo de reservas, donde verán la movilidad")
+    print("entren a la pizarra pública, donde verán la movilidad")
     print("designada a La Paz con nombre, placa y color.")
 
 

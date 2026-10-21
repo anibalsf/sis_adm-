@@ -39,7 +39,9 @@ def crear_poster_mejorado():
     draw.multiline_text((w/2, 480), txt_sub, fill=white, font=font_sub, anchor="mm", align="center", spacing=10)
     
     # 4. QR Centrado con Borde
-    qr_path = "QR_RESERVAS_TAIPIPLAYA.png"
+    qr_path = "frontend/public/QR_PIZARRA_LA_PAZ.png"
+    if not os.path.exists(qr_path):
+        qr_path = "QR_PIZARRA_LA_PAZ.png"
     if os.path.exists(qr_path):
         qr_img = Image.open(qr_path)
         qr_size = 700

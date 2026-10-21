@@ -1,10 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import YapeQRModal from '../components/YapeQRModal';
+import { useToast } from '../context/ToastContext';
 import '../css/Reservas.css';
 
+function mensajeDeError(err, fallback) {
+    const data = err.response?.data;
+    if (typeof data === 'string') return data;
+    if (data?.detail) return data.detail;
+    if (data && typeof data === 'object') {
+        return Object.entries(data)
+            .map(([campo, valor]) => `${campo}: ${Array.isArray(valor) ? valor.join(', ') : valor}`)
+            .join(' | ');
+    }
+    return fallback;
+}
+
 function Reservas() {
+    const { success: mostrarExito, error: mostrarError, warning: mostrarAdvertencia } = useToast();
+    const [tabActiva, setTabActiva] = useState('nueva');
     const [hojasDisponibles, setHojasDisponibles] = useState([]);
     const [hojaSeleccionada, setHojaSeleccionada] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -24,6 +39,17 @@ function Reservas() {
     const [metodoPago, setMetodoPago] = useState('efectivo');
     const [qrData, setQrData] = useState(null);
     const [verificandoPago, setVerificandoPago] = useState(false);
+
+    // Estado del listado y gestión de reservas
+    const [reservas, setReservas] = useState([]);
+    const [loadingReservas, setLoadingReservas] = useState(false);
+    const [reservasError, setReservasError] = useState('');
+    const [busqueda, setBusqueda] = useState('');
+    const [filtroEstado, setFiltroEstado] = useState('');
+    const [filtroFecha, setFiltroFecha] = useState('');
+    const [paginaReservas, setPaginaReservas] = useState(1);
+    const [totalReservas, setTotalReservas] = useState(0);
+    const [accionReserva, setAccionReserva] = useState(null);
 
     // Estados para Ver Pasajeros (Nombres únicos para evitar colisiones)
     const [verPasajerosModulo, setVerPasajerosModulo] = useState(false);
@@ -74,20 +100,21 @@ function Reservas() {
         if (!qrData) return;
         try {
             setVerificandoPago(true);
-            const res = await api.getReserva(qrData.id); // Consultamos la reserva para ver si cambió de estado
-            if (res.data.estado === 'confirmada' || res.data.estado === 'pagada') {
-                alert('✅ ¡Pago confirmado exitosamente!');
+            const res = await api.verifyPagoQr(qrData.transaction_id);
+            if (res.data.status === 'ok') {
+                mostrarExito('Pago confirmado exitosamente.');
                 setQrData(null);
                 setHojaSeleccionada(null);
                 setSelectedSeats([]);
                 setShowForm(false);
                 loadHojasDisponibles();
+                if (tabActiva === 'listado') loadReservas();
             } else {
-                alert('El pago aún figura como pendiente. Por favor escanee el QR con Yape.');
+                mostrarAdvertencia(res.data.message || 'El pago aún figura como pendiente. Escanee el QR con Yape.');
             }
         } catch (err) {
             console.error(err);
-            alert('Error al verificar el estado del pago.');
+            mostrarError(err.response?.data?.message || 'Error al verificar el estado del pago.');
         } finally {
             setVerificandoPago(false);
         }
@@ -128,6 +155,85 @@ function Reservas() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const loadReservas = useCallback(async () => {
+        try {
+            setLoadingReservas(true);
+            setReservasError('');
+            const res = await api.getReservas({
+                page: paginaReservas,
+                ordering: '-created_at',
+                ...(busqueda ? { search: busqueda } : {}),
+                ...(filtroEstado ? { estado: filtroEstado } : {}),
+                ...(filtroFecha ? { fecha_viaje: filtroFecha } : {})
+            });
+            const data = res.data;
+            if (Array.isArray(data)) {
+                setReservas(data);
+                setTotalReservas(data.length);
+            } else {
+                setReservas(data.results || []);
+                setTotalReservas(data.count || 0);
+            }
+        } catch (err) {
+            console.error(err);
+            setReservasError(mensajeDeError(err, 'Error al cargar el listado de reservas.'));
+        } finally {
+            setLoadingReservas(false);
+        }
+    }, [paginaReservas, busqueda, filtroEstado, filtroFecha]);
+
+    useEffect(() => {
+        if (tabActiva === 'listado') loadReservas();
+    }, [tabActiva, loadReservas]);
+
+    const confirmarReservaListado = async (reserva) => {
+        setAccionReserva(reserva.id);
+        try {
+            const res = await api.confirmarReserva(reserva.id);
+            setReservas(prev => prev.map(r => (r.id === reserva.id ? res.data : r)));
+            mostrarExito(`Reserva de ${reserva.cliente} confirmada.`);
+        } catch (err) {
+            console.error(err);
+            mostrarError(mensajeDeError(err, 'No se pudo confirmar la reserva.'));
+        } finally {
+            setAccionReserva(null);
+        }
+    };
+
+    const cancelarReservaListado = async (reserva) => {
+        const motivo = window.prompt(`Motivo de cancelación para ${reserva.cliente}:`, '');
+        if (motivo === null) return;
+        setAccionReserva(reserva.id);
+        try {
+            const res = await api.cancelarReserva(reserva.id, motivo);
+            setReservas(prev => prev.map(r => (r.id === reserva.id ? res.data : r)));
+            mostrarExito('Reserva cancelada y asiento liberado.');
+        } catch (err) {
+            console.error(err);
+            mostrarError(mensajeDeError(err, 'No se pudo cancelar la reserva.'));
+        } finally {
+            setAccionReserva(null);
+        }
+    };
+
+    const abrirQrListado = async (reserva) => {
+        setAccionReserva(reserva.id);
+        try {
+            const res = await api.generarPagoQrReserva(reserva.id);
+            setQrData(res.data);
+        } catch (err) {
+            console.error(err);
+            mostrarError(mensajeDeError(err, 'No se pudo generar el QR de pago.'));
+        } finally {
+            setAccionReserva(null);
+        }
+    };
+
+    const cambiarFiltro = (setter) => (e) => {
+        setter(e.target.value);
+        setPaginaReservas(1);
     };
 
     const seleccionarRuta = (hoja) => {
@@ -210,28 +316,19 @@ function Reservas() {
         try {
             setSubmitError('');
 
-            // Crear una reserva por cada asiento seleccionado
-            const promises = selectedSeats.map(asiento => {
-                const payload = {
-                    cliente: form.cliente,
-                    telefono: form.telefono,
-                    ruta: hojaSeleccionada.ruta.id,
-                    afiliado: hojaSeleccionada.afiliado?.id,
-                    fecha_viaje: form.fecha_viaje,
-                    cantidad: 1, // Siempre 1 por asiento
-                    asiento: asiento,
-                    estado: 'pendiente'
-                };
-                return api.createReserva(payload);
+            const res = await api.createReserva({
+                cliente: form.cliente,
+                telefono: form.telefono,
+                ruta: hojaSeleccionada.ruta.id,
+                fecha_viaje: form.fecha_viaje,
+                asientos: selectedSeats
             });
+            const creadas = res.data;
 
-            const results = await Promise.all(promises);
-
-            // Si es pago QR, generar el QR para la primera reserva del grupo
             if (metodoPago === 'qr') {
                 try {
-                    const firstReservaId = results[0].data.id;
-                    const qrResponse = await api.generarPagoQrReserva(firstReservaId);
+                    const ids = creadas.map(r => r.id);
+                    const qrResponse = await api.generarPagoQrReserva(ids[0], ids);
                     setQrData(qrResponse.data);
                 } catch (qrErr) {
                     console.error('Error al generar QR:', qrErr);
@@ -256,7 +353,18 @@ function Reservas() {
 
         } catch (err) {
             console.error(err);
-            setSubmitError(err.response?.data?.detail || 'Error al crear la reserva');
+            const data = err.response?.data;
+            let mensaje = 'Error al crear la reserva';
+            if (typeof data === 'string') {
+                mensaje = data;
+            } else if (data?.detail) {
+                mensaje = data.detail;
+            } else if (data && typeof data === 'object') {
+                mensaje = Object.entries(data)
+                    .map(([campo, valor]) => `${campo}: ${Array.isArray(valor) ? valor.join(', ') : valor}`)
+                    .join(' | ');
+            }
+            setSubmitError(mensaje);
             setShowConfirmation(false);
         }
     };
@@ -312,15 +420,14 @@ function Reservas() {
         setHojaSeleccionada(null);
     };
 
-    if (loading) return <div className="loading">Cargando rutas disponibles...</div>;
-    if (error) return <div className="error">{error}</div>;
-
     return (
         <div className="reservas-container">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <div>
                     <h1 style={{ textDecoration: 'none' }}>Módulo de Reservas</h1>
-                    <p>Selecciona una ruta para realizar tu reserva</p>
+                    <p>{tabActiva === 'nueva'
+                        ? 'Selecciona una ruta para realizar tu reserva'
+                        : 'Consulta, confirma o cancela las reservas registradas'}</p>
                 </div>
                 <Link to="/pizarra" style={{
                     background: '#10b981',
@@ -338,6 +445,25 @@ function Reservas() {
                 </Link>
             </div>
 
+            <div className="reservas-tabs">
+                <button
+                    type="button"
+                    className={`reservas-tab ${tabActiva === 'nueva' ? 'active' : ''}`}
+                    onClick={() => setTabActiva('nueva')}
+                >
+                    ➕ Nueva Reserva
+                </button>
+                <button
+                    type="button"
+                    className={`reservas-tab ${tabActiva === 'listado' ? 'active' : ''}`}
+                    onClick={() => setTabActiva('listado')}
+                >
+                    📋 Listado y Gestión
+                </button>
+            </div>
+
+            {tabActiva === 'nueva' ? (
+                <>
                 {/* Banner: Afiliado de Turno La Paz del Día */}
             <div style={{
                 background: 'linear-gradient(135deg, #1a3a2a 0%, #2d6a4f 50%, #1a3a2a 100%)',
@@ -525,7 +651,11 @@ function Reservas() {
             {!showForm ? (
                 <div className="rutas-disponibles">
                     <h2>Rutas Disponibles</h2>
-                    {hojasDisponibles.length === 0 ? (
+                    {loading ? (
+                        <div className="loading">Cargando rutas disponibles...</div>
+                    ) : error ? (
+                        <div className="error">{error}</div>
+                    ) : hojasDisponibles.length === 0 ? (
                         <div className="no-rutas">No hay rutas disponibles en este momento</div>
                     ) : (
                         <div className="rutas-grid">
@@ -898,6 +1028,162 @@ function Reservas() {
                             </button>
                         </div>
                     </form>
+                </div>
+            )}
+
+                </>
+            ) : (
+                <div className="reservas-listado">
+                    <div className="reservas-listado-header">
+                        <div>
+                            <h2>Listado de Reservas</h2>
+                            <p className="reservas-muted">{totalReservas} reserva(s) encontrada(s)</p>
+                        </div>
+                        <button type="button" className="btn btn-secondary" onClick={loadReservas} disabled={loadingReservas}>
+                            ↻ Actualizar
+                        </button>
+                    </div>
+
+                    <div className="reservas-filtros">
+                        <input
+                            type="search"
+                            value={busqueda}
+                            onChange={cambiarFiltro(setBusqueda)}
+                            placeholder="Buscar cliente, teléfono o ruta..."
+                        />
+                        <select value={filtroEstado} onChange={cambiarFiltro(setFiltroEstado)}>
+                            <option value="">Todos los estados</option>
+                            <option value="pendiente">Pendiente</option>
+                            <option value="confirmada">Confirmada</option>
+                            <option value="cancelada">Cancelada</option>
+                        </select>
+                        <input
+                            type="date"
+                            value={filtroFecha}
+                            onChange={cambiarFiltro(setFiltroFecha)}
+                        />
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                                setBusqueda('');
+                                setFiltroEstado('');
+                                setFiltroFecha('');
+                                setPaginaReservas(1);
+                            }}
+                        >
+                            Limpiar
+                        </button>
+                    </div>
+
+                    {reservasError && <div className="error">{reservasError}</div>}
+
+                    {loadingReservas ? (
+                        <div className="loading">Cargando reservas...</div>
+                    ) : reservas.length === 0 ? (
+                        <div className="no-rutas">No hay reservas que coincidan con los filtros.</div>
+                    ) : (
+                        <div className="reservas-table-wrap">
+                            <table className="reservas-table">
+                                <thead>
+                                    <tr>
+                                        <th>Cliente</th>
+                                        <th>Ruta / Fecha</th>
+                                        <th>Asiento</th>
+                                        <th>Cant.</th>
+                                        <th>Estado</th>
+                                        <th>Conductor</th>
+                                        <th>Monto</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {reservas.map((reserva) => {
+                                        const ocupada = accionReserva === reserva.id;
+                                        return (
+                                            <tr key={reserva.id}>
+                                                <td>
+                                                    <strong>{reserva.cliente}</strong>
+                                                    <div className="reservas-muted">{reserva.telefono || 'Sin teléfono'}</div>
+                                                </td>
+                                                <td>
+                                                    <strong>{reserva.ruta_nombre}</strong>
+                                                    <div className="reservas-muted">
+                                                        {reserva.fecha_viaje}
+                                                        {reserva.hora_salida ? ` · ${reserva.hora_salida}` : ''}
+                                                    </div>
+                                                </td>
+                                                <td>{reserva.asiento || '-'}</td>
+                                                <td>{reserva.cantidad}</td>
+                                                <td>
+                                                    <span className={`reservas-badge ${reserva.estado}`}>{reserva.estado}</span>
+                                                </td>
+                                                <td>{reserva.afiliado_nombre || 'Sin asignar'}</td>
+                                                <td>Bs. {Number(reserva.monto_total || 0).toFixed(2)}</td>
+                                                <td>
+                                                    <div className="reservas-acciones">
+                                                        {reserva.estado === 'pendiente' && (
+                                                            <button
+                                                                type="button"
+                                                                className="reservas-accion confirmar"
+                                                                onClick={() => confirmarReservaListado(reserva)}
+                                                                disabled={ocupada}
+                                                            >
+                                                                Confirmar
+                                                            </button>
+                                                        )}
+                                                        {reserva.estado !== 'cancelada' && (
+                                                            <button
+                                                                type="button"
+                                                                className="reservas-accion cancelar"
+                                                                onClick={() => cancelarReservaListado(reserva)}
+                                                                disabled={ocupada}
+                                                            >
+                                                                Cancelar
+                                                            </button>
+                                                        )}
+                                                        <Link className="reservas-accion voucher" to={`/voucher/${reserva.id}`} target="_blank">
+                                                            Voucher
+                                                        </Link>
+                                                        {reserva.estado !== 'cancelada' && (
+                                                            <button
+                                                                type="button"
+                                                                className="reservas-accion qr"
+                                                                onClick={() => abrirQrListado(reserva)}
+                                                                disabled={ocupada}
+                                                            >
+                                                                QR
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    <div className="reservas-paginacion">
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => setPaginaReservas(p => Math.max(1, p - 1))}
+                            disabled={paginaReservas <= 1 || loadingReservas}
+                        >
+                            ← Anterior
+                        </button>
+                        <span>Página {paginaReservas} de {Math.max(1, Math.ceil(totalReservas / 20))}</span>
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => setPaginaReservas(p => p + 1)}
+                            disabled={paginaReservas >= Math.ceil(totalReservas / 20) || loadingReservas}
+                        >
+                            Siguiente →
+                        </button>
+                    </div>
                 </div>
             )}
 

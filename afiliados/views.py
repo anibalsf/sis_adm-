@@ -12,7 +12,18 @@ from tesoreria.models import Pago
 from django.utils import timezone
 
 
-def _generar_turnos_agentes(dias_a_generar=365):
+def _parse_fecha(valor):
+    """Convierte un string YYYY-MM-DD en date; retorna None si es inválido."""
+    from datetime import datetime
+    if not valor:
+        return None
+    try:
+        return datetime.strptime(str(valor)[:10], '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _generar_turnos_agentes(dias_a_generar=365, fecha_desde=None):
     """
     Genera la rotación de turnos de Agente de Parada a partir del último turno
     (o desde hoy si no existe ninguno). Devuelve la cantidad de turnos creados.
@@ -27,6 +38,9 @@ def _generar_turnos_agentes(dias_a_generar=365):
         fecha_inicio = ultimo_turno.fecha + timedelta(days=1)
     else:
         fecha_inicio = datetime.now().date()
+
+    if fecha_desde and fecha_desde > fecha_inicio:
+        fecha_inicio = fecha_desde
 
     la_paz_ids = Afiliado.objects.filter(
         Q(vehiculos__tipo__iexact='IPSUM') | Q(vehiculos__tipo__iexact='MINIBUS'),
@@ -79,6 +93,7 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context['incluir_turno'] = self.request.query_params.get('incluir_turno') == 'true'
+        context['fecha_turno'] = self.request.query_params.get('fecha_turno') or None
         return context
 
     def get_queryset(self):
@@ -399,7 +414,7 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
             Paragraph('<b>3er PUNTERO</b>', styles['Normal']),
         ]]
 
-        fecha_actual = datetime.now().date()
+        fecha_actual = _parse_fecha(request.data.get('fecha_inicio')) or datetime.now().date()
         dias_laborables = 30
         dias_generados = 0
         dia_offset = 0
@@ -507,6 +522,8 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
         from .models import TurnoAgente
         from datetime import date
 
+        fecha_desde = _parse_fecha(request.query_params.get('fecha_inicio')) or date.today()
+
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch,
                                 leftMargin=0.5*inch, rightMargin=0.5*inch)
@@ -523,12 +540,13 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
             alignment=TA_CENTER,
             fontName='Helvetica-Bold'
         )
-        elements.append(Paragraph(f"NÓMINA DE AGENTE DE PARADA {date.today().year}", title_style))
+        elements.append(Paragraph(f"NÓMINA DE AGENTE DE PARADA {fecha_desde.year}", title_style))
         elements.append(Spacer(1, 15))
 
-        # Obtener turnos futuros desde hoy
-        hoy = date.today()
-        turnos = TurnoAgente.objects.filter(fecha__gte=hoy).select_related('afiliado').order_by('fecha')[:30] # Próximos 30 días laborables
+        # Obtener turnos desde la fecha indicada (hoy por defecto)
+        if not TurnoAgente.objects.filter(fecha__gte=fecha_desde).exists():
+            _generar_turnos_agentes(365, fecha_desde=fecha_desde)
+        turnos = TurnoAgente.objects.filter(fecha__gte=fecha_desde).select_related('afiliado').order_by('fecha')[:30] # Próximos 30 días laborables
 
         if not turnos.exists():
              elements.append(Paragraph("No hay turnos generados. Por favor genere los turnos primero.", styles['Normal']))
@@ -603,6 +621,7 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
         from datetime import date
 
         afiliado_ids = request.data.get('afiliado_ids') or []
+        fecha_desde = _parse_fecha(request.data.get('fecha_inicio')) or date.today()
         if not isinstance(afiliado_ids, (list, tuple)) or len(afiliado_ids) == 0:
             return Response({'detail': 'Debe seleccionar al menos un afiliado'}, status=400)
 
@@ -616,13 +635,12 @@ class AfiliadoViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'No se encontraron afiliados activos para los seleccionados'}, status=400)
 
         # Fecha de la próxima designación como Agente de Parada por afiliado
-        from datetime import date as _date
         from .models import TurnoAgente
-        # Si aún no hay turnos programados, generarlos una sola vez para poder mostrar fechas
-        if not TurnoAgente.objects.filter(fecha__gte=_date.today()).exists():
-            _generar_turnos_agentes(365)
+        # Si aún no hay turnos programados desde la fecha indicada, generarlos una sola vez
+        if not TurnoAgente.objects.filter(fecha__gte=fecha_desde).exists():
+            _generar_turnos_agentes(365, fecha_desde=fecha_desde)
         turnos = TurnoAgente.objects.filter(
-            afiliado__in=afiliados, fecha__gte=_date.today()
+            afiliado__in=afiliados, fecha__gte=fecha_desde
         ).order_by('fecha')
         fecha_turno = {}
         for t in turnos:

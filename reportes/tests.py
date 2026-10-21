@@ -588,6 +588,55 @@ def test_vista_sigue_devolviendo_morosos_por_defecto(authenticated_client, afili
 
 
 @pytest.mark.django_db
+def test_estado_cuentas_incluye_detalle_de_aportes_y_cuotas(authenticated_client, afiliado):
+    from cuotas.models import Cuota
+
+    Cuota.objects.create(
+        afiliado=afiliado, periodo=date(2026, 9, 1), tipo='afiliacion',
+        monto=150, estado='pendiente'
+    )
+    Cuota.objects.create(
+        afiliado=afiliado, periodo=date(2026, 10, 1), tipo='mensual',
+        monto=30, estado='pendiente'
+    )
+    Cuota.objects.create(
+        afiliado=afiliado, periodo=date(2026, 11, 1), tipo='mensual',
+        monto=30, estado='pagada'
+    )
+
+    response = authenticated_client.get(
+        '/api/reportes/afiliados-morosos/?meses=0&incluir_detalle=true'
+    )
+    assert response.status_code == 200
+    data = response.data
+
+    fila = next(m for m in data['morosos'] if m['afiliado_id'] == afiliado.id)
+    assert len(fila['detalle_aportes']) == 2
+    assert fila['detalle_aportes'][0]['etiqueta'] == 'Afiliación'
+    assert fila['detalle_aportes'][0]['periodo'] == '09/2026'
+
+    tipos = {t['tipo']: t for t in data['resumen']['aportes_por_tipo']}
+    assert tipos['afiliacion']['monto'] == 150.0
+    assert tipos['mensual']['monto'] == 30.0
+    assert data['resumen']['monto_cuotas'] >= 180.0
+
+
+@pytest.mark.django_db
+def test_deuda_incluye_sanciones_notificadas(authenticated_client, afiliado):
+    from sanciones.models import Sancion
+
+    Sancion.objects.create(
+        afiliado=afiliado, tipo='Falta', motivo='Inasistencia',
+        monto=50, estado='notificada'
+    )
+
+    response = authenticated_client.get('/api/reportes/afiliados-morosos/?meses=0')
+    assert response.status_code == 200
+    morosos_ids = [m['afiliado_id'] for m in response.data['morosos']]
+    assert afiliado.id in morosos_ids
+
+
+@pytest.mark.django_db
 def test_pdf_estado_cuentas_se_genera_con_deudores_y_cancelaron(
     authenticated_client, afiliado, otro_afiliado
 ):

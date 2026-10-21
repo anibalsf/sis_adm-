@@ -82,9 +82,9 @@ export const api = {
     updateAfiliado: (id, data) => axios.put(`/afiliados/${id}/`, data),
     deleteAfiliado: (id) => axios.delete(`/afiliados/${id}/`),
     generarListaPunteros: () => axios.get('/afiliados/generar_lista_punteros/'),
-    generarListaPunterosSeleccion: (afiliadoIds) => axios.post('/afiliados/generar_lista_punteros_seleccion/', { afiliado_ids: afiliadoIds }, { responseType: 'blob' }),
-    generarNominaAgentes: () => axios.get('/afiliados/generar_nomina_agentes/'),
-    generarListaAgentes: (afiliadoIds) => axios.post('/afiliados/generar_lista_agentes/', { afiliado_ids: afiliadoIds }, { responseType: 'blob' }),
+    generarListaPunterosSeleccion: (afiliadoIds, fechaInicio) => axios.post('/afiliados/generar_lista_punteros_seleccion/', { afiliado_ids: afiliadoIds, fecha_inicio: fechaInicio }, { responseType: 'blob' }),
+    generarNominaAgentes: (fechaInicio) => axios.get('/afiliados/generar_nomina_agentes/', { params: fechaInicio ? { fecha_inicio: fechaInicio } : {} }),
+    generarListaAgentes: (afiliadoIds, fechaInicio) => axios.post('/afiliados/generar_lista_agentes/', { afiliado_ids: afiliadoIds, fecha_inicio: fechaInicio }, { responseType: 'blob' }),
     generarTurnos: () => axios.post('/afiliados/generar_turnos/'),
     getTurnoDelDia: (fecha) => axios.get(`/afiliados/turno_del_dia/?fecha=${fecha}`),
     generarPagoQrTotalAfiliado: (id) => axios.post(`/afiliados/${id}/generar_pago_qr_total/`),
@@ -206,11 +206,14 @@ export const api = {
     getReservas: (params) => axios.get('/reservas/', { params }),
     getReserva: (id) => axios.get(`/reservas/${id}/`),
     createReserva: (data) => axios.post('/reservas/', data),
-    updateReserva: (id, data) => axios.put(`/reservas/${id}/`, data),
-    deleteReserva: (id) => axios.delete(`/reservas/${id}/`),
+    updateReserva: (id, data) => axios.patch(`/reservas/${id}/`, data),
+    deleteReserva: (id, data) => axios.delete(`/reservas/${id}/`, { data }),
+    confirmarReserva: (id) => axios.post(`/reservas/${id}/confirmar/`),
+    cancelarReserva: (id, motivo = '') => axios.post(`/reservas/${id}/cancelar/`, { motivo }),
     getHojasRutaDisponibles: (params) => axios.get('/hojas-ruta/disponibles_hoy/', { params }),
     getPasajeros: (id) => axios.get(`/hojas-ruta/${id}/pasajeros/`),
-    generarPagoQrReserva: (id) => axios.post(`/reservas/${id}/generar_pago_qr/`),
+    generarPagoQrReserva: (id, reservaIds) =>
+        axios.post(`/reservas/${id}/generar_pago_qr/`, reservaIds ? { reservas: reservaIds } : {}),
     getReservaPublica: (id) => axios.get(`/reservas/${id}/public-retrieve/`),
 
     // Reportes
@@ -274,6 +277,7 @@ export const api = {
     // Pagos QR (transacciones)
     generarQr: (data) => axios.post('/pagos-qr/transactions/', data),
     verifyPagoQr: (transactionId) => axios.post('/pagos-qr/transactions/verify/', { transaction_id: transactionId }),
+    verifyPagoQrPublico: (transactionId) => axios.post('/pagos-qr/transactions/verify-public/', { transaction_id: transactionId }),
     getQrStatus: (id) => axios.get(`/pagos-qr/transactions/${id}/check_status/`),
 
     // Egresos

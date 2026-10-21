@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import YapeQRModal from '../components/YapeQRModal';
@@ -18,23 +18,25 @@ function PizarraPublica() {
     const [metodoPago, setMetodoPago] = useState('efectivo');
     const [qrData, setQrData] = useState(null);
     const [submitting, setSubmitting] = useState(false);
+    const [verificandoPago, setVerificandoPago] = useState(false);
 
-    useEffect(() => {
-        loadHojas();
-    }, [destino]);
-
-    const loadHojas = async () => {
+    const loadHojas = useCallback(async () => {
         try {
             setLoading(true);
             const res = await api.getHojasRutaDisponibles({ destino });
             setHojas(res.data || []);
+            setError('');
         } catch (err) {
             setError('Error al cargar la pizarra de rutas.');
             console.error(err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [destino]);
+
+    useEffect(() => {
+        loadHojas();
+    }, [loadHojas]);
 
     const [movilidadesLaPaz, setMovilidadesLaPaz] = useState([]);
     const [cargandoTurno, setCargandoTurno] = useState(false);
@@ -99,33 +101,56 @@ function PizarraPublica() {
 
         try {
             setSubmitting(true);
-            const promises = selectedSeats.map(asiento => {
-                return api.createReserva({
-                    cliente: form.cliente,
-                    telefono: form.telefono,
-                    ruta: hojaSeleccionada.ruta.id,
-                    afiliado: hojaSeleccionada.afiliado?.id,
-                    fecha_viaje: hojaSeleccionada.fecha_salida,
-                    cantidad: 1,
-                    asiento: asiento,
-                    estado: 'pendiente'
-                });
+            const res = await api.createReserva({
+                cliente: form.cliente,
+                telefono: form.telefono,
+                ruta: hojaSeleccionada.ruta.id,
+                fecha_viaje: hojaSeleccionada.fecha_salida,
+                asientos: selectedSeats
             });
-
-            const results = await Promise.all(promises);
+            const creadas = res.data;
 
             if (metodoPago === 'qr') {
-                const qrRes = await api.generarPagoQrReserva(results[0].data.id);
-                setQrData({ ...qrRes.data, reservaId: results[0].data.id });
+                const ids = creadas.map(r => r.id);
+                const qrRes = await api.generarPagoQrReserva(ids[0], ids);
+                setQrData(qrRes.data);
             } else {
                 alert('✅ Reserva realizada con éxito. Por favor pase por oficina para pagar.');
                 cerrarReserva();
                 loadHojas();
             }
         } catch (err) {
-            alert(err.response?.data?.detail || 'Error al crear la reserva');
+            const data = err.response?.data;
+            let mensaje = 'Error al crear la reserva';
+            if (data?.detail) {
+                mensaje = data.cupos_disponibles !== undefined
+                    ? `${data.detail} (Cupos disponibles: ${data.cupos_disponibles})`
+                    : data.detail;
+            } else if (typeof data === 'string') {
+                mensaje = data;
+            }
+            alert(mensaje);
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const verificarPagoPublico = async () => {
+        if (!qrData?.transaction_id) return;
+        try {
+            setVerificandoPago(true);
+            const res = await api.verifyPagoQrPublico(qrData.transaction_id);
+            if (res.data.status === 'ok') {
+                alert('✅ ¡Pago confirmado! Su reserva está confirmada.');
+                cerrarReserva();
+                loadHojas();
+            } else {
+                alert(res.data.message || 'El pago aún no figura. Escanee el QR con Yape e intente nuevamente.');
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'No se pudo verificar el pago. Intente nuevamente.');
+        } finally {
+            setVerificandoPago(false);
         }
     };
 
@@ -319,7 +344,9 @@ function PizarraPublica() {
                     </div>
                 )}
 
-                {loading ? (
+                {error ? (
+                    <div className="pizarra-status" style={{ color: '#b91c1c', fontWeight: 'bold' }}>{error}</div>
+                ) : loading ? (
                     <div className="pizarra-status">Cargando salidas en tiempo real...</div>
                 ) : hojas.length === 0 ? (
                     <div className="pizarra-no-data">
@@ -333,7 +360,7 @@ function PizarraPublica() {
                                     <div className="route-info">
                                         <span className="route-path">{hoja.ruta.origen} ➔ {hoja.ruta.destino}</span>
                                         <span className="route-time">
-                                            Salida: {new Date(hoja.fecha_salida).toLocaleDateString()}
+                                            Salida: {new Date(`${hoja.fecha_salida}T12:00:00`).toLocaleDateString()}
                                             {hoja.hora_salida ? ` — ${hoja.hora_salida}` : ''}
                                         </span>
                                     </div>
@@ -504,20 +531,31 @@ function PizarraPublica() {
                                     <img src={`data:image/png;base64,${qrData.imagen_base64}`} alt="QR Yape" />
                                 </div>
                                 <div className="qr-details">
-                                    <p><strong>Monto:</strong> Bs. {qrData.monto}</p>
+                                    <p><strong>Monto:</strong> Bs. {parseFloat(qrData.monto).toFixed(2)}</p>
                                     <p><strong>Glosa:</strong> {qrData.glosa}</p>
+                                    <p><strong>Titular:</strong> {qrData.titular || 'Anibal Choque Aguirre'}</p>
+                                    {qrData.reserva_ids?.length > 0 && (
+                                        <p>
+                                            <strong>Reserva(s):</strong>{' '}
+                                            {qrData.reserva_ids.map(id => `RES-${String(id).padStart(6, '0')}`).join(', ')}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="voucher-link-zone" style={{ margin: '1rem 0', padding: '1rem', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
                                     <p style={{ margin: 0, fontSize: '0.85rem' }}>🎫 <strong>Boleto Digital generado:</strong></p>
                                     <button
-                                        onClick={() => window.open(`/voucher/${qrData.reservaId}`, '_blank')}
+                                        onClick={() => window.open(qrData.voucher_url || `/voucher/${qrData.reserva_ids?.[0]}`, '_blank')}
                                         style={{ background: '#10b981', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '6px', fontWeight: 'bold', marginTop: '0.5rem', cursor: 'pointer' }}
                                     >
                                         VER MI BOLETO
                                     </button>
                                 </div>
-                                <button className="btn-finish-public" onClick={() => { cerrarReserva(); loadHojas(); }}>
-                                    Entendido, ya pagué
+                                <button
+                                    className="btn-finish-public"
+                                    onClick={verificarPagoPublico}
+                                    disabled={verificandoPago}
+                                >
+                                    {verificandoPago ? 'VERIFICANDO...' : 'ENTENDIDO, YA PAGUÉ'}
                                 </button>
                             </div>
                         )}

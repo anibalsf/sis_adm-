@@ -603,3 +603,198 @@
 .input-success {
     border-color: #4CAF50 !important;
 }
+/* Pestañas y listado de reservas */
+.reservas-tabs {
+    display: flex;
+    gap: 0.5rem;
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.reservas-tab {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #64748b;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.reservas-tab:hover {
+    color: #0f172a;
+}
+
+.reservas-tab.active {
+    color: #047857;
+    border-bottom-color: #10b981;
+}
+
+.reservas-listado {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+}
+
+.reservas-listado-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.reservas-listado-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #0f172a;
+}
+
+.reservas-container .reservas-muted {
+    color: #64748b;
+    font-size: 0.85rem;
+    margin: 0.25rem 0 0;
+}
+
+.reservas-filtros {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.reservas-filtros input,
+.reservas-filtros select {
+    padding: 0.6rem 0.8rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: #ffffff;
+}
+
+.reservas-filtros input[type="search"] {
+    flex: 1;
+    min-width: 220px;
+}
+
+.reservas-table-wrap {
+    overflow-x: auto;
+}
+
+.reservas-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.reservas-table th {
+    text-align: left;
+    padding: 0.75rem;
+    background: #f8fafc;
+    color: #475569;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.reservas-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+}
+
+.reservas-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.reservas-badge {
+    display: inline-block;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: capitalize;
+}
+
+.reservas-badge.pendiente {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.reservas-badge.confirmada {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.reservas-badge.cancelada {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.reservas-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.reservas-accion {
+    border: none;
+    border-radius: 6px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    color: #ffffff;
+}
+
+.reservas-accion.confirmar {
+    background: #10b981;
+}
+
+.reservas-accion.cancelar {
+    background: #ef4444;
+}
+
+.reservas-accion.voucher {
+    background: #e0f2fe;
+    color: #075985;
+}
+
+.reservas-accion.qr {
+    background: #7c3aed;
+}
+
+.reservas-accion:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.reservas-paginacion {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    flex-wrap: wrap;
+    color: #475569;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+    .reservas-listado {
+        padding: 1rem;
+    }
+
+    .reservas-listado-header {
+        align-items: flex-start;
+    }
+}

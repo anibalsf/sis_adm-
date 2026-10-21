@@ -341,7 +341,7 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
         """
         from datetime import date, timedelta
         from django.db.models import Sum, Q
-        from reservas.models import Reserva
+        from reservas.models import Reserva, ESTADOS_ACTIVOS
         
         hoy = date.today()
         # Obtener hojas de ruta de hoy y los próximos 7 días
@@ -370,14 +370,14 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
         rutas_ids = {h.ruta_id for h in hojas if h.ruta_id}
         fechas_salida = {h.fecha_salida for h in hojas if h.fecha_salida}
         
-        from reservas.models import Reserva
+        from reservas.models import Reserva, ESTADOS_ACTIVOS
         from django.db.models import Sum
         
         # 1. Agregado de cupos totales por ruta y fecha
         reservas_stats = Reserva.objects.filter(
             ruta_id__in=rutas_ids,
             fecha_viaje__in=fechas_salida,
-            estado__in=['pendiente', 'confirmada']
+            estado__in=ESTADOS_ACTIVOS
         ).values('ruta_id', 'fecha_viaje').annotate(total=Sum('cantidad'))
         
         stats_map = {(r['ruta_id'], r['fecha_viaje']): r['total'] for r in reservas_stats}
@@ -386,7 +386,7 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
         asientos_qs = Reserva.objects.filter(
             ruta_id__in=rutas_ids,
             fecha_viaje__in=fechas_salida,
-            estado__in=['pendiente', 'confirmada']
+            estado__in=ESTADOS_ACTIVOS
         ).exclude(asiento__isnull=True).values('ruta_id', 'fecha_viaje', 'asiento')
         
         asientos_map = {}
@@ -443,11 +443,11 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
     def pasajeros(self, request, pk=None):
         """Retorna la lista de pasajeros (reservas) para esta hoja de ruta"""
         hoja = self.get_object()
-        from reservas.models import Reserva
+        from reservas.models import Reserva, ESTADOS_ACTIVOS
         reservas = Reserva.objects.filter(
             ruta=hoja.ruta,
             fecha_viaje=hoja.fecha_salida,
-            estado__in=['pendiente', 'confirmada']
+            estado__in=ESTADOS_ACTIVOS
         ).order_by('asiento', 'created_at')
         
         data = []
@@ -536,7 +536,7 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
         from reportlab.pdfgen import canvas
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
-        from reservas.models import Reserva
+        from reservas.models import Reserva, ESTADOS_ACTIVOS
 
         obj = self.get_object()
         
@@ -660,7 +660,7 @@ class HojaRutaViewSet(viewsets.ModelViewSet):
             reservas = Reserva.objects.filter(
                 ruta=obj.ruta, 
                 fecha_viaje=obj.fecha_salida, 
-                estado__in=['confirmada', 'pendiente', 'pagada']
+                estado__in=ESTADOS_ACTIVOS
             )
             pasajeros_map = {res.asiento: f"{res.cliente}" for res in reservas if res.asiento}
             
@@ -996,12 +996,12 @@ class TurnoSalidaViewSet(viewsets.ModelViewSet):
         # Cuando se llena de pasajeros, se habilita automáticamente la siguiente,
         # siempre en orden. Aplica para ipsum y minibus.
         # =========================================================================
-        from reservas.models import Reserva
+        from reservas.models import Reserva, ESTADOS_ACTIVOS
 
         total_reservados = Reserva.objects.filter(
             ruta=ruta_la_paz,
             fecha_viaje=fecha,
-            estado__in=['pendiente', 'confirmada']
+            estado__in=ESTADOS_ACTIVOS
         ).aggregate(total=Sum('cantidad'))['total'] or 0
 
         restante = total_reservados

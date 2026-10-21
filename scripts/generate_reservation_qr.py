@@ -3,13 +3,13 @@ from pathlib import Path
 
 # CONFIGURACIÓN
 BASE_URL = "https://administracion.sindicatointegracion.com"
-TARGET_URL = f"{BASE_URL}/reservas"
+TARGET_URL = f"{BASE_URL}/pizarra"
 
 def generate_reservation_qr():
     # Resolver la salida desde el repositorio para que funcione en cualquier equipo.
     output_dir = Path(__file__).resolve().parents[1] / 'frontend' / 'public'
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / 'QR_RESERVAS_TAIPIPLAYA.png'
+    output_path = output_dir / 'QR_PIZARRA_LA_PAZ.png'
     
     print(f"Generando QR para: {TARGET_URL}")
     

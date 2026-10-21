@@ -14,6 +14,7 @@ class QRTransactionViewSet(viewsets.ModelViewSet):
     queryset = QRTransaccion.objects.all()
     serializer_class = QRTransaccionSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post', 'head', 'options']
 
     def create(self, request, *args, **kwargs):
         """
@@ -82,7 +83,23 @@ class QRTransactionViewSet(viewsets.ModelViewSet):
         if success:
             return Response({'status': 'ok', 'message': msg})
         return Response({'status': 'error', 'message': msg}, status=status.HTTP_400_BAD_REQUEST)
-            
+
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], url_path='verify-public')
+    def verify_public(self, request):
+        """
+        Verificación desde la pizarra pública de reservas.
+        El transaction_id es un UUID no adivinable que el pasajero recibe al
+        generar su QR; en producción el pago real lo confirma el banco por webhook.
+        """
+        transaction_id = request.data.get('transaction_id')
+        if not transaction_id:
+            return Response({'error': 'transaction_id requerido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        success, msg = QRService.verify_payment(transaction_id)
+        if success:
+            return Response({'status': 'ok', 'message': msg})
+        return Response({'status': 'error', 'message': msg}, status=status.HTTP_400_BAD_REQUEST)
+
     @action(detail=True, methods=['get'])
     def check_status(self, request, pk=None):
         instance = self.get_object()
@@ -90,5 +107,6 @@ class QRTransactionViewSet(viewsets.ModelViewSet):
         return Response({
             'transaction_id': instance.transaction_id,
             'estado': instance.estado,
+            'expiration_date': instance.expiration_date,
             'updated_at': instance.updated_at
         })
