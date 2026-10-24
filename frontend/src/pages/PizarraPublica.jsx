@@ -27,8 +27,23 @@ function PizarraPublica() {
             setHojas(res.data || []);
             setError('');
         } catch (err) {
-            setError('Error al cargar la pizarra de rutas.');
-            console.error(err);
+            const status = err.response?.status;
+            const detalle = err.response?.data?.detail;
+            let mensaje = 'No se pudo cargar la pizarra de rutas.';
+
+            if (!err.response) {
+                mensaje = 'No hay conexión con el servidor. Revise su internet e intente nuevamente.';
+            } else if (status === 503) {
+                mensaje = detalle || 'El sistema se está actualizando. Intente nuevamente en unos minutos.';
+            } else if (status === 500) {
+                mensaje = 'El servidor tuvo un problema al cargar las salidas. Intente nuevamente en unos minutos.';
+            } else if (detalle) {
+                mensaje = detalle;
+            }
+
+            setHojas([]);
+            setError(mensaje);
+            console.error('Error al cargar la pizarra de rutas:', err);
         } finally {
             setLoading(false);
         }
@@ -345,7 +360,16 @@ function PizarraPublica() {
                 )}
 
                 {error ? (
-                    <div className="pizarra-status" style={{ color: '#b91c1c', fontWeight: 'bold' }}>{error}</div>
+                    <div className="pizarra-error-panel" role="alert">
+                        <span className="pizarra-error-icon">⚠️</span>
+                        <div className="pizarra-error-text">
+                            <h3>No se pudo cargar la pizarra</h3>
+                            <p>{error}</p>
+                        </div>
+                        <button className="btn-retry-public" onClick={loadHojas} disabled={loading}>
+                            {loading ? 'Reintentando...' : 'Reintentar'}
+                        </button>
+                    </div>
                 ) : loading ? (
                     <div className="pizarra-status">Cargando salidas en tiempo real...</div>
                 ) : hojas.length === 0 ? (

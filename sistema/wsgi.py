@@ -11,6 +11,9 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
+from sistema.startup import aplicar_migraciones_pendientes
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'sistema.settings')
 
 application = get_wsgi_application()
+aplicar_migraciones_pendientes()

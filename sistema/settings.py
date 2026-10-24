@@ -237,6 +237,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'sistema.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': config('PAGE_SIZE', default=20, cast=int),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'EXCEPTION_HANDLER': 'sistema.exceptions.api_exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle'

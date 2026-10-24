@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api, API_URL } from '../services/api'
-import { useNavigate } from 'react-router-dom'
 import SancionesAlert from '../components/SancionesAlert'
 import YapeQRModal from '../components/YapeQRModal'
 import '../css/Common.css'
@@ -13,7 +12,6 @@ const hoyLocal = () => {
 }
 
 function HojasRuta() {
-  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('agentes') // 'agentes' | 'designaciones' | 'asignacion-la-paz'
 
   // Estados para Designaciones (Hojas de Ruta)
@@ -308,7 +306,7 @@ function HojasRuta() {
   const onChange = (e) => {
     const { name, value } = e.target; setForm(prev => {
       const next = { ...prev, [name]: value }
-      const calcularPrecio = (rutaId, vehiculoId) => {
+      const calcularPrecio = (rutaId) => {
         const r = rutas.find(rr => String(rr.id) === String(rutaId))
         if (r) {
           const nom = (r.nombre || r.destino || '').toLowerCase()
@@ -336,7 +334,7 @@ function HojasRuta() {
 
           if (vehiculosAptos.length > 0) {
             next.vehiculo = vehiculosAptos[0].id
-            const aPrecio = calcularPrecio(next.ruta, next.vehiculo);
+            const aPrecio = calcularPrecio(next.ruta);
             if(aPrecio) next.precio = aPrecio;
           } else {
             next.vehiculo = ''
@@ -573,17 +571,6 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
 
     const url = `https://wa.me/591${telefono}?text=${encodeURIComponent(mensaje)}`;
     window.open(url, '_blank');
-  }
-
-  const generarPdf = async (id) => {
-    try {
-      await api.generarPdfHoja(id);
-      await load();
-      alert('PDF generado')
-    } catch (err) {
-      alert('Error al generar PDF');
-      console.error(err)
-    }
   }
 
   const generarPlanillaIpsum = async (id) => {
@@ -859,68 +846,110 @@ _Sindicato Mixto de Transporte Integración Taipiplaya_`;
                 onChange={e => { setPageSize(parseInt(e.target.value || '10', 10)); setPageAgentes(1) }}
               />
             </div>
-            <button
-              className="btn btn-primary"
-              onClick={handleGenerarListaPunteros}
-              disabled={selectedAgentes.length === 0}
-              style={{
-                backgroundColor: selectedAgentes.length === 0 ? '#9e9e9e' : '#2E7D32',
-                color: 'white',
-                padding: '8px 16px',
-                fontSize: '0.9rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: selectedAgentes.length === 0 ? 'not-allowed' : 'pointer',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                fontWeight: '500'
-              }}
-            >
-              <span style={{ fontSize: '1.1rem' }}>📋</span> Imprimir Lista de Punteros ({selectedAgentes.length})
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleGenerarNominaAgentes}
-              style={{
-                backgroundColor: '#1976D2',
-                color: 'white',
-                padding: '8px 16px',
-                fontSize: '0.9rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                fontWeight: '500'
-              }}
-            >
-              <span style={{ fontSize: '1.1rem' }}>📄</span> Nómina de Agentes
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleGenerarListaAgentes}
-              disabled={selectedAgentes.length === 0}
-              style={{
-                backgroundColor: selectedAgentes.length === 0 ? '#9e9e9e' : '#C62828',
-                color: 'white',
-                padding: '8px 16px',
-                fontSize: '0.9rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: selectedAgentes.length === 0 ? 'not-allowed' : 'pointer',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                fontWeight: '500'
-              }}
-            >
-              <span style={{ fontSize: '1.1rem' }}>🖨️</span> Generar Lista Agentes de Parada ({selectedAgentes.length})
-            </button>
+          </div>
+
+          <div
+            style={{
+              marginBottom: '25px',
+              padding: '16px 18px',
+              background: 'var(--card-bg, #ffffff)',
+              border: '1px solid var(--border-color, #e2e8f0)',
+              borderRadius: '12px',
+              boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
+              width: '100%',
+              maxWidth: '460px'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '10px' }}>
+              <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary, #1e293b)' }}>
+                🖨️ Impresión de listas
+              </h3>
+              <span style={{ fontSize: '12px', color: '#475569', background: '#f1f5f9', padding: '3px 10px', borderRadius: '999px', whiteSpace: 'nowrap' }}>
+                {selectedAgentes.length} seleccionado{selectedAgentes.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                className="btn btn-primary"
+                onClick={handleGenerarListaPunteros}
+                disabled={selectedAgentes.length === 0}
+                style={{
+                  width: '100%',
+                  backgroundColor: selectedAgentes.length === 0 ? '#9e9e9e' : '#2E7D32',
+                  color: 'white',
+                  padding: '10px 16px',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: selectedAgentes.length === 0 ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  fontWeight: '600',
+                  textAlign: 'left'
+                }}
+              >
+                <span style={{ fontSize: '1.15rem' }}>📋</span>
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.25 }}>
+                  <span>Lista de Punteros</span>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 400, opacity: 0.9 }}>Programación de turnos · 30 días</span>
+                </span>
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleGenerarNominaAgentes}
+                style={{
+                  width: '100%',
+                  backgroundColor: '#1976D2',
+                  color: 'white',
+                  padding: '10px 16px',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  fontWeight: '600',
+                  textAlign: 'left'
+                }}
+              >
+                <span style={{ fontSize: '1.15rem' }}>📄</span>
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.25 }}>
+                  <span>Nómina de Agentes</span>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 400, opacity: 0.9 }}>Turnos asignados por fecha</span>
+                </span>
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleGenerarListaAgentes}
+                disabled={selectedAgentes.length === 0}
+                style={{
+                  width: '100%',
+                  backgroundColor: selectedAgentes.length === 0 ? '#9e9e9e' : '#C62828',
+                  color: 'white',
+                  padding: '10px 16px',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: selectedAgentes.length === 0 ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  fontWeight: '600',
+                  textAlign: 'left'
+                }}
+              >
+                <span style={{ fontSize: '1.15rem' }}>🖨️</span>
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.25 }}>
+                  <span>Lista de Agentes de Parada</span>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 400, opacity: 0.9 }}>Datos de contacto y turno</span>
+                </span>
+              </button>
+            </div>
           </div>
 
           {loadingAgentes ? (<div className="loading">Cargando agentes...</div>) : (
