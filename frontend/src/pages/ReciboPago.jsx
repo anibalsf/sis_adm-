@@ -231,7 +231,6 @@ function ReciboPago() {
     };
 
     const renderStandardReceipt = (copiaLabel) => {
-        const isOriginal = copiaLabel.includes('ORIGINAL');
         const horaImpresion = new Date().toLocaleString('es-BO', { 
             day: 'numeric', month: 'long', year: 'numeric', 
             hour: '2-digit', minute: '2-digit' 

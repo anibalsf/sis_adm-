@@ -6,7 +6,7 @@ import { IconSearch, IconCalendar, IconEye, IconEdit, IconBook, IconFileText, Ic
 function LibroActas() {
     const [reuniones, setReuniones] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [page, setPage] = useState(1);
+    const [page] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');

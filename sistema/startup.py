@@ -66,22 +66,28 @@ def migraciones_pendientes():
 
 
 def aplicar_migraciones_pendientes():
+    """Aplica las migraciones pendientes.
+
+    Devuelve True cuando la base de datos quedó al día (o AUTO_MIGRATE está
+    deshabilitado) y False si hubo un error al aplicarlas.
+    """
     if not auto_migrate_habilitado():
         logger.info('AUTO_MIGRATE deshabilitado: no se revisan migraciones al iniciar.')
-        return False
+        return True
 
     try:
         if not migraciones_pendientes():
-            return False
+            return True
 
         with _bloqueo(_ruta_lock()):
             pendientes = migraciones_pendientes()
             if not pendientes:
-                return False
+                return True
 
             logger.warning(
-                'Base de datos desactualizada: aplicando %s migracion(es) pendiente(s).',
+                'Base de datos desactualizada: aplicando %s migracion(es) pendiente(s): %s',
                 len(pendientes),
+                ', '.join(f'{migracion.app_label}.{migracion.name}' for migracion, _ in pendientes),
             )
             from django.core.management import call_command
 
@@ -90,4 +96,4 @@ def aplicar_migraciones_pendientes():
             return True
     except Exception:
         logger.exception('No se pudieron aplicar las migraciones pendientes al iniciar.')
-    return False
+        return False

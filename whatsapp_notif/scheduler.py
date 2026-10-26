@@ -4,7 +4,7 @@ Configuración del scheduler para tareas programadas de WhatsApp
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from django_apscheduler.jobstores import DjangoJobStore
-from django_apscheduler.models import DjangoJobExecution
+from django_apscheduler.models import DjangoJob, DjangoJobExecution
 from django_apscheduler import util
 import logging
 
@@ -23,6 +23,49 @@ def delete_old_job_executions(max_age=604_800):
     DjangoJobExecution.objects.delete_old_job_executions(max_age)
 
 
+def run_shift_reminders():
+    """Wrapper serializable para la tarea Celery de recordatorios de turno."""
+    from .tasks import send_shift_reminders
+
+    return send_shift_reminders.delay()
+
+
+def run_meeting_reminders():
+    """Wrapper serializable para la tarea Celery de recordatorios de reunión."""
+    from .tasks import send_meeting_reminders
+
+    return send_meeting_reminders.delay()
+
+
+def run_debt_reminders():
+    """Wrapper serializable para la tarea Celery de recordatorios de deuda."""
+    from .tasks import send_debt_reminders
+
+    return send_debt_reminders.delay()
+
+
+def _limpiar_jobs_invalidos():
+    """Elimina jobs persistidos con referencias que APScheduler no puede resolver.
+
+    Versiones anteriores guardaron objetos ``shared_task`` de Celery en
+    ``DjangoJobStore``. APScheduler los serializa como
+    ``whatsapp_notif.tasks:celery.local`` y falla al restaurarlos en cada
+    arranque. Con los wrappers de arriba eso ya no vuelve a ocurrir, pero hay
+    que limpiar los registros antiguos una vez.
+    """
+    try:
+        obsoletos = [
+            job.id
+            for job in DjangoJob.objects.only('id', 'job_state')
+            if job.job_state and b':celery.local' in job.job_state
+        ]
+        if obsoletos:
+            DjangoJob.objects.filter(id__in=obsoletos).delete()
+            logger.info("Jobs obsoletos eliminados: %s", ", ".join(obsoletos))
+    except Exception as exc:
+        logger.warning("No se pudieron limpiar jobs obsoletos: %s", exc)
+
+
 def start_scheduler():
     """
     Iniciar el scheduler con todas las tareas programadas
@@ -32,15 +75,11 @@ def start_scheduler():
         return
     
     try:
-        from .tasks import (
-            send_shift_reminders,
-            send_meeting_reminders,
-            send_debt_reminders
-        )
-        
+        _limpiar_jobs_invalidos()
+
         # Recordatorios de turno - Diario a las 18:00
         scheduler.add_job(
-            send_shift_reminders,
+            run_shift_reminders,
             trigger=CronTrigger(hour=18, minute=0),
             id='shift_reminders',
             max_instances=1,
@@ -51,7 +90,7 @@ def start_scheduler():
         
         # Recordatorios de reunión - Diario a las 08:00
         scheduler.add_job(
-            send_meeting_reminders,
+            run_meeting_reminders,
             trigger=CronTrigger(hour=8, minute=0),
             id='meeting_reminders',
             max_instances=1,
@@ -62,7 +101,7 @@ def start_scheduler():
         
         # Recordatorios de deuda - Lunes a las 09:00
         scheduler.add_job(
-            send_debt_reminders,
+            run_debt_reminders,
             trigger=CronTrigger(day_of_week='mon', hour=9, minute=0),
             id='debt_reminders',
             max_instances=1,

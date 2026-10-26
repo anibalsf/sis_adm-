@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import AuthShell from '../components/AuthShell';
+import { IconArrowLeft, IconCheckCircle, IconUser } from '../components/Icons';
 import './Login.css';
 
 const ForgotPassword = () => {
@@ -8,61 +10,72 @@ const ForgotPassword = () => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Here we would call the backend password reset endpoint (e.g. /auth/reset-password)
-        // Since it's not implemented yet, we show a message.
         setSubmitted(true);
     };
 
     return (
-        <div className="login-page">
-            <div className="login-container">
-                <div className="login-card">
-                    <div className="login-header">
-                        <h1>Recuperar Contraseña</h1>
-                    </div>
+        <AuthShell>
+            {!submitted ? (
+                <>
+                    <header className="auth-header">
+                        <span className="auth-kicker">Soporte de acceso</span>
+                        <h1>Recuperar contraseña</h1>
+                        <p>
+                            Ingresa tu usuario o C.I. para solicitar el restablecimiento
+                            de tu acceso.
+                        </p>
+                    </header>
 
-                    {!submitted ? (
-                        <form onSubmit={handleSubmit} className="login-form">
-                            <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '10px' }}>
-                                Ingrese su usuario o C.I. para restablecer su contraseña.
-                            </p>
-
-                            <div className="form-group">
-                                <span className="input-icon">👤</span>
+                    <form onSubmit={handleSubmit} className="auth-form">
+                        <label className="auth-field" htmlFor="identifier">
+                            <span className="auth-label">Usuario o C.I.</span>
+                            <span className="auth-input-wrap">
+                                <IconUser className="auth-input-icon" />
                                 <input
                                     id="identifier"
+                                    name="identifier"
                                     type="text"
+                                    className="auth-input"
                                     value={identifier}
                                     onChange={(e) => setIdentifier(e.target.value)}
-                                    placeholder="Usuario o C.I."
+                                    placeholder="Ingresa tu usuario o C.I."
+                                    autoComplete="username"
                                     required
                                     autoFocus
                                 />
-                            </div>
+                            </span>
+                        </label>
 
-                            <button type="submit" className="btn-login">
-                                ENVIAR SOLICITUD
-                            </button>
+                        <button type="submit" className="auth-submit">
+                            Enviar solicitud
+                        </button>
+                    </form>
 
-                            <div className="create-account">
-                                <Link to="/login">Volver al inicio</Link>
-                            </div>
-                        </form>
-                    ) : (
-                        <div className="login-form" style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '3rem', margin: '20px 0' }}>✅</div>
-                            <h3 style={{ color: '#374151' }}>Solicitud Recibida</h3>
-                            <p style={{ color: '#6b7280' }}>
-                                Si sus datos coinciden, contacte con la administración o espere instrucciones vía WhatsApp.
-                            </p>
-                            <div className="create-account">
-                                <Link to="/login">Volver al inicio</Link>
-                            </div>
-                        </div>
-                    )}
+                    <p className="auth-back-row">
+                        <Link to="/login" className="auth-link auth-link--back">
+                            <IconArrowLeft />
+                            Volver a iniciar sesión
+                        </Link>
+                    </p>
+                </>
+            ) : (
+                <div className="auth-success">
+                    <span className="auth-success-icon">
+                        <IconCheckCircle />
+                    </span>
+                    <h1>Solicitud recibida</h1>
+                    <p>
+                        Si tus datos coinciden con un usuario registrado, la
+                        administración se pondrá en contacto contigo para restablecer
+                        el acceso.
+                    </p>
+                    <Link to="/login" className="auth-secondary">
+                        <IconArrowLeft />
+                        Volver a iniciar sesión
+                    </Link>
                 </div>
-            </div>
-        </div>
+            )}
+        </AuthShell>
     );
 };
 

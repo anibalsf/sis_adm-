@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useState, useEffect, createContext, useContext } from 'react';
 import axios from 'axios';
 import { API_URL } from '../services/api';
@@ -7,7 +8,6 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [accessToken, setAccessToken] = useState(() => localStorage.getItem('accessToken'));
-    const [refreshToken] = useState(() => localStorage.getItem('refreshToken'));
     const [loading, setLoading] = useState(true);
 
     axios.defaults.baseURL = API_URL;

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+import AuthShell from '../components/AuthShell';
+import { IconAlertTriangle, IconBus, IconEye, IconLock, IconUser } from '../components/Icons';
 import './Login.css';
 
 const Login = () => {
@@ -18,10 +20,9 @@ const Login = () => {
         setError('');
         setLoading(true);
 
-        const result = await login(username, password, remember);
+        const result = await login(username.trim(), password, remember);
 
         if (result.success) {
-            // Redirección inteligente según el rol
             const role = result.user?.role;
             if (role === 'Afiliado') {
                 navigate('/mi-perfil');
@@ -29,84 +30,114 @@ const Login = () => {
                 navigate('/dashboard');
             }
         } else {
-            setError(result.error);
+            setError(result.error || 'No se pudo iniciar sesión. Intenta nuevamente.');
         }
 
         setLoading(false);
     };
 
     return (
-        <div className="login-page">
-            <div className="login-container">
-                <div className="login-card">
-                    <div className="login-header">
-                        <div className="logo-login-container">
-                            <img src="/login_avatar.svg" alt="Login Avatar" className="login-logo" />
-                        </div>
-                        <h1>SINDICATO MIXTO</h1>
-                        <h2 className="subtitle">"INTEGRACIÓN TAIPIPLAYA"</h2>
+        <AuthShell>
+            <header className="auth-header">
+                <span className="auth-kicker">Bienvenido</span>
+                <h1>Iniciar sesión</h1>
+                <p>Ingresa tus credenciales para acceder al sistema.</p>
+            </header>
+
+            <form onSubmit={handleSubmit} className="auth-form">
+                {error && (
+                    <div className="auth-error" role="alert">
+                        <IconAlertTriangle />
+                        <span>{error}</span>
                     </div>
+                )}
 
-                    <form onSubmit={handleSubmit} className="login-form">
-                        {error && <div className="error-message">{error}</div>}
+                <label className="auth-field" htmlFor="username">
+                    <span className="auth-label">Usuario</span>
+                    <span className="auth-input-wrap">
+                        <IconUser className="auth-input-icon" />
+                        <input
+                            id="username"
+                            name="username"
+                            type="text"
+                            className="auth-input"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            placeholder="Usuario o C.I."
+                            autoComplete="username"
+                            required
+                            autoFocus
+                        />
+                    </span>
+                </label>
 
-                        <div className="form-group">
-                            <span className="input-icon">👤</span>
-                            <input
-                                id="username"
-                                type="text"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                placeholder="Email ID / Usuario / CI"
-                                required
-                                autoFocus
-                            />
-                        </div>
-                        <div className="login-hint">
-                            💡 Afiliado: Su Usuario y Contraseña es su CI (sin extensión).
-                        </div>
+                <p className="auth-hint">
+                    Afiliados: su usuario y contraseña son su C.I. sin extensión.
+                </p>
 
-                        <div className="form-group">
-                            <span className="input-icon">🔒</span>
-                            <input
-                                id="password"
-                                type={showPassword ? 'text' : 'password'}
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Password"
-                                required
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(v => !v)}
-                                className="btn-toggle-password"
-                                aria-label="Mostrar/Ocultar contraseña"
-                            >
-                                {showPassword ? '🙈' : '👁️'}
-                            </button>
-                        </div>
-
-                        <div className="form-options">
-                            <label>
-                                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-                                Remember me
-                            </label>
-                            <a href="#" className="forgot-password" onClick={(e) => e.preventDefault()}>Forgot Password?</a>
-                        </div>
-
-                        <button type="submit" className="btn-login" disabled={loading}>
-                            {loading ? 'Validating...' : 'LOGIN'}
+                <label className="auth-field" htmlFor="password">
+                    <span className="auth-label">Contraseña</span>
+                    <span className="auth-input-wrap">
+                        <IconLock className="auth-input-icon" />
+                        <input
+                            id="password"
+                            name="password"
+                            type={showPassword ? 'text' : 'password'}
+                            className="auth-input auth-input--password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="Ingresa tu contraseña"
+                            autoComplete="current-password"
+                            required
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword((value) => !value)}
+                            className="auth-password-toggle"
+                            aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                            aria-pressed={showPassword}
+                        >
+                            <IconEye />
+                            <span>{showPassword ? 'Ocultar' : 'Mostrar'}</span>
                         </button>
-                    </form>
+                    </span>
+                </label>
 
-                    <div className="passenger-footer">
-                        <Link to="/pizarra" className="link-pizarra">
-                            🚌 VER SALIDAS Y RESERVAR
-                        </Link>
-                    </div>
+                <div className="auth-options">
+                    <label className="auth-checkbox">
+                        <input
+                            type="checkbox"
+                            checked={remember}
+                            onChange={(e) => setRemember(e.target.checked)}
+                        />
+                        <span>Mantener sesión iniciada</span>
+                    </label>
+                    <Link to="/forgot-password" className="auth-link">
+                        ¿Olvidaste tu contraseña?
+                    </Link>
                 </div>
+
+                <button type="submit" className="auth-submit" disabled={loading}>
+                    {loading ? (
+                        <>
+                            <span className="auth-spinner" aria-hidden="true" />
+                            Verificando...
+                        </>
+                    ) : (
+                        'Ingresar al sistema'
+                    )}
+                </button>
+            </form>
+
+            <div className="auth-divider">
+                <span>o</span>
             </div>
-        </div>
+
+            <Link to="/pizarra" className="auth-secondary">
+                <IconBus />
+                Consultar salidas y reservar
+            </Link>
+        </AuthShell>
     );
 };
 

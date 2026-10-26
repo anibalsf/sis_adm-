@@ -128,6 +128,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.gzip.GZipMiddleware',
+    'sistema.middleware.AutoMigrateMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # CORS debe estar antes de CommonMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -516,9 +517,11 @@ if REDIS_URL:
     CELERY_RESULT_BACKEND = REDIS_URL
     CELERY_TASK_ALWAYS_EAGER = False
 else:
-    # Fallback a modo síncrono para desarrollo sin Redis
+    # Fallback a modo síncrono para desarrollo sin Redis.
+    # No usar 'db+sqlite:///...': ese backend requiere SQLAlchemy y no está
+    # instalado. En modo eager el resultado se devuelve en memoria.
     CELERY_BROKER_URL = 'memory://'
-    CELERY_RESULT_BACKEND = 'db+sqlite:///results.sqlite'
+    CELERY_RESULT_BACKEND = 'cache+memory://'
     CELERY_TASK_ALWAYS_EAGER = True
 
 CELERY_TASK_EAGER_PROPAGATES = True  # Propagar errores si ocurren

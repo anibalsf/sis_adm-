@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import SkeletonLoader from '../components/SkeletonLoader';
 import './Afiliados.css';
@@ -11,12 +10,12 @@ function Afiliados() {
   const toast = useToast();
   const [afiliados, setAfiliados] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
   const [ciTerm, setCiTerm] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -35,7 +34,6 @@ function Afiliados() {
   });
   const [formErrors, setFormErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
-  const [searchParams] = useSearchParams();
 
   // Valores de búsqueda con debounce para no hacer peticiones en cada tecla
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -159,7 +157,7 @@ function Afiliados() {
       await api.deleteAfiliado(id);
       toast.success('Afiliado eliminado correctamente');
       fetchAfiliados();
-    } catch (err) {
+    } catch {
       toast.error('Error al intentar eliminar el afiliado');
     }
   };

@@ -1,15 +1,68 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Link } from 'react-router-dom';
 import QRScanner from './QRScanner';
-import { IconQrCode } from './Icons';
+import {
+    IconChevronDown,
+    IconKey,
+    IconLogout,
+    IconMail,
+    IconQrCode,
+    IconUser,
+    IconUsers,
+} from './Icons';
 import NotificationBell from './NotificationBell';
+import './UserMenu.css';
 
 const Header = ({ toggleSidebar }) => {
     const { user, logout } = useAuth();
     const { darkMode, toggleDarkMode } = useTheme();
     const [showScanner, setShowScanner] = useState(false);
+    const [userMenuOpen, setUserMenuOpen] = useState(false);
+    const userMenuRef = useRef(null);
+    const userMenuTriggerRef = useRef(null);
+
+    const nombreCompleto = [user?.first_name, user?.last_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+    const nombreVisible = nombreCompleto || user?.username || 'Usuario';
+    const inicial = (user?.username || user?.first_name || 'U').charAt(0).toUpperCase();
+    const puedeGestionarUsuarios = Boolean(user?.is_staff)
+        || ['Directiva', 'Sistemas'].includes(user?.role);
+
+    useEffect(() => {
+        if (!userMenuOpen) return undefined;
+
+        const handleClickOutside = (event) => {
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+                setUserMenuOpen(false);
+            }
+        };
+
+        const handleEscape = (event) => {
+            if (event.key === 'Escape') {
+                setUserMenuOpen(false);
+                userMenuTriggerRef.current?.focus();
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleEscape);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [userMenuOpen]);
+
+    const closeUserMenu = () => setUserMenuOpen(false);
+
+    const handleLogout = () => {
+        closeUserMenu();
+        logout();
+    };
 
     return (
         <header className="header flex items-center justify-between px-4 sm:px-6 py-4 bg-surface dark:bg-gray-800 border-b border-subtle dark:border-gray-700 sticky top-0 z-50">
@@ -55,31 +108,119 @@ const Header = ({ toggleSidebar }) => {
                     {darkMode ? '☀️' : '🌙'}
                 </button>
                 {showScanner && <QRScanner onClose={() => setShowScanner(false)} />}
-                <div className="relative group">
-                    <button className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
-                        <div className="w-9 h-9 bg-primary flex items-center justify-center rounded-xl text-white font-bold shadow-lg shadow-primary/30">
-                            {user?.username?.charAt(0).toUpperCase() || 'A'}
-                        </div>
-                        <div className="hidden lg:block text-left">
-                            <p className="text-sm font-bold text-main dark:text-gray-100 leading-none mb-1">
-                                {user?.username || 'Admin'}
-                            </p>
-                            <p className="text-[10px] text-muted dark:text-gray-400 font-semibold uppercase tracking-wider">
-                                {user?.role || 'SISTEMAS'}
-                            </p>
-                        </div>
-                        <span className="text-[10px] text-muted ml-1 opacity-50 group-hover:rotate-180 transition-transform">▼</span>
+                <div className="um-shell" ref={userMenuRef}>
+                    <button
+                        ref={userMenuTriggerRef}
+                        type="button"
+                        className={`um-trigger${userMenuOpen ? ' is-open' : ''}`}
+                        onClick={() => setUserMenuOpen((open) => !open)}
+                        aria-haspopup="menu"
+                        aria-expanded={userMenuOpen}
+                        aria-controls="user-menu-panel"
+                        aria-label={`Abrir menú de ${nombreVisible}`}
+                    >
+                        <span className="um-avatar">{inicial}</span>
+                        <span className="um-identity">
+                            <span className="um-name">{user?.username || 'Usuario'}</span>
+                            <span className="um-role-label">{user?.role || 'SISTEMAS'}</span>
+                        </span>
+                        <span className="um-chevron" aria-hidden="true">
+                            <IconChevronDown />
+                        </span>
                     </button>
-                    <div className="absolute right-0 mt-2 w-56 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-200 z-50">
-                        <div className="bg-surface dark:bg-gray-800 border border-subtle dark:border-gray-700 rounded-2xl shadow-2xl p-2 overflow-hidden">
-                            <Link to="/usuarios" className="flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl hover:bg-primary/10 hover:text-primary transition-all text-main dark:text-gray-200">
-                                👥 Gestionar Usuarios
+
+                    {userMenuOpen && (
+                        <div
+                            id="user-menu-panel"
+                            className="um-panel"
+                            role="menu"
+                            aria-label="Opciones de usuario"
+                        >
+                            <div className="um-profile">
+                                <span className="um-avatar um-avatar--lg">{inicial}</span>
+                                <div className="um-profile-text">
+                                    <p className="um-profile-name">{nombreVisible}</p>
+                                    {nombreCompleto && (
+                                        <p className="um-profile-handle">@{user?.username}</p>
+                                    )}
+                                    <span className="um-role">{user?.role || 'Usuario'}</span>
+                                </div>
+                            </div>
+
+                            {user?.email && (
+                                <div className="um-email">
+                                    <IconMail />
+                                    <span>{user.email}</span>
+                                </div>
+                            )}
+
+                            <div className="um-divider" />
+
+                            <Link
+                                to="/mi-perfil"
+                                className="um-item"
+                                role="menuitem"
+                                onClick={closeUserMenu}
+                            >
+                                <span className="um-item-icon">
+                                    <IconUser />
+                                </span>
+                                <span className="um-item-text">
+                                    <strong>Mi perfil</strong>
+                                    <small>Datos personales y cuenta</small>
+                                </span>
                             </Link>
-                            <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-all text-main dark:text-gray-200">
-                                🚪 Cerrar Sesión
+
+                            <Link
+                                to="/change-password"
+                                className="um-item"
+                                role="menuitem"
+                                onClick={closeUserMenu}
+                            >
+                                <span className="um-item-icon">
+                                    <IconKey />
+                                </span>
+                                <span className="um-item-text">
+                                    <strong>Seguridad</strong>
+                                    <small>Cambiar mi contraseña</small>
+                                </span>
+                            </Link>
+
+                            {puedeGestionarUsuarios && (
+                                <Link
+                                    to="/usuarios"
+                                    className="um-item"
+                                    role="menuitem"
+                                    onClick={closeUserMenu}
+                                >
+                                    <span className="um-item-icon">
+                                        <IconUsers />
+                                    </span>
+                                    <span className="um-item-text">
+                                        <strong>Gestión de usuarios</strong>
+                                        <small>Roles y permisos de acceso</small>
+                                    </span>
+                                </Link>
+                            )}
+
+                            <div className="um-divider" />
+
+                            <button
+                                type="button"
+                                className="um-item um-item--danger"
+                                role="menuitem"
+                                onClick={handleLogout}
+                            >
+                                <span className="um-item-icon">
+                                    <IconLogout />
+                                </span>
+                                <span className="um-item-text">
+                                    <strong>Cerrar sesión</strong>
+                                    <small>Salir del sistema de forma segura</small>
+                                </span>
                             </button>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </header>

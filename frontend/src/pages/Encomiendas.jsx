@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { api, axiosInstance } from '../services/api';
+import { api } from '../services/api';
 import '../css/Encomiendas.css';
 
 const ESTADOS = {
@@ -90,7 +90,7 @@ export default function Encomiendas() {
         try {
             await api.cambiarEstadoEncomienda(id, estado);
             loadData();
-        } catch (err) { alert('Error al cambiar estado'); }
+        } catch { alert('Error al cambiar estado'); }
     };
 
     const eliminar = async (id) => {
@@ -106,7 +106,7 @@ export default function Encomiendas() {
             const res = await api.generarQrEncomienda(enc.id);
             setDetalle({ ...enc, qr_base64: res.data.qr_base64 });
             setTimeout(() => window.print(), 300);
-        } catch (err) {
+        } catch {
             alert('Error al generar QR para el ticket');
             setDetalle(enc);
             setTimeout(() => window.print(), 300);

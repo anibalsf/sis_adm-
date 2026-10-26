@@ -77,10 +77,10 @@ const DashboardMejorado = () => {
     const [hojasRecientes, setHojasRecientes] = useState([]);
     const [paginaHojas, setPaginaHojas] = useState(1);
     const [totalHojas, setTotalHojas] = useState(0);
-    const [loadingHojas, setLoadingHojas] = useState(false);
+    const [, setLoadingHojas] = useState(false);
     const [paginaSanciones, setPaginaSanciones] = useState(1);
     const [totalSanciones, setTotalSanciones] = useState(0);
-    const [loadingSanciones, setLoadingSanciones] = useState(false);
+    const [, setLoadingSanciones] = useState(false);
     const [loading, setLoading] = useState(true);
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -174,16 +174,16 @@ const DashboardMejorado = () => {
                 semanalRes,
                 egresosPorTipoRes
             ] = await Promise.all([
-                api.getReportesOperativos().catch(e => ({ data: {} })),
-                api.getReportesGraficos({ tipo: 'mensual', fecha_inicio: fechaInicio }).catch(e => ({ data: { ingresos: [], egresos: [] } })),
-                api.getRutasRentables({ meses: periodo }).catch(e => ({ data: { rutas: [] } })),
-                api.getOcupacionHistorica({ meses: periodo }).catch(e => ({ data: { meses: [] } })),
-                api.getAfiliadosMorosos({ page_size: 5 }).catch(e => ({ data: { morosos: [] } })),
-                api.getHojasRuta({ page: 1, page_size: 5, ordering: '-fecha_emision' }).catch(e => ({ data: { results: [] } })),
-                api.getSanciones({ estado: 'pendiente', page: 1, page_size: 5 }).catch(e => ({ data: { results: [] } })),
-                api.getReportesGraficos({ tipo: 'salidas' }).catch(e => ({ data: { salidas: [] } })),
-                api.getReportesGraficos({ tipo: 'semanal' }).catch(e => ({ data: { semana: [] } })),
-                api.getReportesGraficos({ tipo: 'por_tipo' }).catch(e => ({ data: { egresos: [] } }))
+                api.getReportesOperativos().catch(() => ({ data: {} })),
+                api.getReportesGraficos({ tipo: 'mensual', fecha_inicio: fechaInicio }).catch(() => ({ data: { ingresos: [], egresos: [] } })),
+                api.getRutasRentables({ meses: periodo }).catch(() => ({ data: { rutas: [] } })),
+                api.getOcupacionHistorica({ meses: periodo }).catch(() => ({ data: { meses: [] } })),
+                api.getAfiliadosMorosos({ page_size: 5 }).catch(() => ({ data: { morosos: [] } })),
+                api.getHojasRuta({ page: 1, page_size: 5, ordering: '-fecha_emision' }).catch(() => ({ data: { results: [] } })),
+                api.getSanciones({ estado: 'pendiente', page: 1, page_size: 5 }).catch(() => ({ data: { results: [] } })),
+                api.getReportesGraficos({ tipo: 'salidas' }).catch(() => ({ data: { salidas: [] } })),
+                api.getReportesGraficos({ tipo: 'semanal' }).catch(() => ({ data: { semana: [] } })),
+                api.getReportesGraficos({ tipo: 'por_tipo' }).catch(() => ({ data: { egresos: [] } }))
             ]);
 
             setStats({
@@ -225,8 +225,7 @@ const DashboardMejorado = () => {
 
     const cargarMetricasFinancieras = async () => {
         try {
-            const hoy = new Date();
-            const res = await api.getReporteFinanzas().catch(e => ({ data: {} }));
+            const res = await api.getReporteFinanzas().catch(() => ({ data: {} }));
 
             if (res && res.data) {
                 setMetricas({

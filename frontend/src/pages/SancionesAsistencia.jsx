@@ -15,7 +15,6 @@ function SancionesAsistencia() {
 
     // Filters
     const [page, setPage] = useState(1);
-    const [totalPages] = useState(1);
     const [search, setSearch] = useState('');
     const [filterFaltas, setFilterFaltas] = useState(false);
 
